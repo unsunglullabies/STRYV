@@ -130,7 +130,7 @@ struct Proc { name: String, cpu: f32, mem: u64 }
 #[tauri::command]
 fn get_processes(m: tauri::State<Monitor>) -> Vec<Proc> {
     let mut s = m.0.lock().unwrap();
-    s.refresh_processes(ProcessesToUpdate::All);
+    s.refresh_processes(ProcessesToUpdate::All, true);
     let cores = s.cpus().len().max(1) as f32;
     let mut v: Vec<Proc> = s.processes().values()
         .map(|p| Proc { name: p.name().to_string_lossy().into_owned(), cpu: p.cpu_usage() / cores, mem: p.memory() })
