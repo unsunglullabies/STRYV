@@ -234,7 +234,7 @@ fn opt_catalog() -> Vec<Opt> {
     let ok = cfg!(windows);
     let why = if ok { None } else { Some("Available on Windows only.") };
     vec![
-        Opt { id: "power_plan", title: "Switch power plan", what: "Changes the active Windows power plan.", why: "A performance-oriented plan can keep the CPU responsive. The effect depends on the PC and workload; STRYV does not measure it yet.", tradeoffs: "Higher power use, more heat and shorter battery life on laptops.", restart: false, admin: false, reversible: true, available: ok, reason: why },
+        Opt { id: "power_plan", title: "Switch power plan", what: "Changes the active Windows power plan.", why: "A performance-oriented plan can keep the CPU responsive. The effect depends on the PC and workload; STRYV does not measure it yet.", tradeoffs: "Higher power use, more heat and shorter battery life on laptops. Windows requires Administrator rights to switch plans, so start STRYV with Run as administrator for this action.", restart: false, admin: true, reversible: true, available: ok, reason: why },
         Opt { id: "temp_cleanup", title: "Clean old temporary files", what: "Deletes files older than 24 hours from your user temp folder.", why: "Frees disk space. It does not by itself make the PC faster.", tradeoffs: "Deleted files cannot be restored. Files in use are skipped.", restart: false, admin: false, reversible: false, available: ok, reason: why },
     ]
 }
@@ -272,10 +272,18 @@ async fn opt_apply(app: tauri::AppHandle, id: String, value: Option<String>) -> 
             let (_, name, _) = p.iter().find(|x| x.0 == target).ok_or("That plan is not available.")?.clone();
             let (prev, _, _) = p.iter().find(|x| x.2).ok_or("Could not determine the current plan.")?.clone();
             if prev == target { return Err("That plan is already active.".into()); }
+            // Save rollback state before touching the system, so we never change the
+            // plan without a way back. If powercfg then fails, discard the snapshot
+            // again, so no phantom "Roll back" button is left for a change that never
+            // happened.
             let mut s = read_snaps(&app);
             s["power_plan"] = json!({ "previous": prev, "time": SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0) });
-            write_snaps(&app, &s)?; // save rollback state before changing anything
-            run("powercfg", &["/setactive", &target])?;
+            write_snaps(&app, &s)?;
+            if let Err(e) = run("powercfg", &["/setactive", &target]) {
+                s.as_object_mut().map(|o| o.remove("power_plan"));
+                let _ = write_snaps(&app, &s); // best effort; report the original failure
+                return Err(format!("{} Switching the active power plan needs Administrator rights: start STRYV with Run as administrator and try again.", e));
+            }
             Ok(Applied { message: format!("Power plan switched to {}.", name) })
         }
         "temp_cleanup" => {

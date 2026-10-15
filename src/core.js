@@ -7,7 +7,7 @@ const CHANGELOG = [{
   v: "0.1.0", date: "2026-10-15", tag: "Development build",
   groups: {
     New: ["Dashboard with live CPU, memory, uptime and storage readings.", "Performance page with 2-minute CPU and memory graphs and a top-processes list.", "Network page with live throughput, adapter list, TCP latency and DNS tests.", "System page with hardware and OS details and a copy-diagnostics button.", "Optimizations page with power-plan switching (reversible) and old temp-file cleanup, both with review and confirmation. Startup apps list with reversible enable/disable.", "GPU load, memory, temperature and clock (NVIDIA only), temperature sensors where Windows exposes them, and adapter link speed.", "Dashboard system-health summary (memory, sustained CPU, storage space, uptime) with data-quality labels.", "Settings, activity feed, technical log, command palette (Ctrl+K), data export and reset."],
-    "Known limits": ["AMD and Intel GPU readings are not supported yet, and many PCs do not expose CPU temperature.", "SYN Assistant is not connected.", "There is no update mechanism yet; install new builds manually."]
+    "Known limits": ["AMD and Intel GPU readings are not supported yet, and many PCs do not expose CPU temperature.", "Switching the Windows power plan needs Administrator rights, so STRYV must be started with Run as administrator for that action.", "SYN Assistant is not connected.", "There is no update mechanism yet; install new builds manually."]
   }
 }];
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
