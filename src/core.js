@@ -2,9 +2,34 @@
 const q = (id) => document.getElementById(id);
 const PAGES = ["dashboard", "performance", "network", "atlas", "optimizations", "system", "syn", "activity", "settings", "whatsnew", "help"];
 const ACCENTS = { Amber: "#F5A623", Cyan: "#38BDF8", Violet: "#8B5CF6" };
-const VERSION = "0.2.0";
+const VERSION = "0.2.1";
 const CHANGELOG = [{
-  v: "0.2.0", date: "2026-10-15", tag: "Signed updates",
+  v: "0.2.1", date: "2026-10-16", tag: "ATLAS library",
+  groups: {
+    New: [
+      "ATLAS is now a proper library instead of a table. Search by name, launcher or install path, sort by recently played, last launched, name, most played or install size, and mark favourites to pin them to the top.",
+      "Cover art for Steam games, loaded from Valve's public CDN. Games you add yourself have no art and show a plain placeholder rather than a broken image.",
+      "Add any game manually by pointing STRYV at its .exe. The file is checked before it is added, launched directly, and watched until it closes.",
+      "Session tracking. ATLAS records each launch and, for games it started itself, measures how long it ran along with peak CPU and memory use.",
+      "Your library persists. Favourites, hidden entries, hand-added games and session history are saved and restored the next time STRYV opens."
+    ],
+    Changed: [
+      "New design system. Amber is now the STRYV accent, the sidebar is grouped into Monitor, Tools and STRYV, and the dashboard leads with CPU and memory instead of giving every statistic equal weight.",
+      "Installations update in place. A new release is downloaded, checked against the signature key built into the app, and installed without leaving STRYV."
+    ],
+    Fixed: [
+      "A game name, app id or install path read from a launcher file is now escaped before it reaches the page. Launchers write those files, so that text is treated as untrusted input rather than markup.",
+      "The release workflow can publish again. It was missing a checkout step, and it tried to upload the artifact directories instead of the files inside them.",
+      "The updater now points at the repository's current address rather than relying on GitHub redirecting the old one."
+    ],
+    "Known limits": [
+      "Only Steam is detected automatically. Games from other stores are still added by hand, which launches them directly because there is no launcher for STRYV to ask.",
+      "Play time is only measured for games ATLAS started itself. A Steam game is launched by Steam, so STRYV never sees the process and reports the launch without a duration rather than guessing one.",
+      "Atlas reads Steam libraries only, and launch requests are checked against the library it found on this PC.",
+      "Epic, Battle.net and GOG libraries are not read yet."
+    ]
+  }
+}, {  v: "0.2.0", date: "2026-10-15", tag: "Signed updates",
   groups: {
     New: ["Signed in-app updates. STRYV checks the published release feed, downloads the installer and verifies its signature against the key built into the app before running it. An update that does not verify is discarded.", "Updates can be checked manually from Settings, and STRYV also looks quietly in the background and tells you when a newer version exists."],
     "Known limits": ["Updates are only offered once a signed release has been published. Until then, Check now reports that you are up to date."]
