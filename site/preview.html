@@ -42,7 +42,9 @@ fetch("../src/index.html")
   .then((html) => {
     const doc = new DOMParser().parseFromString(html, "text/html");
     const atlas = doc.querySelector("#atlas");
-    document.getElementById("pvHost").appendChild(atlas.cloneNode(true));
+    const node = atlas.cloneNode(true);
+    node.classList.add("on");
+    document.getElementById("pvHost").appendChild(node);
     start();
   })
   .catch((e) => {
@@ -50,6 +52,13 @@ fetch("../src/index.html")
       '<p style="padding:24px;color:#EF4444">Could not load ../src/index.html (' + e + ').' +
       ' This preview must be served over http, not opened from file://.</p>';
   });
+
+function pvFail(msg) {
+  const host = document.getElementById("pvHost");
+  if (host) host.innerHTML = `<p style="padding:24px;color:#EF4444;font:13px system-ui">Preview problem: ${msg}</p>`;
+  const st = document.getElementById("pvState");
+  if (st) st.textContent = msg;
+}
 
 function start() {
   const FIXTURE = {
@@ -119,7 +128,11 @@ function start() {
   // provided and core.js itself is deliberately NOT loaded here.
   const s = document.createElement("script");
   s.src = "../src/atlas.js";
-  s.onload = () => { if (window.Atlas) window.Atlas.scan(false); };
+  s.onerror = () => { pvFail("atlas.js failed to load"); };
+  s.onload = () => {
+    if (!window.Atlas) { pvFail("atlas.js loaded but exposed no Atlas"); return; }
+    window.Atlas.scan(false);
+  };
   document.head.appendChild(s);
 }
 </script>

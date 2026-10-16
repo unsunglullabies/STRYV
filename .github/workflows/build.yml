@@ -48,7 +48,6 @@ jobs:
         run: npm ci
 
       - name: Frontend tests
-        continue-on-error: true
         run: npm test
 
       # Secrets are not exposed to pull requests from forks, so signing only
@@ -67,7 +66,7 @@ jobs:
       # only needed for an actual release, so all of that is skipped unless this
       # run was triggered by a v* tag.
       - name: Compile check (no installer)
-        if: always() && github.ref_type != 'tag'
+        if: github.ref_type != 'tag'
         shell: pwsh
         run: npm run build:fast
 

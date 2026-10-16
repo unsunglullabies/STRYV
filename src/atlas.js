@@ -62,6 +62,8 @@ const hasBackend = () => typeof invoke === "function";
   // ---- state ------------------------------------------------------------------
   let games = [], sessions = [], busy = false, launching = false;
   let editingId = null, detailId = null;
+  // Set when a scan fails, so the page can say why instead of showing an empty library.
+  let scanError = null;
   // Single source of truth for the toolbar, so the page and the code cannot drift.
   const SORTS = ["recent", "lastLaunch", "name", "plays", "size"];
   const filters = { favOnly: false, missingOnly: false };
@@ -186,13 +188,13 @@ const hasBackend = () => typeof invoke === "function";
         <h2>${escF(g.name)}</h2>
         <dl class="at-meta">
           <div><dt>Last played</dt><dd>${escF(day(g.last_played))}</dd></div>
-          <div><dt>Launches</dt><dd>${escF(String(g.plays || 0))}</dd></div>
+          <div><dt>Launches</dt><dd>${escF(launchesWord(g.plays))}</dd></div>
           <div><dt>Last session</dt><dd>${escF(dur(g.last_session_secs))}</dd></div>
         </dl>
         ${g.available === false ? `<p class="at-why">Executable not found at ${escF(g.exe_path || g.install_dir || "its recorded location")}.</p>` : ""}
         <div class="at-cbtns">
           <button class="btn" data-fplay="${escF(g.id)}"${g.available === false ? " disabled" : ""}>Play</button>
-          <button class="btn ghost at-fav" data-fav="${escF(g.id)}" aria-pressed="${g.favorite ? "true" : "false"}" aria-label="Favourite">${g.favorite ? "★" : "☆"}</button>
+          <button class="btn ghost at-fav" data-fav="${escF(g.id)}" aria-pressed="${g.favorite ? "true" : "false"}" title="${g.favorite ? "Remove from favourites" : "Add to favourites"}" aria-label="Favourite">${g.favorite ? "★" : "☆"}</button>
         </div>
       </div>`;
     show("atlasFeature", true);
@@ -204,13 +206,41 @@ const hasBackend = () => typeof invoke === "function";
     host.onclick = () => openDetail(g.id);
   }
 
-  const byId = (id) => games.find((g) => g.id === id);
+const byId = (id) => games.find((g) => g.id === id);
+
+  // Launchability is worked out here, from the data already on the game, rather
+  // than trusting a flag the backend computed. The backend does compute one, but
+  // a store written before that field existed - or any scan that skips it - would
+  // leave the button live on a game that cannot start, and a dead button that
+  // looks fine is worse than an honest disabled one.
+  // Returns null when it can launch, otherwise the reason it cannot.
+function cannotLaunch(g) {
+      if (!g) return "That game is no longer in your library.";
+      // An entry with no id cannot be launched by id, and sending one to the
+      // backend would be asking it to act on nothing.
+      if (!g.id) return "That game is no longer in your library.";
+      if (g.available === false) {
+      return "Executable not found at " + (g.exe_path || g.install_dir || "its recorded location") + ".";
+    }
+    if (/steam/i.test(g.launcher)) {
+      if (!g.app_id || !/^\d+$/.test(String(g.app_id))) return "Steam has no app id for this entry.";
+      return null;
+    }
+    if (!g.exe_path) return "No executable is recorded for this entry.";
+    return null;
+  }
+
+  // "0 launches" is accurate but reads like a database. ATLAS says what it means,
+  // and is explicit that the number only covers games launched from here.
+  function launchesWord(n) {
+    const c = Number(n) || 0;
+    return c === 0 ? "None from ATLAS" : c === 1 ? "1 launch" : c + " launches";
+  }
 
   // ---- grid -------------------------------------------------------------------
   function card(g) {
-    const why = g.available === false
-      ? `<p class="at-why">Executable not found at ${escF(g.exe_path || g.install_dir || "its recorded location")}.</p>`
-      : "";
+    const blocked = cannotLaunch(g);
+    const why = blocked ? `<p class="at-why">${escF(blocked)}</p>` : "";
     return `<article class="at-card" data-open="${escF(g.id)}">
       ${art(g)}
       <div class="at-cbody">
@@ -221,14 +251,14 @@ const hasBackend = () => typeof invoke === "function";
         <dl class="at-meta">
           <div><dt>Size</dt><dd>${escF(mb(g.size_bytes))}</dd></div>
           <div><dt>Played</dt><dd>${escF(day(g.last_played))}</dd></div>
-          <div><dt>Launches</dt><dd>${escF(String(g.plays || 0))}</dd></div>
+          <div><dt>Launches</dt><dd>${escF(launchesWord(g.plays))}</dd></div>
           <div><dt>Session</dt><dd>${escF(dur(g.last_session_secs))}</dd></div>
         </dl>
         ${g.install_dir ? `<small class="at-path" title="${escF(g.install_dir)}">${escF(g.install_dir)}</small>` : ""}
         ${why}
         <div class="at-cbtns">
-          <button class="btn" data-play="${escF(g.id)}"${g.available === false ? " disabled" : ""}>Play</button>
-          <button class="btn ghost at-fav" data-fav="${escF(g.id)}" aria-pressed="${g.favorite ? "true" : "false"}" aria-label="Favourite">${g.favorite ? "★" : "☆"}</button>
+          <button class="btn" data-play="${escF(g.id)}"${blocked ? " disabled" : ""}>Play</button>
+          <button class="btn ghost at-fav" data-fav="${escF(g.id)}" aria-pressed="${g.favorite ? "true" : "false"}" title="${g.favorite ? "Remove from favourites" : "Add to favourites"}" aria-label="Favourite">${g.favorite ? "★" : "☆"}</button>
           <button class="btn ghost at-del" data-del="${escF(g.id)}">Remove</button>
         </div>
       </div>
@@ -251,16 +281,23 @@ const hasBackend = () => typeof invoke === "function";
 
     // Four distinct empty states, never one generic message.
     let state = "";
-    if (!hasBackend()) {
+    if (scanError) {
+      state = `<b>Could not read the library.</b><p>${escF(scanError)}</p>`;
+    } else if (!hasBackend()) {
       state = `<b>STRYV is not connected to its backend.</b><p>The library cannot be read until the backend is running.</p>`;
     } else if (!games.length) {
       state = `<b>No games found yet.</b>
         <p>STRYV reads the library files your launchers have already written. If a game is not listed, add it yourself and ATLAS will launch it directly.</p>
         <button class="btn" data-emptyadd="1">Add a game</button>`;
-    } else if (!list.length) {
-      const filtered = filters.favOnly || filters.missingOnly || ((E("atlasQ") && E("atlasQ").value || "").trim());
+} else if (!list.length) {
+      const term = ((E("atlasQ") && E("atlasQ").value) || "").trim();
+      const filtered = filters.favOnly || filters.missingOnly || term;
+      // Echoes what was searched for and how big the library actually is, so a
+      // wrong search reads as a wrong search rather than as an empty library.
       state = filtered
-        ? `<b>Nothing matches.</b><p>No game in your library matches the current search or filters.</p><button class="btn ghost" data-reset="1">Clear search and filters</button>`
+        ? `<b>Nothing matches${term ? ` &ldquo;${escF(term)}&rdquo;` : ""}.</b>
+           <p>None of the ${games.length} ${games.length === 1 ? "game" : "games"} in your library match the current search or filters.</p>
+           <button class="btn ghost" data-reset="1">Clear search and filters</button>`
         : `<b>No games found yet.</b><p>Add a game and ATLAS will keep it, launch it, and record how long it runs.</p>
            <button class="btn" data-emptyadd="1">Add a game</button>`;
     }
@@ -274,13 +311,21 @@ const hasBackend = () => typeof invoke === "function";
   function renderHero() {
     const host = E("atlasHeroStat");
     if (!host) return;
+    if (scanError) { host.innerHTML = '<span class="at-loading">Library unavailable</span>'; return; }
     if (!games.length && !hasBackend()) { host.innerHTML = '<span class="at-loading">Backend unavailable</span>'; return; }
     const total = games.reduce((a, g) => a + (g.size_bytes || 0), 0);
     const plays = games.reduce((a, g) => a + (g.plays || 0), 0);
     const secs = games.reduce((a, g) => a + (g.total_secs || 0), 0);
-    const launchers = [...new Set(games.map((g) => g.launcher))].filter(Boolean);
+const launchers = [...new Set(games.map((g) => g.launcher))].filter(Boolean);
+    // When a search or filter is narrowing the grid, the first figure counts what
+    // is on screen and says so, rather than always quoting the whole library.
+    const term = ((E("atlasQ") && E("atlasQ").value) || "").trim();
+    const shownList = visible();
+    const narrowed = shownList.length !== games.length;
+    const shown = shownList.length === 1 ? "1 game shown" : `${shownList.length} games shown`;
+    const of = narrowed ? ` of ${games.length}` : "";
     host.innerHTML = `
-      <div><b>${escF(String(games.length))}</b><small>${games.length === 1 ? "game" : "games"}${launchers.length ? " · " + escF(launchers.join(", ")) : ""}</small></div>
+      <div><b>${escF(narrowed ? String(shownList.length) : String(games.length))}</b><small>${narrowed ? shown + of : games.length === 1 ? "game" : "games"}${launchers.length ? " · " + escF(launchers.join(", ")) : ""}</small></div>
       <div><b>${escF(mb(total))}</b><small>reported install size</small></div>
       <div><b>${escF(String(plays))}</b><small>launches from ATLAS</small></div>
       <div><b>${escF(secs ? dur(secs) : "Not measured")}</b><small>measured play time</small></div>`;
@@ -297,7 +342,7 @@ const hasBackend = () => typeof invoke === "function";
           <b>${escF(s.name)}</b>
           <small>${escF(when(s.started))} · ${escF(s.launcher)} · ${escF(dur(s.duration_secs))}${s.measured ? "" : " · duration not measured"}</small>
         </div>
-        <span class="at-sx">${s.measured && s.cpu_pct !== null && s.cpu_pct !== undefined ? "peak " + Math.round(s.cpu_pct) + "% cpu" : ""}</span>
+        <span class="at-sx">${s.measured ? [s.cpu_pct !== null && s.cpu_pct !== undefined ? "peak " + Math.round(s.cpu_pct) + "% cpu" : "", s.mem_bytes ? mb(s.mem_bytes) + " peak" : ""].filter(Boolean).join(" · ") : "duration not measured"}</span>
       </div>`).join("");
   }
 
@@ -314,35 +359,55 @@ const hasBackend = () => typeof invoke === "function";
 
   // ---- actions ----------------------------------------------------------------
   async function scan(manual) {
-    if (busy) return;
-    if (!hasBackend()) { render(); return; }
+if (busy) return;
+      // Renders before bailing, so the sessions panel can explain that it cannot
+      // read rather than quietly claiming there is nothing recorded.
+      if (!hasBackend()) { render(); loadSessions(); return; }
     busy = true;
     const btn = E("atlasScan");
     if (btn) { btn.disabled = true; if (manual) btn.textContent = "Scanning…"; }
     try {
       games = await call("atlas_scan");
+      scanError = null;
+      loadSessions();
       A.log({ text: "ATLAS library rescan", status: "done", detail: JSON.stringify({ found: games.length }) });
       if (manual) T("Library rescanned — " + games.length + (games.length === 1 ? " game" : " games"));
-    } catch (e) {
-      TG.add("atlas.scan", e);
-      if (manual) T("Could not read the library: " + e, true);
-    } finally {
+} catch (e) {
+        TG.add("atlas.scan", e);
+        scanError = String(e.message || e);
+        // A background refresh that fails still has to say so: the grid on screen
+        // is now older than the library, and silence would read as "up to date".
+        if (manual) T("Could not read the library: " + e, true);
+        else T("Could not refresh the library: " + e + " Showing the last known list.", true);
+      } finally {
       busy = false;
       if (btn) { btn.disabled = false; btn.textContent = "Rescan"; }
       render();
     }
   }
 
-  async function loadSessions() {
-    if (!hasBackend()) return;
-    try { sessions = await call("atlas_sessions"); renderSessions(); } catch { /* not critical */ }
-  }
+async function loadSessions() {
+      const host = E("atlasSess");
+      // Says "none recorded" only when it was actually able to look. A panel that
+      // claims an empty history while the backend is unreachable is telling the
+      // user their data is gone when really STRYV just cannot see it.
+      if (!hasBackend()) {
+        if (host) host.innerHTML = `<p class="at-empty">Sessions are not connected in this window, so STRYV cannot read your history. Nothing has been lost.</p>`;
+        return;
+      }
+      try { sessions = await call("atlas_sessions"); renderSessions(); }
+      catch (e) {
+        TG.add("atlas.sessions", e);
+        if (host) host.innerHTML = `<p class="at-empty">STRYV could not read your session history. The games in your library are untouched.</p>`;
+      }
+    }
 
   // Sends only a library id. The executable is resolved by the backend.
-  async function launch(g) {
-    if (!g || launching) return;
-    if (g.available === false) { T("That game's executable is missing. Edit or remove the entry.", true); return; }
-    launching = true;
+async function launch(g) {
+      if (launching) return;
+      const blocked = cannotLaunch(g);
+      if (blocked) { T(blocked + " Edit or remove the entry.", true); return; }
+      launching = true;
     const id = A.log({ text: "Launching from ATLAS: " + g.name, status: "running" });
     try {
       const msg = await call("atlas_launch_id", { id: g.id });
@@ -371,18 +436,27 @@ const hasBackend = () => typeof invoke === "function";
     if (!g) return;
     const ok = await ASK({
       title: "Remove from ATLAS",
-      body: "Remove \"" + g.name + "\" from your ATLAS library?\n\nThis only removes the ATLAS entry. It does not uninstall the game, delete the executable, or touch anything the launcher wrote.",
+      body: /steam/i.test(g.launcher)
+          ? "Take \"" + g.name + "\" out of your ATLAS library?\n\nNothing in the Steam install is deleted. Nothing is uninstalled, no save is touched, and the launcher is not changed. ATLAS only stops listing it."
+          : "Take \"" + g.name + "\" out of your ATLAS library?\n\nThis removes the ATLAS entry only. The game, its files and its save data are not touched, and nothing is deleted from disk.",
       yes: "Remove from ATLAS",
       danger: true,
     });
-    if (!ok) return;
+if (!ok) return;
     ST.set("atlas.removed", true);
+    const act = A.log({ text: "Removed from ATLAS: " + g.name, status: "running" });
     try {
       await call("atlas_remove", { id, forget: !!forget });
       games = games.filter((x) => x.id !== id);
+      A.update(act, { status: "done", detail: "ATLAS entry removed. Nothing on disk was deleted." });
       render();
+      await scan(false);
       T("Removed from ATLAS. The game itself is untouched.");
-    } catch (e) { TG.add("atlas.remove", e); T("Could not remove that: " + e, true); }
+    } catch (e) {
+      A.update(act, { status: "failed", detail: String(e.message || e) });
+      TG.add("atlas.remove", e);
+      T("Could not remove that: " + e, true);
+    }
   }
 
   // ---- details ----------------------------------------------------------------
@@ -408,14 +482,14 @@ const hasBackend = () => typeof invoke === "function";
           <div><dt>Install size</dt><dd>${escF(mb(g.size_bytes))}</dd></div>
           <div><dt>Last played</dt><dd>${escF(day(g.last_played))}</dd></div>
           <div><dt>Last launched</dt><dd>${escF(when(g.last_launch))}</dd></div>
-          <div><dt>Launches</dt><dd>${escF(String(g.plays || 0))}</dd></div>
+          <div><dt>Launches</dt><dd>${escF(launchesWord(g.plays))}</dd></div>
           <div><dt>Last session</dt><dd>${escF(dur(g.last_session_secs))}</dd></div>
           <div><dt>Total measured</dt><dd>${escF(g.total_secs ? dur(g.total_secs) : "Not measured")}</dd></div>
           ${g.art_path ? `<div><dt>Cover image</dt><dd>${escF(g.art_path)}</dd></div>` : ""}
         </dl>
         <div class="at-cbtns">
-          <button class="btn" data-play="${escF(g.id)}"${g.available === false ? " disabled" : ""}>Play</button>
-          <button class="btn ghost at-fav" data-fav="${escF(g.id)}" aria-pressed="${g.favorite ? "true" : "false"}" aria-label="Favourite">${g.favorite ? "★" : "☆"}</button>
+          <button class="btn" data-play="${escF(g.id)}"${cannotLaunch(g) ? " disabled" : ""}>Play</button>
+          <button class="btn ghost at-fav" data-fav="${escF(g.id)}" aria-pressed="${g.favorite ? "true" : "false"}" title="${g.favorite ? "Remove from favourites" : "Add to favourites"}" aria-label="Favourite">${g.favorite ? "★" : "☆"}</button>
           <button class="btn ghost" data-edit="${escF(g.id)}">Edit</button>
           <button class="btn ghost at-del" data-del="${escF(g.id)}">Remove</button>
           <button class="btn ghost" data-close="1">Close</button>
@@ -494,17 +568,25 @@ const hasBackend = () => typeof invoke === "function";
     }
   }
 
-  async function submitAdd() {
+async function submitAdd() {
     const exe = (E("atlasExe") && E("atlasExe").value || "").trim();
-    if (!exe) { T("Choose the game's .exe first.", true); return; }
+    if (!exe) { T("Choose the game's .exe file first.", true); return; }
     const name = (E("atlasName") && E("atlasName").value || "").trim() || null;
     const artPath = (E("atlasArt") && E("atlasArt").value || "").trim() || null;
+    // Adding is a change to the user's library, so it lands in the activity feed
+    // like everything else that alters what ATLAS knows.
+    const act = A.log({ text: "Adding a game: " + (name || exe), status: "running" });
     try {
       const g = await call("atlas_add_manual", { name, exe_path: exe, art_path: artPath });
+      A.update(act, { status: "done", detail: g.name });
       closeAdd();
       await scan(false);
-      T("Added " + g.name + " to your library.");
-    } catch (e) { TG.add("atlas.add", e); T(String(e.message || e), true); }
+      T("Added " + g.name);
+    } catch (e) {
+      A.update(act, { status: "failed", detail: String(e.message || e) });
+      TG.add("atlas.add_manual", e);
+      T(String(e.message || e), true);
+    }
   }
 
   async function submitEdit() {
@@ -562,22 +644,59 @@ const hasBackend = () => typeof invoke === "function";
     try { await call("atlas_set_art", { id: editingId, art_path: null }); T("Cover image cleared."); } catch (err) { T(String(err.message || err), true); }
   });
 
-  on("atlasQ", "input", () => { ST.set("atlas.q", E("atlasQ").value); renderGrid(); const a = filters.favOnly || filters.missingOnly || (E("atlasQ").value || "").trim(); show("atlasReset", !!a); });
+  on("atlasQ", "input", () => {
+      ST.set("atlas.q", E("atlasQ").value);
+      // The headline count and the featured game both depend on what is showing.
+      // Rerendering only the grid left them quoting the whole library while you
+      // were looking at one result.
+      renderHero(); renderFeature(); renderGrid();
+      const a = filters.favOnly || filters.missingOnly || (E("atlasQ").value || "").trim();
+      show("atlasReset", !!a);
+    });
   on("atlasSort", "change", () => { ST.set("atlas.sort", E("atlasSort").value); renderGrid(); renderFeature(); });
   on("atlasFavOnly", "click", () => { filters.favOnly = !filters.favOnly; syncChips(); render(); });
   on("atlasMissingOnly", "click", () => { filters.missingOnly = !filters.missingOnly; syncChips(); render(); });
   on("atlasReset", "click", () => resetAll());
 
-  on("atlasRestore", "click", async () => {
-    try { await call("atlas_restore"); ST.set("atlas.removed", false); await scan(false); T("Removed games restored."); }
-    catch (e) { T(String(e.message || e), true); }
-  });
+on("atlasRestore", "click", async () => {
+      // Putting games back is harmless, but it is still a change to the library,
+      // so it asks first and says plainly what it is not doing.
+      const ok = await ASK({
+        title: "Restore removed games",
+        body: "Put every game you removed back into your ATLAS library?\n\nNothing is reinstalled and nothing is re-downloaded. ATLAS is only forgetting what it deleted from its own list.",
+        yes: "Restore them", danger: false,
+      });
+      if (!ok) return;
+      const act = A.log({ text: "Restored removed ATLAS games", status: "running" });
+      try {
+        await call("atlas_restore"); ST.set("atlas.removed", false);
+        A.update(act, { status: "done", detail: "ATLAS entries restored. Nothing was reinstalled." });
+        await scan(false); T("Removed games restored.");
+      } catch (e) {
+        A.update(act, { status: "failed", detail: String(e.message || e) });
+        TG.add("atlas.restore", e); T(String(e.message || e), true);
+      }
+    });
 
   on("atlasSessClr", "click", async () => {
-    if (!await ASK({ title: "Clear session history", body: "Delete every recorded launch? Games in your library are not affected.", yes: "Clear", danger: true })) return;
-    try { await call("atlas_clear_sessions"); sessions = []; renderSessions(); T("Session history cleared."); }
-    catch (e) { T(String(e.message || e), true); }
-  });
+      // Refuses before calling the backend, rather than asking it to delete nothing.
+      if (!sessions.length) { T("There are no sessions to clear."); return; }
+      const ok = await ASK({
+        title: "Clear session history",
+        body: "Delete every recorded launch?\n\nOnly the measured play time is lost, and it cannot be recovered afterwards. Games stay in your library with their covers, paths and favourites exactly as they are.",
+        yes: "Clear history", danger: true,
+      });
+      if (!ok) return;
+      const act = A.log({ text: "Cleared ATLAS session history", status: "running" });
+      try {
+        await call("atlas_clear_sessions"); sessions = [];
+        A.update(act, { status: "done", detail: "Play time cleared. Games were not touched." });
+        renderSessions(); T("Session history cleared.");
+      } catch (e) {
+        A.update(act, { status: "failed", detail: String(e.message || e) });
+        TG.add("atlas.sessions.clear", e); T(String(e.message || e), true);
+      }
+    });
 
   on("atlasExe", "keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); submitAdd(); } });
   on("atlasName", "keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); submitAdd(); } });

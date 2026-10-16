@@ -2,9 +2,42 @@
 const q = (id) => document.getElementById(id);
 const PAGES = ["dashboard", "performance", "network", "atlas", "optimizations", "system", "syn", "activity", "settings", "whatsnew", "help"];
 const ACCENTS = { Amber: "#F5A623", Cyan: "#38BDF8", Violet: "#8B5CF6" };
-const VERSION = "0.2.1";
+const VERSION = "0.2.3";
 const CHANGELOG = [{
-  v: "0.2.1", date: "2026-10-16", tag: "ATLAS library",
+    v: "0.2.3", date: "2026-10-16", tag: "ATLAS 2.0",
+    groups: {
+      New: [
+        "ATLAS is rebuilt around your games rather than a list of file paths. An ATLAS header, headline figures, a featured game, artwork-led cards, and a details panel that opens without leaving the page.",
+        "Filter the library by favourites or by games that cannot be launched, alongside search and five sort orders. The headline count follows what you are actually looking at, so a filtered view reads '2 games shown of 7' instead of still claiming seven.",
+        "Edit a game you added by hand. Fix a name, a wrong executable, or point it somewhere else. A native Windows file picker is used for both the game and its cover.",
+        "Set a cover image for any hand-added game. It is validated on the way in, so a bad path never leaves a half-added game behind.",
+        "Search now tells you what it searched for and how big your library is when nothing matches, so a typo never looks like an empty library.",
+        "New launch screen. STRYV reports its subsystems coming online, respects your reduced-motion setting, and can always be skipped with Escape."
+      ],
+      Signature: [
+        "Signed, like every STRYV release. STRYV checks the published release feed, downloads the installer, and verifies its signature against the key built into the app before running it. An update that does not verify is discarded."
+      ],
+      Fixed: [
+        "A Play button could sit there looking completely normal on a game that could not start. ATLAS now works out launchability itself and tells you why on the card: Steam has no app id for this entry, or no executable is recorded.",
+        "The session panel said 'No sessions recorded yet' while the backend was unreachable. It now says it cannot read your history, and that nothing has been lost.",
+        "Searching no longer left the headline count and the featured game showing the whole library while you were looking at one result.",
+        "Adding and removing a game is now recorded in the activity feed, with what actually happened. Removing says plainly that nothing on disk was deleted.",
+        "Restoring removed games asks first and says nothing is reinstalled. Clearing session history now says that only the measured play time is lost and cannot be recovered, and it refuses to call the backend when there is nothing to clear.",
+        "A cover image chosen when adding a game is actually saved. Previously it was accepted and discarded unless you went back and edited the game.",
+        "The background update check now runs after startup finishes instead of being cut off by the launch screen. Manual checks were unaffected.",
+        "A refresh that fails in the background no longer stays silent. ATLAS says the list on screen is the last known one.",
+        "Favourite buttons now say what clicking them will do."
+      ],
+      Known: [
+        "Games found by a launcher cannot be edited or given a cover, because ATLAS does not own those entries.",
+        "ATLAS reads Steam. Other launchers are not read yet.",
+        "A game added by hand is launched as the .exe you pointed at. Games that need their own launcher are not started through it.",
+        "Store artwork is used when it is reachable. It is optional and never required for the library to work."
+      ]
+    }
+  },
+  {
+    v: "0.2.1", date: "2026-10-16", tag: "ATLAS library",
   groups: {
     New: [
       "ATLAS is now a proper library instead of a table. Search by name, launcher or install path, sort by recently played, last launched, name, most played or install size, and mark favourites to pin them to the top.",

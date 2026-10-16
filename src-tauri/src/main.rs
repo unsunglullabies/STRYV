@@ -781,8 +781,8 @@ fn stable_id(p: &Path) -> String {
 }
 
 #[tauri::command]
-fn atlas_add_manual(app: tauri::AppHandle, name: Option<String>, exe_path: String) -> Result<Game, String> {
-    let mut path = exe_path.trim().to_string();
+fn atlas_add_manual(app: tauri::AppHandle, name: Option<String>, exe_path: String, art_path: Option<String>) -> Result<Game, String> {
+      let mut path = exe_path.trim().to_string();
     if path.is_empty() { return Err("Choose the game's .exe file.".into()); }
     // Tolerate a path pasted straight out of Explorer, which quotes it.
     if path.len() > 1 && path.starts_with('"') && path.ends_with('"') { path = path[1..path.len() - 1].to_string(); }
@@ -791,9 +791,12 @@ fn atlas_add_manual(app: tauri::AppHandle, name: Option<String>, exe_path: Strin
     if !p.extension().map(|e| e.eq_ignore_ascii_case("exe")).unwrap_or(false) {
         return Err("That is not an .exe. Shortcuts, folders and documents cannot be launched.".into());
     }
-    let stem = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| path.clone());
-    let final_name = name.unwrap_or_default();
-    let final_name = if final_name.trim().is_empty() { stem } else { final_name.trim().to_string() };
+let stem = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| path.clone());
+      let final_name = name.unwrap_or_default();
+      let final_name = if final_name.trim().is_empty() { stem } else { final_name.trim().to_string() };
+      // Validated before anything is written, so a bad cover never leaves the game
+      // half-added. Same helper as atlas_set_art, so the two cannot drift apart.
+      let art = clean_art_path(art_path)?;
 
     let mut store = read_atlas(&app);
     let id = format!("manual:{}", stable_id(&p));
@@ -811,8 +814,9 @@ fn atlas_add_manual(app: tauri::AppHandle, name: Option<String>, exe_path: Strin
         app_id: String::new(),
         name: final_name,
         install_dir: p.parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default(),
-        exe_path: p.to_string_lossy().into_owned(),
-        // Left at zero on purpose: walking a whole install tree is slow and a
+exe_path: p.to_string_lossy().into_owned(),
+          art_path: art,
+          // Left at zero on purpose: walking a whole install tree is slow and a
         // partial figure would be a wrong number dressed up as a real one.
         size_bytes: 0,
         last_played: 0,
@@ -893,33 +897,40 @@ fn atlas_update(app: tauri::AppHandle, id: String, name: Option<String>, exe_pat
 
 // Attaches a local image to a game. The file has to exist and look like an
 // image, so ATLAS never ends up pointing at a directory or an .exe.
-#[tauri::command]
-fn atlas_set_art(app: tauri::AppHandle, id: String, art_path: Option<String>) -> Result<(), String> {
-    let tid = id.trim().to_string();
-    let mut store = read_atlas(&app);
-    let Some(g) = store.manual.iter_mut().find(|m| m.id == tid) else {
-        return Err("That game is no longer in your library.".into());
-    };
+// Validates a cover-image path the user picked. One definition, so adding a game
+// with art and setting art on an existing game cannot drift apart.
+fn clean_art_path(art_path: Option<String>) -> Result<String, String> {
+      let raw = art_path.unwrap_or_default().trim().trim_matches('"').to_string();
+      if raw.is_empty() {
+          return Ok(String::new());
+      }
+      let pb = PathBuf::from(&raw);
+      if !pb.is_file() {
+          return Err(format!("{} is not a file on this PC.", raw));
+      }
+      let ok = pb
+          .extension()
+          .map(|e| {
+              let e = e.to_ascii_lowercase();
+              e == "png" || e == "jpg" || e == "jpeg" || e == "webp" || e == "bmp" || e == "gif"
+          })
+          .unwrap_or(false);
+      if !ok {
+          return Err("Choose an image file (png, jpg, webp, bmp or gif).".into());
+      }
+      Ok(pb.to_string_lossy().into_owned())
+  }
 
-    let raw = art_path.unwrap_or_default().trim().trim_matches('"').to_string();
-    if raw.is_empty() {
-        g.art_path.clear();
-    } else {
-        let pb = PathBuf::from(&raw);
-        if !pb.is_file() { return Err(format!("{} is not a file on this PC.", raw)); }
-        let ok = pb
-            .extension()
-            .map(|e| {
-                let e = e.to_ascii_lowercase();
-                e == "png" || e == "jpg" || e == "jpeg" || e == "webp" || e == "bmp" || e == "gif"
-            })
-            .unwrap_or(false);
-        if !ok { return Err("Choose an image file (png, jpg, webp, bmp or gif).".into()); }
-        g.art_path = pb.to_string_lossy().into_owned();
-    }
-
-    write_atlas(&app, &store)
-}
+  #[tauri::command]
+  fn atlas_set_art(app: tauri::AppHandle, id: String, art_path: Option<String>) -> Result<(), String> {
+      let tid = id.trim().to_string();
+      let mut store = read_atlas(&app);
+      let Some(g) = store.manual.iter_mut().find(|m| m.id == tid) else {
+          return Err("That game is no longer in your library.".into());
+      };
+      g.art_path = clean_art_path(art_path)?;
+      write_atlas(&app, &store)
+  }
 #[tauri::command]
 fn atlas_remove(app: tauri::AppHandle, id: String, forget: Option<bool>) -> Result<(), String> {
     let tid = id.trim().to_string();

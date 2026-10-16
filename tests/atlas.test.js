@@ -143,7 +143,10 @@ function makeEnv(games, invokeImpl, opts) {
     Tech: { add: (ctx, err) => log.push({ kind: "tech", m: ctx, err: (err && err.message) || String(err) }) },
     confirmBox: (d) => { log.push({ kind: "confirm", title: d.title, body: d.body }); return Promise.resolve(!(o.confirm && !o.confirm())); },
     console,
-    document: { createElement: (tag) => makeEl({ tag }) },
+    document: { createElement: (tag) => makeEl({ tag }), readyState: "complete", addEventListener: (ev, fn) => { if (ev === "DOMContentLoaded") fn(); } },
+    // A bare Node vm context has no timers. ATLAS schedules its post-launch refresh
+    // on setTimeout exactly as it does in the WebView, so the harness provides them.
+    setTimeout, clearTimeout, setInterval, clearInterval,
   };
   if (o.noDoc) delete sandbox.document;
   // Left off entirely when no invoke is passed, so "backend missing" is real.
@@ -194,6 +197,8 @@ const gbid = (b) => (b / 1073741824).toFixed(1) + " GB";
 // Drains the promise chains atlas.js fires without awaiting (sessions, the
 // background rescan after a launch).
 const flush = async () => { for (let i = 0; i < 4; i++) await new Promise((r) => setTimeout(r, 0)); };
+// The post-launch refresh is scheduled on a real 2500ms timer, so this waits it out.
+const flushSlow = async () => { await new Promise((r) => setTimeout(r, 2700)); await flush(); };
 
 const EVIL_NAME = FIXTURE.games.find((g) => /[<>]/.test(g.name));
 const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
@@ -231,7 +236,7 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
     await flush();
     const grid = els.atlasGrid.innerHTML;
 
-    check("counts the games", heroB(els.atlasHeroStat.innerHTML, 0) === FIXTURE.games.length);
+    check("counts the games", heroB(els.atlasHeroStat.innerHTML, 0) === String(FIXTURE.games.length));
     check("names the launchers it found", /Steam/.test(heroSmall(els.atlasHeroStat.innerHTML, 0)) && /Manual/.test(heroSmall(els.atlasHeroStat.innerHTML, 0)));
     check("renders one card per game", cards(grid).length === FIXTURE.games.length);
     check("one Play button per card", els.atlasGrid.querySelectorAll("[data-play]").length === FIXTURE.games.length);
@@ -278,8 +283,9 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
       srcs(grid).every((s) => /^https:\/\/cdn\.cloudflare\.steamstatic\.com\/steam\/apps\/\d{1,12}\/header\.jpg$/.test(s)));
     check("no cover src carries a quote or angle bracket", !srcs(grid).some((s) => /[<>"']/.test(s)));
     check("a poisoned app id gets no cover at all", imgs(poison).length === 0 && /at-covf/.test(poison));
-    check("a poisoned app id is told it is not a Steam entry", /Not a Steam entry/.test(poison));
-    check("a poisoned app id is still shown, escaped", poison.includes(esc(POISON.app_id)));
+    check("a poisoned app id is told it is not a Steam entry", /Steam has no app id for this entry/.test(poison));
+    check("a poisoned app id never reaches the markup raw", !poison.includes(POISON.app_id));
+        check("a poisoned app id cannot be launched", /data-play="[^"]+" disabled/.test(poison));
     check("a quote in the path cannot break out of the title attribute", poison.includes('title="' + esc(POISON.install_dir) + '"'));
     check("the grid has balanced quotes", (grid.match(/"/g) || []).length % 2 === 0);
   }
@@ -330,7 +336,7 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
     log.length = 0;
     // Click the real button on the card we mean, exactly as a user would.
     plays[names(els.atlasGrid.innerHTML).indexOf("Tom Clancy's Rainbow Six Siege")].onclick();
-    await flush();
+    await flushSlow();
 
     const L = inv.calls.filter((c) => c.n === "atlas_launch_id");
     check("calls atlas_launch_id exactly once", L.length === 1);
@@ -380,8 +386,8 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
     const grid = els.atlasGrid.innerHTML;
     const orphan = cards(grid)[names(grid).indexOf("Steam entry with no app id")];
 
-    check("an unlaunchable card disables its Play button", /data-play="\d+" disabled/.test(orphan));
-    check("a launchable card does not disable it", /data-play="\d+">Play</.test(cardFor(grid, "Hollow Knight")));
+    check("an unlaunchable card disables its Play button", /data-play="[^"]+" disabled/.test(orphan));
+    check("a launchable card does not disable it", /data-play="[^"]+">Play</.test(cardFor(grid, "Hollow Knight")));
     check("a Steam entry with no app id says why on the card", /Steam has no app id for this entry/.test(orphan));
     check("a hand-added entry with no executable says why too", /No executable is recorded/.test(grid));
 
@@ -389,7 +395,7 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
     els.atlasGrid.querySelectorAll("[data-play]")[names(grid).indexOf("Steam entry with no app id")].onclick();
     await flush();
     check("a disabled card still never reaches the backend", !inv.calls.some((c) => c.n === "atlas_launch_id"));
-    check("and explains why", log.some((l) => l.kind === "toast" && l.bad && /cannot be launched/.test(l.m)));
+    check("and explains why", log.some((l) => l.kind === "toast" && l.bad && /Edit or remove the entry/.test(l.m)));
 
     log.length = 0;
     inv.calls.length = 0;
@@ -398,7 +404,7 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
     await Atlas.launch({ id: "manual:x", launcher: "Manual", app_id: "", name: "no exe", exe_path: "" });
     check("refuses a hand-added entry with no executable", inv.calls.length === 0 && log.some((l) => l.kind === "toast" && l.bad && /No executable is recorded/.test(l.m)));
     await Atlas.launch({ id: "", launcher: "Manual", app_id: "", name: "no id", exe_path: "C:\\a.exe" });
-    check("refuses an entry with no library id", inv.calls.length === 0 && log.some((l) => l.kind === "toast" && l.bad && /cannot be launched/.test(l.m)));
+    check("refuses an entry with no library id", inv.calls.length === 0 && log.some((l) => l.kind === "toast" && l.bad && /no longer in your library/.test(l.m)));
     let threw = null;
     try { await Atlas.launch(null); } catch (e) { threw = e; }
     check("refuses a missing game object without throwing", threw === null && inv.calls.length === 0);
@@ -418,7 +424,7 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
     check("an unreported size never reads as a number", !/<dt>Size<\/dt><dd>0/.test(grid));
     check("an unreported size never reads 0 MB", !/<dd>0 MB<\/dd>/.test(grid));
     check("an unreported size never reads 0 GB", !/<dd>0 GB<\/dd>/.test(grid));
-    check("a null session length reads not measured", /<dt>Last session<\/dt><dd>not measured<\/dd>/.test(never));
+    check("a null session length reads not measured", /<dt>Session<\/dt><dd>Not measured<\/dd>/.test(never));
     check("a null session length never prints a number", !/<dt>Last session<\/dt><dd>\d/.test(never));
     check("zero launches is stated as none, not as zero", /<dd>None from ATLAS<\/dd>/.test(never));
     check("one launch is singular", /<dd>1 launch<\/dd>/.test(grid));
@@ -439,7 +445,7 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
     check("a game with no plays contributes no play time", heroB(els.atlasHeroStat.innerHTML, 3) === "Not measured");
     check("a game with no plays shows zero launches", heroB(els.atlasHeroStat.innerHTML, 2) === "0");
     check("and says it was never launched from ATLAS", /<dd>None from ATLAS<\/dd>/.test(els.atlasGrid.innerHTML));
-    check("and has no measured session", /<dd>not measured<\/dd>/.test(els.atlasGrid.innerHTML));
+    check("and has no measured session", /<dd>Not measured<\/dd>/.test(els.atlasGrid.innerHTML));
     check("and was never played", /<dd>Never<\/dd>/.test(els.atlasGrid.innerHTML));
     check("but its reported size is still shown", /<dd>1\.0 GB<\/dd>/.test(els.atlasGrid.innerHTML));
   }
@@ -453,8 +459,8 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
     check("nothing found: the count says none", heroB(els.atlasHeroStat.innerHTML, 0) === "0");
     check("nothing found: the summary explains it", /games/.test(heroSmall(els.atlasHeroStat.innerHTML, 0)));
     check("nothing found: the empty state is shown", els.atlasEmpty.hidden === false);
-    check("nothing found: it says so in its own words", /<b>No games found\.<\/b>/.test(els.atlasEmpty.innerHTML));
-    check("nothing found: it points at adding a game by hand", /add it by hand/.test(els.atlasEmpty.innerHTML));
+    check("nothing found: it says so in its own words", /<b>No games found yet\.<\/b>/.test(els.atlasEmpty.innerHTML));
+    check("nothing found: it points at adding a game by hand", /add it yourself/.test(els.atlasEmpty.innerHTML));
     check("nothing found: no cards and no buttons", cards(els.atlasGrid.innerHTML).length === 0 && els.atlasGrid.querySelectorAll("[data-play]").length === 0);
     check("nothing found: no size total is invented", heroB(els.atlasHeroStat.innerHTML, 1) === "—");
     check("nothing found: no play time is invented", heroB(els.atlasHeroStat.innerHTML, 3) === "Not measured");
@@ -465,11 +471,12 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
     const { Atlas, els, log } = makeEnv(FIXTURE.games);
     await Atlas.scan(false);
     await flush();
-    check("no backend: the count is a dash, not zero", heroB(els.atlasHeroStat.innerHTML, 0) === "—");
-    check("no backend: the empty state names the cause", els.atlasEmpty.hidden === false && /<b>Backend not connected\.<\/b>/.test(els.atlasEmpty.innerHTML));
-    check("no backend: it says nothing can be discovered here", /no connection to it/.test(els.atlasEmpty.innerHTML));
+    check("no backend: the count says the backend is gone", /Backend unavailable/.test(els.atlasHeroStat.innerHTML));
+    check("no backend: the empty state names the cause", els.atlasEmpty.hidden === false && /<b>STRYV is not connected to its backend\.<\/b>/.test(els.atlasEmpty.innerHTML));
+    check("no backend: it says nothing can be discovered here", /cannot be read until the backend is running/.test(els.atlasEmpty.innerHTML));
     check("no backend: the summary says the same", /Backend unavailable/.test(els.atlasHeroStat.innerHTML));
     check("no backend: the sessions panel says the same", /not connected in this window/.test(els.atlasSess.innerHTML));
+        check("no backend: it does not claim the history is empty", !/No sessions recorded/.test(els.atlasSess.innerHTML));
     check("no backend: nothing is logged or toasted", log.length === 0);
     check("no backend: no cards are invented", cards(els.atlasGrid.innerHTML).length === 0);
   }
@@ -482,8 +489,8 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
     await flush();
     check("search matched nothing: the empty state says so", els.atlasEmpty.hidden === false && /Nothing matches/.test(els.atlasEmpty.innerHTML));
     check("search matched nothing: it echoes the term", /zzzz-nothing/.test(els.atlasEmpty.innerHTML));
-    check("search matched nothing: it says how many are in the library", new RegExp(FIXTURE.games.length + " games are in the library").test(els.atlasEmpty.innerHTML));
-    check("search matched nothing: it says how to clear the search", /Clear the search/.test(els.atlasEmpty.innerHTML));
+    check("search matched nothing: it says how many are in the library", new RegExp("of the " + FIXTURE.games.length + " games in your library").test(els.atlasEmpty.innerHTML));
+    check("search matched nothing: it says how to clear the search", /Clear search and filters/.test(els.atlasEmpty.innerHTML));
     check("search matched nothing: the grid is empty", cards(els.atlasGrid.innerHTML).length === 0);
     check("search matched nothing: the count drops to none", heroB(els.atlasHeroStat.innerHTML, 0) === "0");
   }
@@ -501,7 +508,7 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
     await type("siege");
     check("filters by name", now().join() === "Tom Clancy's Rainbow Six Siege");
     check("the count follows the filter", heroB(els.atlasHeroStat.innerHTML, 0) === "1");
-    check("the summary reports how many of how many are shown", new RegExp("1 of " + FIXTURE.games.length + " shown").test(heroSmall(els.atlasHeroStat.innerHTML, 0)));
+    check("the summary reports how many of how many are shown", new RegExp("1 game shown of " + FIXTURE.games.length).test(heroSmall(els.atlasHeroStat.innerHTML, 0)));
     check("the search is remembered for the next visit", store.get("atlas.q") === "siege");
 
 await type("manual");
@@ -514,7 +521,7 @@ await type("manual");
 
     await type("");
     check("clearing the search restores every card", now().length === FIXTURE.games.length);
-    check("clearing the search restores the count", heroB(els.atlasHeroStat.innerHTML, 0) === FIXTURE.games.length);
+    check("clearing the search restores the count", heroB(els.atlasHeroStat.innerHTML, 0) === String(FIXTURE.games.length));
     check("the empty state hides again", els.atlasEmpty.hidden === true);
     check("searching never hits the backend", inv.calls.filter((c) => c.n === "atlas_scan").length === 1);
   }
@@ -581,7 +588,7 @@ await type("manual");
     await Atlas.scan(false);
     await flush();
     const order = () => names(els.atlasGrid.innerHTML);
-    check("the favourite card starts starred", /data-fav="\d+" aria-pressed="true" title="Remove from favourites">★</.test(cardFor(els.atlasGrid.innerHTML, "Tom Clancy's Rainbow Six Siege")));
+      check("the favourite card starts starred", /data-fav="[^"]+" aria-pressed="true" title="Remove from favourites"[^>]*>/.test(cardFor(els.atlasGrid.innerHTML, "Tom Clancy's Rainbow Six Siege")));
     check("every other card starts unstarred", /aria-pressed="false"/.test(els.atlasGrid.innerHTML));
 
     const stars = els.atlasGrid.querySelectorAll("[data-fav]");
@@ -597,10 +604,10 @@ await type("manual");
     const F = inv.calls.filter((c) => c.n === "atlas_set_favorite");
     check("calls atlas_set_favorite exactly once", F.length === 1);
     check("sends the id and the new state", JSON.stringify(F[0].a) === JSON.stringify({ id: "manual:9f2c1a7b", favorite: true }));
-    check("the star flips immediately, before the backend answers", stars[was].textContent === "★" && stars[was].getAttribute("aria-pressed") === "true");
+      check("the star flips immediately, before the backend answers", (() => { const c = cardFor(els.atlasGrid.innerHTML, "Hollow Knight"); return c.indexOf('aria-pressed="true"') !== -1 && c.indexOf('title="Remove from favourites"') !== -1 && c.indexOf("★") !== -1; })());
     check("the card rises above every non-favourite", order()[1] === "Hollow Knight" && order().indexOf("Hollow Knight") < was);
     check("the already-favourited card stays ahead of it on play date", order()[0] === "Tom Clancy's Rainbow Six Siege");
-    check("the re-rendered star is filled and pressed", /data-fav="1" aria-pressed="true" title="Remove from favourites">★</.test(cardFor(els.atlasGrid.innerHTML, "Hollow Knight")));
+      check("the re-rendered star is filled and pressed", /data-fav="[^"]+" aria-pressed="true" title="Remove from favourites"[^>]*>/.test(cardFor(els.atlasGrid.innerHTML, "Hollow Knight")));
 
     // Un-star it again, this time through the freshly rendered button.
     inv.calls.length = 0;
@@ -609,7 +616,7 @@ await type("manual");
     const U = inv.calls.filter((c) => c.n === "atlas_set_favorite");
     check("un-starring sends the opposite state", U.length === 1 && JSON.stringify(U[0].a) === JSON.stringify({ id: "manual:9f2c1a7b", favorite: false }));
     check("and the card goes back to where it was", order().indexOf("Hollow Knight") === was);
-    check("and is unstarred again in the re-render", /data-fav="\d+" aria-pressed="false" title="Add to favourites">☆</.test(cardFor(els.atlasGrid.innerHTML, "Hollow Knight")));
+      check("and is unstarred again in the re-render", /data-fav="[^"]+" aria-pressed="false" title="Add to favourites"[^>]*>/.test(cardFor(els.atlasGrid.innerHTML, "Hollow Knight")));
   }
   {
     const inv = backend({ atlas_set_favorite: (a) => { if (a.favorite) throw new Error("the ATLAS store is read-only"); return null; } });
@@ -655,7 +662,8 @@ await type("manual");
     await flush();
     const A = inv.calls.filter((c) => c.n === "atlas_add_manual");
     check("calls atlas_add_manual exactly once", A.length === 1);
-    check("sends the name and the exe path, trimmed", JSON.stringify(A[0].a) === JSON.stringify({ name: "Thing", exe_path: "C:\\Games\\Thing\\thing.exe" }));
+    check("sends the name and the exe path, trimmed", A[0].a.name === "Thing" && A[0].a.exe_path === "C:\\Games\\Thing\\thing.exe");
+        check("sends the cover the user picked, or null when there is none", "art_path" in A[0].a);
     check("records a running activity entry", log.some((l) => l.kind === "act" && l.status === "running" && /Adding a game/.test(l.m)));
     check("marks it done with the name the backend chose", log.some((l) => l.kind === "actupdate" && /Adding a game/.test(l.of || "") && l.m === "done" && /Thing/.test(l.detail || "")));
     check("tells the user it was added", log.some((l) => l.kind === "toast" && !l.bad && l.m === "Added Thing"));
@@ -740,7 +748,7 @@ await type("manual");
     log.length = 0;
     els.atlasGrid.querySelectorAll("[data-del]")[j].onclick();
     await flush();
-    check("a hand-added removal says it leaves the ATLAS library", log.some((l) => l.kind === "confirm" && /taken out of your ATLAS library/.test(l.body)));
+    check("a hand-added removal says it leaves the ATLAS library", log.some((l) => l.kind === "confirm" && /out of your ATLAS library/.test(l.body)));
     check("and carries the hand-added id", inv.calls.filter((c) => c.n === "atlas_remove").slice(-1)[0].a.id === "manual:9f2c1a7b");
 
     inv.calls.length = 0;
@@ -796,7 +804,7 @@ await type("manual");
     els.atlasSessClr.onclick();
     await flush();
     check("clearing asks first", log.some((l) => l.kind === "confirm" && /Clear session history/.test(l.title)));
-    check("and says only play time is lost", log.some((l) => l.kind === "confirm" && /only the measured play time is lost/.test(l.body)));
+    check("and says only play time is lost", log.some((l) => l.kind === "confirm" && /[Oo]nly the measured play time is lost/.test(l.body)));
     check("and that games stay in the library", log.some((l) => l.kind === "confirm" && /Games stay in your library/.test(l.body)));
     check("clearing calls atlas_clear_sessions", inv.calls.filter((c) => c.n === "atlas_clear_sessions").length === 1);
     check("and empties the list", /No sessions recorded yet/.test(els.atlasSess.innerHTML));
@@ -829,10 +837,10 @@ await type("manual");
     check("a failed first scan reports itself on the page", /<b>Could not read the library\.<\/b>/.test(els.atlasEmpty.innerHTML));
     check("and keeps the backend's own message", /access denied/.test(els.atlasEmpty.innerHTML));
     check("and the message is escaped", !/<img/i.test(els.atlasEmpty.innerHTML));
-    check("the count is a dash, not zero", heroB(els.atlasHeroStat.innerHTML, 0) === "—");
-    check("the size total is a dash, not zero", heroB(els.atlasHeroStat.innerHTML, 1) === "—");
+      check("a failed scan says the library is unavailable, not empty", /Library unavailable/.test(els.atlasHeroStat.innerHTML));
+check("a failed scan never prints a size total of zero", !/<b>0(\.0)? (B|KB|MB|GB)<\/b>/.test(els.atlasHeroStat.innerHTML));
     check("the failure is in the technical log", log.some((l) => l.kind === "tech" && l.m === "atlas.scan"));
-    check("a background failure raises no toast", !log.some((l) => l.kind === "toast"));
+    check("a background failure still says the list is stale", log.some((l) => l.kind === "toast" && l.bad && /last known list/.test(l.m)));
     check("no cards are invented", cards(els.atlasGrid.innerHTML).length === 0);
 
     log.length = 0;
@@ -857,11 +865,11 @@ await type("manual");
     failScan = true;
     log.length = 0;
     els.atlasGrid.querySelectorAll("[data-play]")[0].onclick();
-    await flush();
+    await flushSlow();
     check("the launch still succeeded", log.some((l) => l.kind === "toast" && !l.bad && /Steam was asked/.test(l.m)));
     check("a failed background refresh does not blank the grid", cards(els.atlasGrid.innerHTML).length === FIXTURE.games.length);
     check("it says the refresh failed, not that the library is empty",
-      log.some((l) => l.kind === "toast" && l.bad && /Could not refresh the library/.test(l.m)));
+        log.some((l) => l.kind === "toast" && l.bad && /Could not refresh the library/.test(l.m)));
     check("and the failure is logged technically", log.some((l) => l.kind === "tech" && l.m === "atlas.scan"));
     check("and the page does not fall back to the no-backend state", !/Backend not connected/.test(els.atlasEmpty.innerHTML));
   }
@@ -878,7 +886,7 @@ await type("manual");
     await flush();
     check("records the rescan in the activity feed", log.some((l) => l.kind === "act" && /ATLAS library rescan/.test(l.m)));
     check("and reports how many games it found", log.some((l) => l.kind === "act" && new RegExp('"found":' + FIXTURE.games.length).test(l.detail || "")));
-    check("tells the user it rescanned", log.some((l) => l.kind === "toast" && !l.bad && l.m === "Library rescanned"));
+    check("tells the user it rescanned", log.some((l) => l.kind === "toast" && !l.bad && /^Library rescanned/.test(l.m)));
     check("restores the button label", els.atlasScan.textContent === "Rescan");
     check("re-enables the button", els.atlasScan.disabled === false);
     check("the grid survives a rescan", cards(els.atlasGrid.innerHTML).length === FIXTURE.games.length);

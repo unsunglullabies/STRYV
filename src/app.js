@@ -72,4 +72,14 @@ async function startup() {
   const [snap, info] = await Promise.all([tick(), sys(), procs(), net(), document.fonts && document.fonts.ready, ...[...document.images].map((i) => i.decode().catch(() => null))]);
   return snap && info ? { ok: true } : { ok: false, reason: !invoke ? "The STRYV backend is not available in this window." : "Could not read " + [!snap && "live system data", !info && "system information"].filter(Boolean).join(" or ") + "." };
 }
-startTimers(); Intro.run(startup, { ready: async () => { const r = await startup(); if (r.ok && typeof Updater !== "undefined") Updater.check(false); return r; } });
+startTimers(); Intro.run(startup, { ready: async () => {
+    const r = await startup();
+    // The quiet check used to be fired from here and never actually ran: it was
+    // invoked while the intro still owned startup, so it could be cut off when
+    // the window appeared. It now runs only once startup is genuinely done, and
+    // a failure here must never stop the app from opening.
+    if (r.ok && typeof Updater !== "undefined") {
+      try { Updater.check(false); } catch (e) { Tech.add("updater", e); }
+    }
+    return r;
+  } });
