@@ -36,7 +36,7 @@
   "updater": {
    "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM3RTNCMkVFNTMyMEE0RjQKUldUMHBDQlQ3ckxqeHoramNsZlJrcDgzUkpLSTc5dHhVU3MrQUJEMEt4ZUNrOENOVlorRDhINWMK",
    "endpoints": [
-    "https://github.com/ririsanchez67-byte/STRYV/releases/latest/download/latest.json"
+    "https://github.com/unsunglullabies/STRYV/releases/latest/download/latest.json"
    ],
    "windows": {
     "installMode": "passive"

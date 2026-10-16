@@ -87,10 +87,29 @@ jobs:
     permissions:
       contents: write
     steps:
+      # gh resolves the target repository from the local git remote, so this job
+      # needs a checkout. Without one, "gh release create" has no repository to
+      # act on and fails.
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           name: stryv-installer
           path: dist
+
+      # Derive the tag from the pushed tag, or from package.json on a manual
+      # dispatch, so the version is never duplicated in this file.
+      - name: Resolve release tag
+        id: tag
+        shell: bash
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            tag="${{ github.ref_name }}"
+          else
+            tag="v$(node -p "require('./package.json').version")"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "releasing $tag"
 
       - name: Show what will be published
         run: ls -l dist
@@ -99,7 +118,8 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v{0}', github.event.inputs.version || '0.2.0') }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.tag.outputs.tag }}
         run: |
           set -euo pipefail
           if gh release view "$TAG" >/dev/null 2>&1; then
