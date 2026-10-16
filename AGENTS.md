@@ -1,4 +1,4 @@
-# CLAUDE READ ME
+# STRYV — AGENT NOTES
 
 Coordination notes for anyone (human or AI) working in this repo alongside Aria.
 Written while two agents are active. **Coordinate before editing.**

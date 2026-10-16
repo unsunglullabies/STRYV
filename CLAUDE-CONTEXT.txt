@@ -1,0 +1,1086 @@
+================================================================
+STRYV - CODE CONTEXT FOR CLAUDE
+Generated: 2026-10-15 21:07:37
+================================================================
+
+STRYV is a Tauri 2 desktop system monitor for Windows.
+Frontend: vanilla JS, NO bundler, NO framework, NO npm runtime deps.
+Files in src/ are loaded directly by src/index.html.
+Backend: Rust, src-tauri/src/main.rs, commands via generate_handler!.
+
+Repo (public): https://github.com/unsunglullabies/STRYV
+
+KEY SHARED HELPERS defined in src/core.js:
+  q(id)                    -> document.getElementById
+  esc(s)                   -> HTML-escape a string
+  toast(msg, bad)         -> transient notification, bad=true is an error
+  confirmBox({title, body, yes, danger}) -> async confirmation dialog
+  store.get(k, fallback) / store.set(k, v)  -> localStorage wrapper
+  Act.log({text, status}) -> returns id; Act.update(id, {status, detail})
+  Tech.add(ctx, err)      -> pushes to the technical error log
+  Cfg.d / Cfg.v           -> default and user settings
+  PAGES                   -> page id list
+  go(page)                -> navigation
+
+NOTE: the signing key is NOT in this repo and must never be shared.
+
+
+================================================================
+FILE: README.md   (68 lines, 4358 bytes)
+================================================================
+
+ <div align="center">
+
+# STRYV
+
+### PUSH YOUR PERFORMANCE.
+
+**Your PC. Your games. Your workflow. One command center.**
+
+A Windows desktop application bringing together system monitoring, diagnostics, optimization tools, and a bigger vision for gaming and intelligent workflows.
+
+**Early Development Â· Windows Â· Tauri + Rust**
+
+</div>
+
+---
+
+## âš¡ What is STRYV?
+
+STRYV is being built to give you a more focused way to understand, manage, and improve your PC experience.
+
+Instead of scattering useful tools across different applications, STRYV aims to bring system insights, diagnostics, gaming workflows, and intelligent assistance together under one interface.
+
+The project is actively evolving. Some functionality is already implemented, while larger systems remain in development.
+
+## ðŸ–¥ï¸ Features
+
+### Available in the current application
+
+- **System Monitoring** â€” CPU and memory usage, uptime, disk information, and running processes.
+- **GPU Telemetry** â€” NVIDIA GPU information on supported systems.
+- **Network Diagnostics** â€” Connection checks, latency tests, DNS diagnostics, and network throughput information.
+- **System Tools** â€” System information and selected cleanup and optimization utilities.
+- **Activity Logs** â€” Review recorded application actions and diagnostic information.
+- **Settings & Controls** â€” Persistent settings, keyboard shortcuts, and a command palette.
+- **Startup Animation** â€” A rocket-launch sequence introducing the application.
+
+*Feature availability can depend on hardware, permissions, and Windows configuration. The application and its packaging are still being verified.*
+
+## ðŸš€ The Vision
+
+STRYV is designed to grow beyond its current feature set.
+
+### ATLAS â€” Gaming
+
+A planned gaming hub focused on game discovery, library organization, launching, profiles, session history, and future gaming integrations.
+
+### SYN â€” Intelligence
+
+A planned AI and knowledge layer intended to connect assistance, searchable knowledge, local notes, and useful workflows.
+
+### WorkGuard â€” Protection
+
+A planned system focused on preserving work, checkpoints, and recovery workflows.
+
+These systems represent the broader direction of STRYV. They are not being presented as released features unless and until they are implemented and verified.
+
+## ðŸ§° Technology
+
+- **Tauri 2** â€” Desktop application framework
+- **Rust** â€” Native application backend
+- **HTML, CSS & JavaScript** â€” User interface
+- **Windows** â€” Current development focus
+
+## ðŸ“¦ Installation
+
+STRYV's release and installer are still being verified.
+
+When an official release becomes available, download it from the repository's **Releases** section. Follow the instructions and known-issues information provided with that specific release.
+
+Do not use unofficial downloads.
+
+## ðŸ—ºï¸ Roadmap
+
+STRYV's long-term direction includes:
+
+- Improving reliability, performance, and diagnostics.
+- Strengthening system-tool safety and error handling.
+- Developing ATLAS gaming functionality.
+- Building SYN's AI and knowledge capabilities.
+- Exploring WorkGuard's protection and recovery workflows.
+- Introducing future integrations as they become practical and reliable.
+
+The roadmap is a direction, not a guarantee that every proposed feature will ship.
+
+## ðŸ”’ Privacy & Safety
+
+STRYV can access local system information, and some tools may perform system-level operations.
+
+Review the behavior of an operation before approving it. Hardware support, permissions, and system configuration may affect results.
+
+When reporting issues, remove personal information, credentials, API keys, and other sensitive data from logs and screenshots.
+
+## ðŸ› Reporting Issues
+
+When reporting a problem, include:
+
+- The STRYV version, if available.
+- Your Windows version.
+- What you expected to happen and what actually happened.
+- Steps to reproduce the issue.
+- Relevant logs with sensitive information removed.
+
+Please avoid posting passwords, API keys, account tokens, or other secrets.
+
+## ðŸ“„ License
+
+A license has not yet been specified here. Until a license is added to the repository, do not assume that reuse or redistribution is permitted.
+
+---
+
+<div align="center">
+
+**STRYV**  
+*PUSH YOUR PERFORMANCE.*
+
+</div>
+
+================================================================
+FILE: package.json   (1 lines, 195 bytes)
+================================================================
+
+{"name":"stryv","version":"0.2.0","private":true,"scripts":{"tauri":"tauri","dev":"tauri dev","build":"tauri build","test":"node tests/atlas.test.js"},"devDependencies":{"@tauri-apps/cli":"^2"}}
+
+================================================================
+FILE: src/index.html   (95 lines, 15023 bytes)
+================================================================
+
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>STRYV</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="style.css"></head>
+<body><div id="intro"></div><div class="app" id="app">
+<aside class="side">
+  <div class="brand"><img class="wordmark" src="assets/stryv-wordmark.png" alt="STRYV"><span class="mono">S</span></div>
+  <nav id="nav">
+    <button data-p="dashboard" class="on"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg><span>Dashboard</span></button>
+    <button data-p="performance"><svg viewBox="0 0 24 24"><path d="M3 17l5-6 4 3 8-9"/><path d="M15 5h5v5"/></svg><span>Performance</span></button>
+    <button data-p="network"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><path d="M12 7v5M12 12l-6 5M12 12l6 5"/></svg><span>Network</span></button>
+    <button data-p="atlas"><svg viewBox="0 0 24 24"><path d="M6.5 7h11a4.5 4.5 0 0 1 4.4 5.4l-.8 4A3 3 0 0 1 18 18l-1.4-2h-9.2L6 18a3 3 0 0 1-5.1-1.6l-.8-4A4.5 4.5 0 0 1 6.5 7Z"/><path d="M7.5 11.2v2.6M6.2 12.5h2.6"/><circle cx="15.6" cy="11.6" r=".9"/><circle cx="17.9" cy="13.4" r=".9"/></svg><span>ATLAS</span></button>
+    <button data-p="optimizations"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg><span>Optimizations</span></button>
+    <button data-p="system"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg><span>System</span></button>
+    <button data-p="activity"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h16"/></svg><span>Activity</span></button>
+    <button data-p="syn" class="syn"><img src="assets/syn-logo.png" alt=""><span>SYN Assistant</span></button>
+    <button data-p="settings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span>Settings</span></button>
+  </nav>
+  <nav class="foot"><button data-p="whatsnew"><svg viewBox="0 0 24 24"><path d="M12 3l2.2 5.6L20 10l-5.8 1.4L12 17l-2.2-5.6L4 10l5.8-1.4z"/></svg><span>What's New</span><i class="dot"></i></button><button data-p="help"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17v.01"/></svg><span>Help &amp; About</span></button></nav>
+  <div class="ver" id="ver"></div>
+</aside>
+<main>
+<section id="dashboard" class="page on"><h1>Dashboard</h1><p class="sub">Live measurements from this PC.</p>
+  <div class="card" id="health" style="margin-bottom:14px"><label>System health</label><small>Reading your PCâ€¦</small></div>
+  <div class="grid">
+    <div class="card"><label>CPU utilization</label><b id="cpu">â€”</b><div class="bar"><i id="cpuB"></i></div></div>
+    <div class="card"><label>Memory</label><b id="mem">â€”</b><div class="bar"><i id="memB"></i></div><small id="memD"></small></div>
+    <div class="card"><label>System uptime</label><b id="up">â€”</b></div>
+    <div class="card"><label>Storage</label><div id="disks"></div></div>
+    <div class="card"><label>Temperature</label><b id="tempB">â€”</b><small id="tempD">Reading sensorsâ€¦</small></div>
+    <div class="card"><label>Network</label><b id="net">â€”</b><small id="netU"></small></div>
+  </div></section>
+<section id="performance" class="page"><h1>Performance</h1><p class="sub">Last 2 minutes, sampled every 2 seconds. Only measured data is plotted.</p>
+  <div class="grid2"><div class="card"><label>CPU utilization</label><svg class="chart" id="cpuC" viewBox="0 0 300 90" preserveAspectRatio="none"></svg></div>
+  <div class="card"><label>Memory usage</label><svg class="chart" id="memC" viewBox="0 0 300 90" preserveAspectRatio="none"></svg></div></div>
+  <div class="card" style="margin-top:14px"><label>GPU</label><div id="gpuB"><small>Reading GPUâ€¦</small></div></div>
+  <div class="card" style="margin-top:14px"><label>Temperature sensors</label><table id="tempT"></table><small id="tempN"></small></div>
+  <div class="card" style="margin-top:14px"><label>Top processes by CPU</label><table id="procT"></table>
+  <small>Per-process values are share of total CPU. A busy process is not necessarily a bottleneck.</small></div></section>
+<section id="network" class="page"><h1>Network</h1><p class="sub">Live throughput and connection tests.</p>
+  <div class="grid2"><div class="card"><label>Download</label><b id="dl">â€”</b><svg class="chart" id="dlC" viewBox="0 0 300 90" preserveAspectRatio="none"></svg></div>
+  <div class="card"><label>Upload</label><b id="ul">â€”</b><svg class="chart" id="ulC" viewBox="0 0 300 90" preserveAspectRatio="none"></svg></div></div>
+  <div class="card" style="margin-top:14px"><label>Adapters</label><table id="adT"></table>
+  <small>Throughput above is measured traffic, which depends on what your PC is doing, not the connection's capacity.</small></div>
+  <div class="card" style="margin-top:14px"><label>Link speed</label><table id="linkT"></table><small>The negotiated rate of the connection to your router, not your internet speed.</small></div>
+  <div class="card" style="margin-top:14px"><label>Connection tests</label><div id="tests"><small>Measures TCP connection time to public servers and DNS lookup time. It does not test download speed.</small></div>
+  <button class="btn" id="runT">Run tests</button></div></section>
+<section id="atlas" class="page"><h1>ATLAS</h1><p class="sub">Games found on this PC, read from the files each launcher has already written.</p>
+  <div class="grid2"><div class="card"><label>Library</label><b id="atlasN">â€”</b><small id="atlasSum">Reading launcher filesâ€¦</small></div>
+    <div class="card"><label>Total install size</label><b id="atlasSize">â€”</b><small>Sum of the sizes the launcher itself reports.</small></div></div>
+  <div class="acts" style="margin-top:14px"><button class="btn" id="atlasScan">Rescan library</button></div>
+  <div class="card" style="margin-top:14px"><label>Installed games</label><table id="atlasT"></table><small id="atlasNote"></small></div></section>
+<section id="optimizations" class="page"><h1>Optimizations</h1><p class="sub">Fixed, reviewed actions. Nothing runs without your confirmation, and every action is logged.</p>
+  <div id="optList"></div>
+  <div class="sec" style="margin-top:26px"><h3>Measure impact</h3>
+    <p class="note">Capture a baseline before a change and a comparison after it. Each capture samples for 20 seconds, so keep the PC as idle as you can. STRYV only reports a difference when it is larger than the measurement noise. Readings include STRYV's own usage.</p>
+    <div class="acts"><button class="btn ghost" id="measB">Capture baseline</button><button class="btn ghost" id="measA">Capture comparison</button><button class="btn ghost" id="measX" style="display:none">Cancel</button><button class="lnk" id="measC">Clear</button></div>
+    <p class="note" id="measS"></p><table id="measT"></table></div>
+  <div class="sec" style="margin-top:26px"><h3>Startup apps</h3><table id="startT"></table><p class="note">Controls apps in your user Run key. Changes take effect at next sign-in and are reversible here. System-wide startup items are not listed.</p></div></section>
+<section id="system" class="page"><h1>System</h1><p class="sub">Hardware and operating system.</p><div class="card"><table id="sysT"></table><button class="btn" id="copy">Copy diagnostics</button></div></section>
+<section id="syn" class="page"><h1>SYN Assistant</h1><p class="sub">System intelligence for STRYV.</p>
+  <div class="card sync"><img src="assets/syn-logo.png" alt="SYN"><div><b>In development</b><small>SYN will explain measurements and suggest diagnostics. It is not connected yet, so nothing here is simulated.</small></div></div></section>
+<section id="activity" class="page"><h1>Activity</h1><p class="sub">What STRYV has done, and technical errors if any.</p>
+  <div class="tabs"><button data-tab="feed" class="on">Activity</button><button data-tab="tech">Technical log</button></div><div id="actList"></div></section>
+<section id="settings" class="page"><h1>Settings</h1><p class="sub">Saved on this PC. Changes apply immediately.</p>
+  <div class="sec"><h3>Appearance</h3>
+    <div class="set"><div><b>Accent color</b><small>Used for highlights and graphs.</small></div><div class="sws"><button class="sw" data-accent="Violet" style="--c:#8B5CF6" aria-label="Violet"></button><button class="sw" data-accent="Cyan" style="--c:#38BDF8" aria-label="Cyan"></button><button class="sw" data-accent="Gold" style="--c:#D9A62E" aria-label="Gold"></button></div></div>
+    <div class="set"><div><b>Compact sidebar</b><small>Show icons only.</small></div><button class="tog" data-set="compact" data-label="Compact sidebar" aria-label="Compact sidebar"></button></div>
+    <div class="set"><div><b>Reduce motion</b><small>Turns off transitions and animations.</small></div><button class="tog" data-set="reduceMotion" data-label="Reduce motion" aria-label="Reduce motion"></button></div>
+    <div class="set"><div><b>Launch animation</b><small>Plays when STRYV starts. Skipped when Reduce motion is on.</small></div><div class="acts"><button class="btn ghost" id="replay">Replay</button><button class="tog" data-set="intro" data-label="Launch animation" aria-label="Launch animation"></button></div></div></div>
+  <div class="sec"><h3>Updates</h3>
+    <div class="set"><div><b>STRYV updates</b><small>Signed updates only. Every download is checked against the key built into this app, and an update that fails that check is discarded.</small></div><div class="acts"><button class="btn ghost" id="updCheck">Check now</button><button class="btn" id="updInstall" style="display:none">Install update</button></div></div>
+    <div id="updFound" style="display:none"><p class="note" id="updFoundV" style="color:var(--v);font-weight:600"></p><p class="note" id="updNotes"></p></div>
+    <p class="note" id="updStatus"></p></div>
+  <div class="sec"><h3>Startup and monitoring</h3>
+    <div class="set"><div><b>Open on</b><small>Page shown when STRYV starts.</small></div><select data-sel="startPage" data-label="Start page"><option value="dashboard">Dashboard</option><option value="performance">Performance</option><option value="network">Network</option><option value="system">System</option><option value="activity">Activity</option></select></div>
+    <div class="set"><div><b>Refresh interval</b><small>How often live readings update. Longer uses less CPU.</small></div><select data-sel="interval" data-label="Refresh interval"><option value="1">1 second</option><option value="2">2 seconds</option><option value="5">5 seconds</option></select></div></div>
+  <div class="sec"><h3>Privacy and storage</h3>
+    <div class="set"><div><b>Keep activity history</b><small>When off, activity is not saved between launches.</small></div><button class="tog" data-set="keepActivity" data-label="Keep activity history" aria-label="Keep activity history"></button></div>
+    <p class="note">STRYV stores settings, activity and technical errors in its own app storage on this PC. Nothing is uploaded. SYN, model and workspace settings will appear here once those features exist.</p></div>
+  <div class="sec"><h3>Keyboard shortcuts</h3>
+    <table class="keys"><tr><td>Command palette</td><td><kbd>Ctrl+K</kbd></td></tr><tr><td>Dashboard, Performance, Network, System, Activity</td><td><kbd>Ctrl+1</kbd> to <kbd>Ctrl+5</kbd></td></tr><tr><td>Settings</td><td><kbd>Ctrl+,</kbd></td></tr><tr><td>Close dialog or palette</td><td><kbd>Esc</kbd></td></tr></table></div>
+  <div class="sec"><h3>Data</h3>
+    <div class="set"><div><b>Export</b><small>Settings and activity as a JSON file.</small></div><div class="acts"><button class="btn ghost" id="expFile">Export file</button><button class="btn ghost" id="expCopy">Copy as JSON</button></div></div>
+    <div class="set"><div><b>Clear activity history</b><small>Keeps your settings.</small></div><button class="btn ghost" id="clrAct">Clear</button></div>
+    <div class="set"><div><b>Reset settings</b><small>Restore defaults.</small></div><button class="btn ghost" id="rstSet">Reset</button></div>
+    <div class="set"><div><b>Delete all STRYV data</b><small>Permanent. Removes everything STRYV stored on this PC.</small></div><button class="btn danger" id="delAll">Delete</button></div></div></section>
+<section id="whatsnew" class="page"><h1>What's New</h1><p class="sub">Release notes for this build.</p><div id="newsList"></div><button class="btn" id="markSeen">Mark as viewed</button></section>
+<section id="help" class="page"><h1>Help &amp; About</h1><p class="sub" id="aboutV"></p>
+  <div class="sec"><h3>About</h3><p class="note">STRYV: push your performance. A Windows PC performance and diagnostics utility. Built with Tauri and the sysinfo library. License: not yet specified.</p></div>
+  <div class="sec"><h3>Updates</h3><p class="note">STRYV checks for signed updates and can install them from inside the app. Every download is verified against the public key built into this version; an update that fails verification is discarded and never run. If no signed release has been published yet, Check now simply reports that you are up to date.</p></div>
+  <div class="sec"><h3>Troubleshooting</h3><ul class="tips"><li><b>A reading says Unavailable.</b> That measurement isn't supported yet or the system didn't provide it. STRYV never fills in guessed values.</li><li><b>Connection tests fail.</b> A firewall or VPN may block outbound connections on port 443. Check the Technical log in Activity.</li><li><b>Something looks wrong.</b> Open Activity, copy the details, and include them in a bug report.</li><li><b>Start fresh.</b> Settings, then Data, then Reset settings or Delete all STRYV data.</li></ul></div></section>
+</main></div><div id="pal" class="ov"><div class="pbox"><input id="pin" placeholder="Type a commandâ€¦" autocomplete="off" aria-label="Command palette"><div id="plist"></div></div></div>
+<div id="dlg" class="ov mid" role="dialog" aria-modal="true"><div class="dbox"><h2 id="dT"></h2><p id="dB"></p><div class="dact"><button class="btn ghost" id="dNo">Cancel</button><button class="btn" id="dYes">Confirm</button></div></div></div>
+<div id="rv" class="ov mid" role="dialog" aria-modal="true"><div class="dbox rvb"><h2 id="rvT"></h2><div id="rvB"></div><div class="dact"><button class="btn ghost" id="rvNo">Cancel</button><button class="btn" id="rvYes">Apply</button></div></div></div>
+<div id="toasts"></div>
+<script src="core.js"></script><script src="intro.js"></script><script src="opt.js"></script><script src="meas.js"></script><script src="health.js"></script><script src="sensors.js"></script><script src="atlas.js"></script><script src="updater.js"></script><script src="app.js"></script></body></html>
+
+================================================================
+FILE: src/style.css   (108 lines, 13361 bytes)
+================================================================
+
+:root{--bg:#090B12;--p1:#0F1220;--p2:#151929;--line:#232840;--v:#8B5CF6;--c:#38BDF8;--g:#D9A62E;--t:#D1D5DB;--m:#8993A7}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--t);font:14px/1.45 "Segoe UI Variable","Segoe UI",system-ui,sans-serif;overflow:hidden}
+.app{display:grid;grid-template-columns:232px 1fr;height:100vh;transition:grid-template-columns .2s}
+.app.compact{grid-template-columns:68px 1fr}
+.side{background:var(--p1);border-right:1px solid var(--line);padding:20px 12px;display:flex;flex-direction:column;gap:20px}
+.brand{height:44px;display:flex;align-items:center;padding:0 6px}
+.wordmark{width:100%;height:auto;max-height:40px;object-fit:contain;mix-blend-mode:lighten}
+.mono{display:none;font:800 22px/1 "Segoe UI",sans-serif;color:var(--v);width:100%;text-align:center;font-style:italic}
+.compact .wordmark{display:none}.compact .mono{display:block}
+nav{display:flex;flex-direction:column;gap:4px}
+nav button{display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border:0;border-radius:8px;background:none;color:var(--m);font:inherit;cursor:pointer;transition:background .15s,color .15s}
+nav button:hover{background:var(--p2);color:var(--t)}
+nav button.on{background:color-mix(in srgb,var(--v) 14%,transparent);color:#fff;box-shadow:inset 2px 0 var(--v)}
+nav button.syn.on{background:rgba(56,189,248,.12);box-shadow:inset 2px 0 var(--c)}
+nav svg{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+nav img{width:20px;height:20px;flex:none;border-radius:4px}
+.compact nav span,.compact .ver{display:none}.compact nav button{justify-content:center;padding:0}
+.ver{margin-top:auto;font-size:11px;color:var(--m);padding:0 6px}
+main{padding:28px 32px;overflow:auto}
+.page{display:none}.page.on{display:block;animation:in .2s}
+@keyframes in{from{opacity:0;transform:translateY(4px)}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+h1{font-size:22px;font-weight:600;color:#fff}.sub{color:var(--m);margin:2px 0 20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.card{background:var(--p1);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:8px}
+.card label{font-size:12px;color:var(--m);text-transform:uppercase;letter-spacing:.06em}
+.card b{font-size:26px;font-weight:600;color:#fff;font-variant-numeric:tabular-nums}
+.card small{color:var(--m);font-size:12px}
+.na b{font-size:16px;color:var(--m)}
+.bar{height:6px;border-radius:3px;background:var(--p2);overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--v);border-radius:3px;transition:width .4s}
+.disk{display:flex;justify-content:space-between;font-size:13px;margin-top:6px}
+table{width:100%;border-collapse:collapse}td{padding:9px 0;border-bottom:1px solid var(--line)}td:first-child{color:var(--m);width:40%}
+.btn{align-self:flex-start;margin-top:8px;background:var(--v);color:#fff;border:0;border-radius:8px;padding:9px 16px;font:inherit;cursor:pointer}
+.btn:hover{filter:brightness(1.1)}
+.synprogress,.sync{flex-direction:row;align-items:center;gap:16px;border-color:rgba(56,189,248,.3)}
+.sync img{width:56px;height:56px;border-radius:12px}.sync b{font-size:16px;color:var(--c);display:block}
+.row{flex-direction:row;align-items:center;justify-content:space-between}.row b{font-size:15px;display:block}
+.tog{width:42px;height:24px;border-radius:12px;border:0;background:var(--p2);position:relative;cursor:pointer;transition:background .2s}
+.tog::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--t);transition:transform .2s}
+.tog[aria-pressed=true]{background:var(--v)}.tog[aria-pressed=true]::after{transform:translateX(18px)}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.chart{width:100%;height:110px;display:block}
+.chart .grid{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}
+.chart .ln{fill:none;stroke:var(--v);stroke-width:2;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.chart .ar{fill:color-mix(in srgb,var(--v) 14%,transparent);stroke:none}
+td.n{text-align:right;font-variant-numeric:tabular-nums;width:120px;padding-left:12px;color:var(--t)}
+
+:focus-visible{outline:2px solid var(--c);outline-offset:2px}
+.btn:active{transform:scale(.97)}.btn:disabled{opacity:.5;cursor:default}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--t)}.btn.ghost:hover{background:var(--p2);filter:none}
+.btn.danger{background:#DC2626}.acts{display:flex;gap:8px}.btn{margin-top:0}
+.sec{margin-bottom:26px;max-width:760px}.sec h3{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--m);padding-bottom:8px;border-bottom:1px solid var(--line)}
+.set{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:13px 0;border-bottom:1px solid var(--line)}.set b{display:block;font-weight:500}.set small,.note{color:var(--m);font-size:12px}
+.note{padding:12px 0;max-width:640px;font-size:13px;line-height:1.55}
+select{background:var(--p2);color:var(--t);border:1px solid var(--line);border-radius:6px;padding:7px 10px;font:inherit}
+.sws{display:flex;gap:10px}.sw{width:22px;height:22px;border-radius:50%;background:var(--c);border:0;cursor:pointer;outline-offset:3px;transition:transform .15s}.sw:hover{transform:scale(1.1)}.sw[aria-pressed=true]{outline:2px solid var(--t)}
+.keys{margin-top:4px}kbd{font:12px "Cascadia Mono",Consolas,monospace;background:var(--p2);border:1px solid var(--line);border-radius:4px;padding:2px 6px;color:var(--t)}.keys td:last-child{text-align:right}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:6px}.tabs button{background:none;border:0;color:var(--m);padding:8px 12px;font:inherit;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}.tabs button.on{color:#fff;border-color:var(--v)}
+.arow{display:flex;align-items:flex-start;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}.arow>div{flex:1;min-width:0}.arow b{font-weight:500;display:block}.arow small{color:var(--m);font-size:12px}
+.arow pre{white-space:pre-wrap;word-break:break-word;font:12px Consolas,monospace;color:var(--m);margin-top:6px}
+.st{width:8px;height:8px;border-radius:50%;margin-top:6px;flex:none;background:#22C55E}.st.failed{background:#EF4444}.st.running{background:var(--c);animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.35}}
+.lnk{background:none;border:0;color:var(--c);cursor:pointer;font:inherit;font-size:12px}.lnk:hover{text-decoration:underline}
+.empty{color:var(--m);padding:20px 0}
+.rel{padding:0 0 18px;margin-bottom:18px;border-bottom:1px solid var(--line);max-width:760px}.relh{display:flex;gap:12px;align-items:baseline}.relh b{font-size:18px;color:#fff}.relh span{color:var(--m);font-size:12px}
+.rel h4{margin:14px 0 4px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--v)}.rel ul,.tips{padding-left:18px}.rel li,.tips li{margin:4px 0;color:var(--t)}.tips{padding-top:10px;max-width:700px}
+.dot{display:none;width:7px;height:7px;border-radius:50%;background:var(--g);margin-left:auto}.unseen .dot{display:block}.compact .dot{position:absolute;margin:-14px 0 0 12px}
+nav button{position:relative}nav.foot{margin-top:auto}.ver{margin-top:0}
+.ov{position:fixed;inset:0;background:rgba(5,6,10,.62);display:flex;justify-content:center;align-items:flex-start;padding-top:14vh;opacity:0;visibility:hidden;transition:opacity .15s,visibility 0s .15s;z-index:20}
+.ov.on{opacity:1;visibility:visible;transition-delay:0s}.ov.mid{align-items:center;padding:0}.ov>div{transform:scale(.97);transition:transform .15s}.ov.on>div{transform:none}
+.pbox,.dbox{background:var(--p1);border:1px solid var(--line);border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.pbox{width:min(560px,90vw);overflow:hidden}#pin{width:100%;background:none;border:0;border-bottom:1px solid var(--line);padding:16px;color:#fff;font:inherit;font-size:15px;outline:0}
+#plist{max-height:320px;overflow:auto;padding:6px}.pit{display:flex;justify-content:space-between;padding:9px 12px;border-radius:6px;cursor:pointer}.pit.sel,.pit:hover{background:color-mix(in srgb,var(--v) 16%,transparent)}.pit kbd{background:none;border:0;color:var(--m)}
+.dbox{width:min(420px,90vw);padding:22px}.dbox h2{font-size:17px;color:#fff;margin-bottom:8px}.dbox p{color:var(--m);line-height:1.55}.dact{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}
+#toasts{position:fixed;right:20px;bottom:20px;display:flex;flex-direction:column;gap:8px;z-index:30}
+.toast{display:flex;gap:12px;align-items:center;background:var(--p2);border:1px solid var(--line);border-left:3px solid var(--v);border-radius:6px;padding:10px 14px;opacity:0;transform:translateY(8px);transition:.2s}.toast.in{opacity:1;transform:none}.toast.bad{border-left-color:#EF4444}.toast button{background:none;border:0;color:var(--m);cursor:pointer}
+body.rm *{animation:none!important;transition:none!important}
+@media(max-width:900px){main{padding:20px}.grid2{grid-template-columns:1fr}}
+
+#intro{position:fixed;inset:0;z-index:50;background:#05060A;overflow:hidden;--bh:300px;--bw:222px;--rh:168px;--glow:.12;--lid:0;--sx:0px;--sy:0px}
+#intro.clr{background:transparent}#intro.fade{opacity:0;transition:opacity .2s}#intro.nopt{pointer-events:none}
+#icv{position:absolute;inset:0;width:100%;height:100%;z-index:2}
+.iback,.ifront,.ilid,.irk{position:absolute;opacity:0;translate:var(--sx) var(--sy)}
+.iback{left:calc(50% - var(--bw)/2);top:calc(50% - var(--bh)/2);width:var(--bw);height:var(--bh);background:linear-gradient(#0d0e14,#08090d);border:1px solid #23262f;border-top:0;box-shadow:inset 0 0 40px rgba(0,0,0,.8);z-index:1}
+.iback::after{content:"";position:absolute;inset:-1px;border:1px solid var(--v);border-top:0;opacity:calc(var(--glow)*.7)}
+.iglow{position:absolute;inset:0;background:radial-gradient(ellipse 90% 70% at 50% 100%,var(--v),transparent 70%);opacity:calc(var(--glow)*.55)}
+.irk{left:calc(50% - var(--rh)/6);top:calc(50% + var(--bh)*.36 - var(--rh));width:calc(var(--rh)/3);height:var(--rh);z-index:3;translate:none;overflow:visible}
+.ifront{left:calc(50% - var(--bw)/2);top:calc(50% + var(--bh)*.28);width:var(--bw);height:calc(var(--bh)*.22);background:#0a0b10;border:1px solid #23262f;border-top:1px solid #343846;z-index:4;box-shadow:0 -12px 26px rgba(0,0,0,.6)}
+.ifront::before{content:"";position:absolute;left:0;right:0;top:-1px;height:1px;background:var(--v);opacity:calc(var(--glow)*.8)}
+.ilid{top:calc(50% - var(--bh)/2 - 3px);height:6px;width:calc(var(--bw)/2 + 1px);background:#1a1c24;border:1px solid #2c303b;z-index:4}
+.ilid.l{left:calc(50% - var(--bw)/2);transform:translateX(calc(var(--lid)*-64%))}.ilid.r{left:50%;transform:translateX(calc(var(--lid)*64%))}
+@keyframes iin{from{opacity:0;scale:.97}}
+.in .iback,.in .ifront,.in .ilid,.in .irk{opacity:1;animation:iin .3s ease-out backwards}
+.boxout .iback,.boxout .ifront,.boxout .ilid{opacity:0;transition:opacity .35s}
+.iwait{position:absolute;left:calc(50% - 32px);top:calc(50% + var(--bh)/2 + 28px);width:64px;height:1px;background:linear-gradient(90deg,transparent,var(--t),transparent);animation:iw 1.6s ease-in-out infinite;opacity:0}
+@keyframes iw{50%{opacity:.55}}.fire .iwait,.err .iwait{display:none}
+.imsg{position:absolute;left:0;right:0;top:calc(50% + var(--bh)/2 + 24px);text-align:center;color:var(--m);font-size:13px;z-index:5;padding:0 24px}
+.imsg p{max-width:420px;margin:0 auto 12px}.ibtn{display:flex;gap:8px;justify-content:center}
+.isweep{position:absolute;inset:0;z-index:6;pointer-events:none;transform:translateX(-100%);background:linear-gradient(105deg,transparent 38%,color-mix(in srgb,var(--v) 22%,transparent) 50%,transparent 62%)}
+.sw .isweep{animation:isw .32s ease-out forwards}@keyframes isw{to{transform:translateX(100%)}}
+
+.orow{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 0;border-bottom:1px solid var(--line);max-width:820px}.orow b{font-weight:600;color:#fff;display:block}.orow small{color:var(--m);font-size:12.5px}
+.chips{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}.chip{font-size:11px;padding:2px 8px;border:1px solid var(--line);border-radius:4px;color:var(--m)}.chip.g{color:#22C55E;border-color:rgba(34,197,94,.4)}.chip.w{color:#F59E0B;border-color:rgba(245,158,11,.4)}
+.rvb{width:min(520px,92vw)}.rvb h4{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--v);margin:14px 0 4px}.rvb p{margin:0;color:var(--t);line-height:1.5;font-size:13px}.rvb select{width:100%;margin-top:8px}.rvb .warn{color:#F59E0B}
+
+.hrow{display:flex;gap:12px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--line)}.hrow:first-of-type{border-top:0}.hrow b{font-size:14px;font-weight:600;color:#fff;margin-right:8px;font-variant-numeric:normal}
+.hrow small{display:block;color:var(--m);font-size:12.5px;margin-top:2px}.hrow em{font-style:normal;opacity:.75}
+.hd{width:8px;height:8px;border-radius:50%;margin-top:7px;flex:none;background:var(--m)}.hd.ok{background:#22C55E}.hd.watch{background:#F59E0B}.hd.high{background:#EF4444}
+.hl{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--m)}.hl.ok{color:#22C55E}.hl.watch{color:#F59E0B}.hl.high{color:#EF4444}
+.hnote{display:block;color:var(--m);font-size:11.5px;margin-top:6px}
+
+================================================================
+FILE: src/core.js   (169 lines, 15382 bytes)
+================================================================
+
+"use strict";
+const q = (id) => document.getElementById(id);
+const PAGES = ["dashboard", "performance", "network", "atlas", "optimizations", "system", "syn", "activity", "settings", "whatsnew", "help"];
+const ACCENTS = { Violet: "#8B5CF6", Cyan: "#38BDF8", Gold: "#D9A62E" };
+const VERSION = "0.2.0";
+const CHANGELOG = [{
+  v: "0.2.0", date: "2026-10-15", tag: "Signed updates",
+  groups: {
+    New: ["Signed in-app updates. STRYV checks the published release feed, downloads the installer and verifies its signature against the key built into the app before running it. An update that does not verify is discarded.", "Updates can be checked manually from Settings, and STRYV also looks quietly in the background and tells you when a newer version exists."],
+    "Known limits": ["Updates are only offered once a signed release has been published. Until then, Check now reports that you are up to date."]
+  }
+}, {
+  v: "0.1.0", date: "2026-10-15", tag: "Development build",
+  groups: {
+    New: ["Dashboard with live CPU, memory, uptime and storage readings.", "Performance page with 2-minute CPU and memory graphs and a top-processes list.", "Network page with live throughput, adapter list, TCP latency and DNS tests.", "System page with hardware and OS details and a copy-diagnostics button.", "Optimizations page with power-plan switching (reversible) and old temp-file cleanup, both with review and confirmation. Startup apps list with reversible enable/disable.", "GPU load, memory, temperature and clock (NVIDIA only), temperature sensors where Windows exposes them, and adapter link speed.", "Dashboard system-health summary (memory, sustained CPU, storage space, uptime) with data-quality labels.", "ATLAS page that finds installed games by reading the library files the launcher has already written, showing each game's launcher, app id, install path, size and last-played date.", "Launch a discovered Steam game from the ATLAS library. STRYV asks Steam to start it through Steam's own link handler and never runs a game's files itself.", "Settings, activity feed, technical log, command palette (Ctrl+K), data export and reset."],
+    Fixed: ["A power-plan change that fails no longer leaves a Roll back button behind for a change that did not happen."],
+    "Known limits": ["AMD and Intel GPU readings are not supported yet, and many PCs do not expose CPU temperature.", "Switching the Windows power plan needs Administrator rights, so STRYV must be started with Run as administrator for that action.", "ATLAS reads Steam libraries only. Epic, Riot, Battle.net and GOG are not read yet, and only Steam games can be launched from the library.", "SYN Assistant is not connected.", "There is no update mechanism yet; install new builds manually."]
+  }
+}];
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const redact = (s) => String(s).replace(/((key|token|secret|password|authorization)["']?\s*[:=]\s*)\S+/gi, "$1[redacted]");
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("stryv." + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("stryv." + k, JSON.stringify(v)); return true; } catch { return false; } },
+};
+
+function toast(msg, bad) {
+  const t = document.createElement("div"); t.className = "toast" + (bad ? " bad" : ""); t.setAttribute("role", bad ? "alert" : "status");
+  t.innerHTML = `<span>${esc(msg)}</span>` + (bad ? '<button aria-label="Dismiss">âœ•</button>' : "");
+  const kill = () => { t.classList.remove("in"); setTimeout(() => t.remove(), 200); };
+  if (bad) t.querySelector("button").onclick = kill; else setTimeout(kill, 2400);
+  q("toasts").appendChild(t); requestAnimationFrame(() => t.classList.add("in"));
+}
+
+function confirmBox({ title, body, yes = "Confirm", danger = false }) {
+  return new Promise((res) => {
+    const y = q("dYes"), n = q("dNo"), d = q("dlg");
+    q("dT").textContent = title; q("dB").textContent = body; y.textContent = yes; y.classList.toggle("danger", danger);
+    const done = (v) => { d.classList.remove("on"); y.onclick = n.onclick = null; d._cancel = null; res(v); };
+    y.onclick = () => done(true); n.onclick = () => done(false); d._cancel = () => done(false);
+    d.classList.add("on"); (danger ? n : y).focus();
+  });
+}
+
+const Tech = {
+  list: store.get("tech", []),
+  add(ctx, err) {
+    this.list.push({ t: Date.now(), ctx, msg: redact(err && err.stack || err) });
+    if (this.list.length > 100) this.list.shift();
+    store.set("tech", this.list); renderActivity();
+  },
+};
+addEventListener("error", (e) => Tech.add("window.error", e.error || e.message));
+addEventListener("unhandledrejection", (e) => Tech.add("unhandledrejection", e.reason));
+
+const Cfg = {
+  d: { accent: "#8B5CF6", compact: false, reduceMotion: false, interval: 2, startPage: "dashboard", keepActivity: true, intro: true }, v: {},
+  load() {
+    const s = store.get("settings", {}), v = { ...this.d };
+    if (Object.values(ACCENTS).includes(s.accent)) v.accent = s.accent;
+    for (const k of ["compact", "reduceMotion", "keepActivity", "intro"]) if (typeof s[k] === "boolean") v[k] = s[k];
+    if ([1, 2, 5].includes(s.interval)) v.interval = s.interval;
+    if (["dashboard", "performance", "network", "system", "activity"].includes(s.startPage)) v.startPage = s.startPage;
+    this.v = v;
+  },
+  set(k, val, label) {
+    this.v[k] = val; store.set("settings", this.v); this.apply();
+    if (k === "keepActivity") { if (!val) localStorage.removeItem("stryv.act"); else Act.save(); }
+    if (k === "interval" && window.startTimers) startTimers();
+    Act.log({ text: "Setting changed: " + label }); toast("Saved");
+  },
+  apply() {
+    document.documentElement.style.setProperty("--v", this.v.accent);
+    q("app").classList.toggle("compact", this.v.compact); document.body.classList.toggle("rm", this.v.reduceMotion);
+    document.querySelectorAll("[data-set]").forEach((b) => b.setAttribute("aria-pressed", !!this.v[b.dataset.set]));
+    document.querySelectorAll("[data-accent]").forEach((b) => b.setAttribute("aria-pressed", ACCENTS[b.dataset.accent] === this.v.accent));
+    document.querySelectorAll("[data-sel]").forEach((s) => s.value = this.v[s.dataset.sel]);
+  },
+};
+
+const Act = {
+  list: [],
+  init() { this.list = (Cfg.v.keepActivity ? store.get("act", []) : []).map((a) => a.status === "running" ? { ...a, status: "failed", detail: "Interrupted: the app closed before this finished." } : a); },
+  log(o) { const a = { id: Date.now() + Math.random(), t: Date.now(), status: "done", ...o }; this.list.unshift(a); this.list.length = Math.min(this.list.length, 200); this.save(); renderActivity(); return a.id; },
+  update(id, p) { const a = this.list.find((x) => x.id === id); if (a) { Object.assign(a, p); this.save(); renderActivity(); } },
+  save() { if (Cfg.v.keepActivity) store.set("act", this.list); },
+};
+
+let actTab = "feed";
+function renderActivity() {
+  const el = q("actList"); if (!el) return;
+  document.querySelectorAll("[data-tab]").forEach((b) => b.classList.toggle("on", b.dataset.tab === actTab));
+  const time = (t) => new Date(t).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  if (actTab === "feed") {
+    el.innerHTML = Act.list.length ? Act.list.map((a, i) => `<div class="arow"><i class="st ${a.status}"></i><div><b>${esc(a.text)}</b><small>${a.status === "running" ? "Runningâ€¦" : a.status === "failed" ? "Failed" : "Done"} Â· ${time(a.t)}</small></div>${a.detail ? `<button class="lnk" data-copy="${i}">Copy details</button>` : ""}</div>`).join("") : '<p class="empty">No activity yet. Actions you take in STRYV appear here.</p>';
+    el.querySelectorAll("[data-copy]").forEach((b) => b.onclick = () => copyText(Act.list[b.dataset.copy].detail));
+  } else {
+    el.innerHTML = Tech.list.length ? [...Tech.list].reverse().map((e) => `<div class="arow"><i class="st failed"></i><div><b>${esc(e.ctx)}</b><small>${time(e.t)}</small><pre>${esc(e.msg)}</pre></div></div>`).join("") + '<button class="btn ghost" id="copyTech">Copy technical log</button>' : '<p class="empty">No technical errors recorded.</p>';
+    const c = q("copyTech"); if (c) c.onclick = () => copyText(Tech.list.map((e) => `${new Date(e.t).toISOString()} ${e.ctx}\n${e.msg}`).join("\n\n"));
+  }
+}
+async function copyText(t) { try { await navigator.clipboard.writeText(redact(t)); toast("Copied"); } catch (e) { toast("Copy failed", true); Tech.add("clipboard", e); } }
+
+function renderNews() {
+  const unseen = store.get("seen", "") !== CHANGELOG[0].v;
+  q("newsList").innerHTML = CHANGELOG.map((r) => `<article class="rel"><div class="relh"><b>v${r.v}</b><span>${r.date} Â· ${r.tag}</span></div>` + Object.entries(r.groups).map(([g, l]) => `<h4>${g}</h4><ul>${l.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`).join("") + "</article>").join("");
+  q("markSeen").style.display = unseen ? "" : "none";
+}
+function updateDot() { document.querySelector('[data-p="whatsnew"]').classList.toggle("unseen", store.get("seen", "") !== CHANGELOG[0].v); }
+
+function go(p) {
+  if (!PAGES.includes(p)) return;
+  document.querySelectorAll("[data-p]").forEach((b) => b.classList.toggle("on", b.dataset.p === p));
+  document.querySelectorAll(".page").forEach((s) => s.classList.toggle("on", s.id === p));
+  if (p === "whatsnew") renderNews(); if (p === "activity") renderActivity(); if (p === "optimizations" && typeof Opt !== "undefined") Opt.load();
+  if (p === "atlas" && typeof Atlas !== "undefined") Atlas.scan();
+  if (typeof Sensors !== "undefined") { if (p === "network") Sensors.poll(); else setTimeout(Sensors.poll, 0); }
+  document.querySelector("main").scrollTop = 0;
+}
+
+function exportData() { return { app: "STRYV", version: VERSION, exported: new Date().toISOString(), settings: Cfg.v, activity: Act.list }; }
+
+const COMMANDS = [
+  ["Go to Dashboard", "Ctrl+1", () => go("dashboard")], ["Go to Performance", "Ctrl+2", () => go("performance")],
+  ["Go to Network", "Ctrl+3", () => go("network")], ["Go to ATLAS", "", () => go("atlas")], ["Go to Optimizations", "", () => go("optimizations")], ["Go to System", "Ctrl+4", () => go("system")],
+  ["Go to Activity", "Ctrl+5", () => go("activity")], ["Go to Settings", "Ctrl+,", () => go("settings")],
+  ["Go to What's New", "", () => go("whatsnew")], ["Go to Help & About", "", () => go("help")],
+  ["Run network connection tests", "", () => { go("network"); q("runT").click(); }],
+  ["Copy system diagnostics", "", () => { go("system"); q("copy").click(); }],
+  ["Toggle compact sidebar", "", () => Cfg.set("compact", !Cfg.v.compact, "Compact sidebar")],
+  ["Replay launch animation", "", () => Intro.run(async () => ({ ok: true }), { force: true })],
+  ["Export app data as JSON", "", () => q("expFile").click()],
+];
+let palSel = 0, palList = COMMANDS;
+const palOpen = () => q("pal").classList.contains("on");
+function renderPal() {
+  const t = q("pin").value.toLowerCase().split(/\s+/).filter(Boolean);
+  palList = COMMANDS.filter((c) => t.every((w) => c[0].toLowerCase().includes(w))); palSel = Math.min(palSel, Math.max(0, palList.length - 1));
+  q("plist").innerHTML = palList.length ? palList.map((c, i) => `<div class="pit${i === palSel ? " sel" : ""}" data-i="${i}"><span>${c[0]}</span><kbd>${c[1]}</kbd></div>`).join("") : '<p class="empty">No matching commands.</p>';
+  q("plist").querySelectorAll(".pit").forEach((e) => e.onclick = () => runPal(+e.dataset.i));
+}
+function runPal(i) { const c = palList[i]; closePal(); if (c) c[2](); }
+function openPal() { q("pin").value = ""; palSel = 0; renderPal(); q("pal").classList.add("on"); q("pin").focus(); }
+function closePal() { q("pal").classList.remove("on"); }
+q("pin").oninput = () => { palSel = 0; renderPal(); };
+q("pin").onkeydown = (e) => {
+  if (e.key === "ArrowDown") { palSel = Math.min(palSel + 1, palList.length - 1); renderPal(); e.preventDefault(); }
+  else if (e.key === "ArrowUp") { palSel = Math.max(palSel - 1, 0); renderPal(); e.preventDefault(); }
+  else if (e.key === "Enter") runPal(palSel);
+};
+q("pal").onmousedown = (e) => { if (e.target === q("pal")) closePal(); };
+addEventListener("keydown", (e) => {
+  if (e.key === "Escape") { if (q("dlg").classList.contains("on")) q("dlg")._cancel(); else if (q("rv").classList.contains("on")) Opt.close(); else if (palOpen()) closePal(); return; }
+  if (!(e.ctrlKey || e.metaKey)) return;
+  const k = e.key.toLowerCase();
+  if (k === "k") { e.preventDefault(); palOpen() ? closePal() : openPal(); }
+  else if (k === ",") { e.preventDefault(); go("settings"); }
+  else if (/^[1-5]$/.test(k)) { e.preventDefault(); go(["dashboard", "performance", "network", "system", "activity"][+k - 1]); }
+});
+
+document.querySelectorAll("[data-p]").forEach((b) => b.onclick = () => go(b.dataset.p));
+document.querySelectorAll("[data-tab]").forEach((b) => b.onclick = () => { actTab = b.dataset.tab; renderActivity(); });
+document.querySelectorAll("[data-set]").forEach((b) => b.onclick = () => Cfg.set(b.dataset.set, !Cfg.v[b.dataset.set], b.dataset.label));
+document.querySelectorAll("[data-accent]").forEach((b) => b.onclick = () => Cfg.set("accent", ACCENTS[b.dataset.accent], "Accent color"));
+document.querySelectorAll("[data-sel]").forEach((s) => s.onchange = () => Cfg.set(s.dataset.sel, isNaN(s.value) ? s.value : +s.value, s.dataset.label));
+q("markSeen").onclick = () => { store.set("seen", CHANGELOG[0].v); updateDot(); renderNews(); toast("Marked as viewed"); };
+q("expFile").onclick = () => {
+  try {
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(exportData(), null, 2)], { type: "application/json" }));
+    a.download = "stryv-export.json"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    Act.log({ text: "Exported app data" }); toast("Export started");
+  } catch (e) { Tech.add("export", e); toast("Export failed. Use Copy as JSON instead.", true); }
+};
+q("replay").onclick = () => Intro.run(async () => ({ ok: true }), { force: true });
+q("expCopy").onclick = () => copyText(JSON.stringify(exportData(), null, 2));
+q("clrAct").onclick = async () => { if (await confirmBox({ title: "Clear activity history?", body: "This removes the activity feed on this PC. Settings are kept.", yes: "Clear", danger: true })) { Act.list = []; Act.save(); renderActivity(); toast("Activity cleared"); } };
+q("rstSet").onclick = async () => { if (await confirmBox({ title: "Reset settings?", body: "Accent, sidebar, motion, startup and monitoring options return to defaults. Your activity history is kept.", yes: "Reset", danger: true })) { Cfg.v = { ...Cfg.d }; store.set("settings", Cfg.v); Cfg.apply(); if (window.startTimers) startTimers(); Act.log({ text: "Settings reset to defaults" }); toast("Settings reset"); } };
+q("delAll").onclick = async () => { if (await confirmBox({ title: "Delete all STRYV data?", body: "This permanently deletes settings, activity history and the technical log stored by STRYV on this PC, then restarts the interface. It cannot be undone.", yes: "Delete everything", danger: true })) { Object.keys(localStorage).filter((k) => k.startsWith("stryv.")).forEach((k) => localStorage.removeItem(k)); location.reload(); } };
+q("ver").textContent = "v" + VERSION; q("aboutV").textContent = "Version " + VERSION;
+
+Cfg.load(); Act.init(); Cfg.apply(); updateDot(); go(Cfg.v.startPage);
+
+================================================================
+FILE: src/app.js   (75 lines, 6109 bytes)
+================================================================
+
+const invoke = window.__TAURI__?.core?.invoke;
+const $ = (id) => document.getElementById(id);
+const gb = (b) => (b / 1073741824).toFixed(1) + " GB";
+const dur = (s) => { const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return (d ? d + "d " : "") + h + "h " + m + "m"; };
+async function tick() {
+  if (!invoke) { $("cpu").textContent = "Unavailable"; return false; }
+  try {
+    const s = await invoke("get_snapshot");
+    $("cpu").textContent = s.cpu_usage.toFixed(0) + "%"; $("cpuB").style.width = s.cpu_usage + "%";
+    const p = s.mem_used / s.mem_total * 100;
+    $("mem").textContent = p.toFixed(0) + "%"; $("memB").style.width = p + "%";
+    $("memD").textContent = gb(s.mem_used) + " of " + gb(s.mem_total);
+    if (typeof Health !== "undefined") Health.push(s);
+    H.cpu.push(s.cpu_usage); H.mem.push(p); for (const k in H) if (H[k].length > N) H[k].shift();
+    draw("cpuC", H.cpu); draw("memC", H.mem);
+    $("up").textContent = dur(s.uptime_secs);
+    $("disks").innerHTML = s.disks.map((d) => `<div class="disk"><span>${d.name}</span><span>${gb(d.available)} free of ${gb(d.total)}</span></div>`).join("") || "<small>Unavailable</small>";
+  return true;
+  } catch (e) { $("cpu").textContent = "Unavailable"; console.error(e); return false; }
+}
+const H = { cpu: [], mem: [] }, N = 60;
+function draw(id, arr, max = 100) {
+  const el = $(id), step = 300 / (N - 1), off = N - arr.length;
+  const pts = arr.map((v, i) => [(off + i) * step, 88 - Math.min(max, v) / max * 86]);
+  let g = [25, 50, 75].map((y) => `<line class="grid" x1="0" x2="300" y1="${88 - y * .86}" y2="${88 - y * .86}"/>`).join("");
+  if (pts.length > 1) { const l = pts.map((p) => p.join(",")).join(" "); g += `<polygon class="ar" points="${pts[0][0]},88 ${l} ${pts.at(-1)[0]},88"/><polyline class="ln" points="${l}"/>`; }
+  el.innerHTML = g;
+}
+async function procs() {
+  if (!invoke) return false;
+  try {
+    const p = await invoke("get_processes"); window.LastProcs = p;
+    $("procT").innerHTML = p.map((x) => `<tr><td style="color:var(--t)">${x.name}</td><td class="n">${x.cpu.toFixed(1)}%</td><td class="n">${(x.mem / 1048576).toFixed(0)} MB</td></tr>`).join(""); return true;
+  } catch (e) { $("procT").innerHTML = "<tr><td>Unavailable</td></tr>"; return false; }
+}
+H.dl = []; H.ul = [];
+const mbps = (b) => (b / 1e6).toFixed(b < 1e7 ? 2 : 1) + " Mbps";
+async function net() {
+  if (!invoke) return false;
+  try {
+    const all = await invoke("get_network");
+    const real = all.filter((x) => x.rx_bps + x.tx_bps > 0 || x.mac !== "00:00:00:00:00:00");
+    const d = real.reduce((a, x) => a + x.rx_bps, 0), u = real.reduce((a, x) => a + x.tx_bps, 0);
+    $("dl").textContent = mbps(d); $("ul").textContent = mbps(u);
+    $("net").textContent = "â†“ " + mbps(d); $("netU").textContent = "â†‘ " + mbps(u);
+    H.dl.push(d / 1e6); H.ul.push(u / 1e6); for (const k of ["dl", "ul"]) if (H[k].length > N) H[k].shift();
+    const mx = (k) => Math.max(10, ...H[k]);
+    draw("dlC", H.dl, mx("dl")); draw("ulC", H.ul, mx("ul"));
+    $("adT").innerHTML = real.map((x) => `<tr><td style="color:var(--t)">${x.name}</td><td>${x.mac}</td><td class="n">â†“ ${mbps(x.rx_bps)}</td><td class="n">â†‘ ${mbps(x.tx_bps)}</td></tr>`).join(""); return true;
+  } catch (e) { $("dl").textContent = "Unavailable"; return false; }
+}
+const ms = (v) => v == null ? "â€”" : v.toFixed(0) + " ms";
+$("runT").onclick = async (e) => {
+  e.target.disabled = true; e.target.textContent = "Testingâ€¦"; const aid = Act.log({ text: "Network connection tests", status: "running" });
+  try {
+    const r = await invoke("run_network_tests"); Act.update(aid, { status: "done", detail: JSON.stringify(r, null, 1) });
+    $("tests").innerHTML = "<table>" + r.latency.map((l) => `<tr><td style="color:var(--t)">${l.target}</td><td>min ${ms(l.min_ms)} Â· avg ${ms(l.avg_ms)} Â· max ${ms(l.max_ms)}</td><td class="n">${l.lost}/${l.sent} failed</td></tr>`).join("") +
+      r.dns.map((x) => `<tr><td style="color:var(--t)">DNS ${x.host}</td><td>${x.error ? "Failed: " + x.error : "Resolved"}</td><td class="n">${ms(x.ms)}</td></tr>`).join("") + "</table><small>Failed connections count as loss in this test, but a blocked port can also cause them.</small>";
+  } catch (err) { Act.update(aid, { status: "failed", detail: String(err) }); Tech.add("network.tests", err); toast("Network tests failed", true); $("tests").innerHTML = "<small>Test could not run: " + err + "</small>"; }
+  e.target.disabled = false; e.target.textContent = "Run again";
+};
+let rows = [];
+async function sys() {
+  if (!invoke) return false;
+  let i; try { i = await invoke("get_system_info"); } catch (e) { return false; }
+  rows = [["Operating system", i.os_version || i.os], ["Device name", i.host], ["Processor", i.cpu_brand], ["Physical cores", i.cpu_cores || "Unavailable"], ["Installed memory", gb(i.mem_total)]];
+  $("sysT").innerHTML = rows.map((r) => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join(""); return true;
+}
+$("copy").onclick = async (e) => { await navigator.clipboard.writeText(rows.map((r) => r.join(": ")).join("\n")); e.target.textContent = "Copied"; toast("Diagnostics copied"); Act.log({ text: "Copied system diagnostics" }); setTimeout(() => e.target.textContent = "Copy diagnostics", 1500); };
+function startTimers() { clearInterval(window._a); clearInterval(window._b); const t = Cfg.v.interval * 1000; window._a = setInterval(() => { tick(); net(); }, t); window._b = setInterval(procs, t * 2); }
+async function startup() {
+  const [snap, info] = await Promise.all([tick(), sys(), procs(), net(), document.fonts && document.fonts.ready, ...[...document.images].map((i) => i.decode().catch(() => null))]);
+  return snap && info ? { ok: true } : { ok: false, reason: !invoke ? "The STRYV backend is not available in this window." : "Could not read " + [!snap && "live system data", !info && "system information"].filter(Boolean).join(" or ") + "." };
+}
+startTimers(); Intro.run(startup, { ready: async () => { const r = await startup(); if (r.ok && typeof Updater !== "undefined") Updater.check(false); return r; } });
+
+================================================================
+FILE: src/atlas.js   (77 lines, 4186 bytes)
+================================================================
+
+"use strict";
+// ATLAS - game discovery and launching.
+// Discovery is read-only: it reads the files the launcher has already written.
+// Launching is a separate, explicit action the user takes per game, and it only
+// ever passes an app id back to the backend, never a path or a command.
+const Atlas = (() => {
+  let games = [], busy = false, launching = false;
+  const mb = (b) => b >= 1073741824 ? (b / 1073741824).toFixed(1) + " GB" : (b / 1048576).toFixed(0) + " MB";
+  const when = (s) => {
+    if (!s) return "Never played";
+    const d = new Date(s * 1000);
+    if (isNaN(d.getTime()) || d.getFullYear() < 2000) return "Never played";
+    return d.toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
+  };
+  const playable = (g) => g.launcher === "Steam" && !!g.app_id;
+
+  function render() {
+    const total = games.reduce((a, g) => a + (g.size_bytes || 0), 0);
+    const launchers = [...new Set(games.map((g) => g.launcher))];
+    q("atlasN").textContent = games.length ? games.length + (games.length === 1 ? " game" : " games") : "None found";
+    q("atlasSum").textContent = games.length
+      ? "Found via " + launchers.join(", ") + "."
+      : "No launcher library files were found on this PC.";
+    q("atlasSize").textContent = total ? mb(total) : "â€”";
+    q("atlasT").innerHTML = games.length
+      ? games.map((g, i) => `<tr><td style="color:var(--t)">${esc(g.name)}<br><small style="color:var(--m)">${esc(g.launcher)}${g.app_id ? " Â· " + esc(g.app_id) : ""} Â· ${esc(g.install_dir)}</small></td><td class="n">${g.size_bytes ? mb(g.size_bytes) : "â€”"}</td><td class="n">${when(g.last_played)}</td><td class="n">${playable(g) ? `<button class="btn" data-play="${i}">Play</button>` : `<small style="color:var(--m)">â€”</small>`}</td></tr>`).join("")
+      : '<tr><td>Nothing to show yet.</td></tr>';
+    q("atlasT").querySelectorAll("[data-play]").forEach((b) => { b.onclick = () => launch(games[+b.dataset.play]); });
+    q("atlasNote").innerHTML = "STRYV reads only what the launcher wrote. Launching asks Steam to start a game through Steam's own link handler; STRYV never runs the game's files directly. Epic, Riot, Battle.net and GOG libraries are not read yet.";
+  }
+
+  async function scan(manual) {
+    if (busy || typeof invoke === "undefined" || !invoke) {
+      if (typeof invoke === "undefined" || !invoke) { q("atlasT").innerHTML = "<tr><td>Unavailable: the STRYV backend is not connected.</td></tr>"; }
+      return;
+    }
+    busy = true;
+    const btn = q("atlasScan");
+    btn.disabled = true;
+    if (manual) btn.textContent = "Scanningâ€¦";
+    try {
+      games = await invoke("atlas_scan");
+      render();
+      if (manual) { toast("Library rescanned"); Act.log({ text: "ATLAS library rescan", detail: JSON.stringify({ found: games.length }) }); }
+    } catch (e) {
+      Tech.add("atlas.scan", e);
+      q("atlasT").innerHTML = '<tr><td>Could not read the library: ' + esc(e) + "</td></tr>";
+      q("atlasNote").textContent = "";
+    } finally {
+      busy = false;
+      btn.disabled = false;
+      if (manual) btn.textContent = "Rescan library";
+    }
+  }
+
+  // Sends only the numeric app id. The backend re-checks it against the scanned
+  // library and builds the Steam link itself.
+  async function launch(g) {
+    if (!g || launching) return;
+    if (!playable(g)) { toast("That game cannot be launched yet.", true); return; }
+    launching = true;
+    const btn = q("atlasT").querySelector("[data-play='" + games.indexOf(g) + "']");
+    if (btn) { btn.disabled = true; btn.textContent = "Startingâ€¦"; }
+    const aid = Act.log({ text: "Launching from ATLAS: " + g.name, status: "running" });
+    try {
+      const msg = await invoke("atlas_launch", { appid: g.app_id });
+      Act.update(aid, { status: "done", detail: String(msg) });
+      toast(msg);
+    } catch (e) {
+      Act.update(aid, { status: "failed", detail: String(e) });
+      Tech.add("atlas.launch", e);
+      toast("Could not launch: " + e, true);
+    } finally {
+      launching = false;
+      if (btn) { btn.disabled = false; btn.textContent = "Play"; }
+    }
+  }
+
+  q("atlasScan").onclick = () => scan(true);
+  return { scan, launch };
+})();
+
+================================================================
+FILE: src/intro.js   (162 lines, 13504 bytes)
+================================================================
+
+"use strict";
+const Intro = (() => {
+  const TL = { appear: 300, lid: 280, ign: 700, launch: 450, cover0: 800, cover1: 1450, clr0: 1500, clr1: 2500, end: 2820 };
+  const SP = 128, K = 0.65;
+  let st = null, shown = false;
+  const c01 = (v) => Math.min(1, Math.max(0, v));
+  const cl = (v, a, b) => Math.min(b, Math.max(a, v));
+  const sm = (a, b, v) => { const t = c01((v - a) / (b - a)); return t * t * (3 - 2 * t); };
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const rgb = (h) => { const n = parseInt(h.replace("#", ""), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+  const hash = (x, y) => { let h = Math.imul(x, 374761393) + Math.imul(y, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967295; };
+  const vn = (x, y) => { const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf); return hash(xi, yi) * (1 - u) * (1 - v) + hash(xi + 1, yi) * u * (1 - v) + hash(xi, yi + 1) * (1 - u) * v + hash(xi + 1, yi + 1) * u * v; };
+  const fbm = (x, y) => { let s = 0, a = .5, f = 1; for (let i = 0; i < 3; i++) { s += a * vn(x * f, y * f); f *= 2; a *= .5; } return s / .875; };
+
+  const HTML = `<canvas id="icv"></canvas><div class="iback"><div class="iglow"></div></div>
+<svg class="irk" viewBox="0 0 40 120" overflow="visible"><defs>
+<linearGradient id="ig1" x1="0" x2="1"><stop offset="0" stop-color="#4a4f5e"/><stop offset=".38" stop-color="#e8eaf2"/><stop offset=".62" stop-color="#8a90a4"/><stop offset="1" stop-color="#2a2d38"/></linearGradient>
+<linearGradient id="ig3" x1="0" x2="1"><stop offset="0" stop-color="#2d303b"/><stop offset="1" stop-color="#5a5f70"/></linearGradient>
+<linearGradient id="ig2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset=".25" style="stop-color:var(--v)"/><stop offset="1" style="stop-color:var(--v);stop-opacity:0"/></linearGradient>
+<clipPath id="igc"><path d="M20 2C27 18 29 40 28 96H12C11 40 13 18 20 2Z"/></clipPath></defs>
+<g id="ifl" style="transform-origin:20px 106px;transform:scaleY(0)"><path d="M15 106Q16 138 20 172Q24 138 25 106Z" fill="url(#ig2)"/><path d="M17.2 106Q18 126 20 146Q22 126 22.8 106Z" fill="#fff" opacity=".85"/></g>
+<path d="M12 80L2 106L12 101Z" fill="url(#ig3)"/><path d="M28 80L38 106L28 101Z" fill="url(#ig3)"/>
+<path d="M20 2C27 18 29 40 28 96H12C11 40 13 18 20 2Z" fill="url(#ig1)"/>
+<rect x="10" y="60" width="20" height="6" style="fill:var(--v)" clip-path="url(#igc)"/>
+<path d="M13 96H27L25 107H15Z" fill="#1c1f29" stroke="#3a3e4c" stroke-width=".6"/></svg>
+<div class="ilid l"></div><div class="ilid r"></div><div class="ifront"></div>
+<div class="iwait"></div><div class="imsg" role="status" aria-live="polite"></div><div class="isweep"></div>`;
+
+  function makeSprites(ac) {
+    const out = [];
+    for (let k = 0; k < 6; k++) {
+      const c = document.createElement("canvas"); c.width = c.height = SP;
+      const g = c.getContext("2d"), img = g.createImageData(SP, SP), d = img.data, o = k * 37.7, tint = k >= 4;
+      const n = (x, y) => fbm(x * .024 + o, y * .024 + o * .6);
+      for (let y = 0; y < SP; y++) for (let x = 0; x < SP; x++) {
+        const dx = (x - SP / 2) / (SP / 2), dy = (y - SP / 2) / (SP / 2), r = Math.hypot(dx, dy);
+        if (r >= 1) continue;
+        const e = 1 - r, fall = e * e * (3 - 2 * e), a = c01(n(x, y) * 1.6 - .2) * fall;
+        const lit = c01(.45 + ((n(x - 2, y) - n(x + 2, y)) * .8 + (n(x, y - 2) - n(x, y + 2))) * 3.5), t = tint ? .38 * lit : 0, i = (y * SP + x) * 4;
+        const base = [24 + 80 * lit, 25 + 83 * lit, 30 + 90 * lit];
+        d[i] = base[0] + (ac[0] - base[0]) * t; d[i + 1] = base[1] + (ac[1] - base[1]) * t; d[i + 2] = base[2] + (ac[2] - base[2]) * t; d[i + 3] = a * 255;
+      }
+      g.putImageData(img, 0, 0); out.push(c);
+    }
+    return out;
+  }
+
+  function geom() {
+    const vw = innerWidth, vh = innerHeight, bh = cl(vh * .4, 200, 460), bw = bh * .74, rh = bh * .56, cx = vw / 2, cy = vh / 2, boxBot = cy + bh / 2, rkBottom = boxBot - bh * .14;
+    return { vw, vh, bh, bw, rh, cx, cy, boxTop: cy - bh / 2, rkBottom, D: rkBottom + rh * .6 + 40, maxD: Math.hypot(cx, cy) };
+  }
+  function setVars() {
+    const g = geom(), s = st.root.style;
+    s.setProperty("--bh", g.bh + "px"); s.setProperty("--bw", g.bw + "px"); s.setProperty("--rh", g.rh + "px");
+    st.cv.width = Math.round(g.vw * K); st.cv.height = Math.round(g.vh * K);
+  }
+
+  function msg(text, btns = []) {
+    const m = st.root.querySelector(".imsg"); m.innerHTML = `<p>${esc(text)}</p><div class="ibtn"></div>`;
+    btns.forEach(([t, f], i) => { const b = document.createElement("button"); b.className = "btn" + (i ? " ghost" : ""); b.textContent = t; b.onclick = f; m.querySelector(".ibtn").appendChild(b); });
+    const b0 = m.querySelector("button"); if (b0) b0.focus();
+  }
+  function finish() {
+    if (!st) return;
+    st.timers.forEach(clearTimeout); cancelAnimationFrame(st.raf); removeEventListener("resize", st.onR);
+    st.root.remove(); st = null;
+  }
+  function quick() { if (!st) return; st.root.classList.add("nopt", "fade"); st.timers.push(setTimeout(finish, 220)); }
+
+  async function begin(readyFn) {
+    const s = st; s.root.classList.remove("err"); s.root.querySelector(".imsg").innerHTML = "";
+    const appear = new Promise((r) => s.timers.push(setTimeout(r, TL.appear)));
+    const slow = setTimeout(() => { if (st === s) msg("Still startingâ€¦", [["Open STRYV anyway", quick]]); }, 8000); s.timers.push(slow);
+    let res; try { res = await readyFn(); } catch (e) { res = { ok: false, reason: String(e) }; }
+    await appear; clearTimeout(slow);
+    if (st !== s) return;
+    s.root.querySelector(".imsg").innerHTML = "";
+    if (!res.ok) {
+      Tech.add("startup", res.reason || "Startup failed"); s.root.classList.add("err");
+      return msg("STRYV couldn't finish starting. " + (res.reason || ""), [["Retry", () => begin(readyFn)], ["Open STRYV anyway", quick]]);
+    }
+    if (s.force ? matchMedia("(prefers-reduced-motion: reduce)").matches || Cfg.v.reduceMotion : (Cfg.v.reduceMotion || Cfg.v.intro === false || matchMedia("(prefers-reduced-motion: reduce)").matches)) return quick();
+    launch();
+  }
+
+  function launch() {
+    st.root.classList.add("fire");
+    if (!st.sprites) st.sprites = makeSprites(st.ac);
+    st.ctx = st.cv.getContext("2d"); st.P = []; st.S = [];
+    st.rk = st.root.querySelector(".irk"); st.fl = st.root.querySelector("#ifl");
+    st.t0 = performance.now(); st.last = st.t0; st.raf = requestAnimationFrame(frame);
+  }
+
+  function frame() {
+    if (!st) return;
+    const now = performance.now();
+    const T = Math.max(0, now - st.t0), dt = Math.min(.05, Math.max(.001, (now - st.last) / 1000)); st.last = now;
+    const g = geom(), ctx = st.ctx, P = st.P, S = st.S, root = st.root, ac = st.ac;
+    const p = c01(T / TL.ign), u = c01((T - TL.ign) / TL.launch);
+    const lift = T < TL.ign ? 0 : g.D * Math.pow(u, 2.4), vib = T < TL.ign ? p * p * 2.6 : 0;
+    st.rk.style.transform = `translate(${(Math.random() - .5) * vib * 2}px,${(Math.random() - .5) * vib * 2 - lift}px) rotate(${(Math.random() - .5) * vib * .3}deg)`;
+    st.rk.style.visibility = u >= 1 ? "hidden" : "visible";
+    const fl = T < TL.ign ? .12 + p * 1.05 : 1.2 + u * .75; st.fl.style.transform = `scaleY(${fl * (.92 + Math.random() * .16)})`;
+    const rs = root.style; rs.setProperty("--glow", T < TL.ign ? .12 + .88 * p * p : 1.2 * (1 - sm(TL.ign, TL.ign + 700, T)));
+    rs.setProperty("--lid", sm(0, TL.lid, T));
+    const sh = T >= TL.ign ? 5 * (1 - c01((T - TL.ign) / 320)) : 0; rs.setProperty("--sx", (Math.random() - .5) * sh * 2 + "px"); rs.setProperty("--sy", (Math.random() - .5) * sh * 2 + "px");
+    if (T > TL.ign + 350) root.classList.add("boxout");
+
+    const nozY = g.rkBottom - 13 / 120 * g.rh - lift, ox = g.cx, oy = g.cy - g.bh * .1;
+    const puff = (x, y, vx, vy, s0, s1, life, peak, tint, curl) => { if (P.length < 340) P.push({ x, y, vx, vy, s0, s1, life, peak, k: tint ? 4 + (Math.random() * 2 | 0) : Math.random() * 4 | 0, r: Math.random() * 6.28, vr: rnd(-.4, .4), curl, ph: rnd(0, 6.28), born: T }); };
+    const spark = (x, y, vx, vy, life) => S.push({ x, y, vx, vy, life, born: T });
+    if (T < TL.ign && Math.random() < p * .6) spark(g.cx + rnd(-8, 8), g.rkBottom - g.rh * .2, rnd(-160, 160), rnd(-120, 40), .5);
+    if (!st.burst && T >= TL.ign) {
+      st.burst = true;
+      for (let i = 0; i < 70; i++) { const a = rnd(0, 6.28), sp = rnd(300, 1500); puff(ox, oy, Math.cos(a) * sp, Math.sin(a) * sp * .8, rnd(60, 120), rnd(260, 460), rnd(1.6, 2.4), rnd(.55, .85), Math.random() < .08, rnd(-1.5, 1.5)); }
+      for (let i = 0; i < 26; i++) spark(g.cx + rnd(-g.bw * .3, g.bw * .3), g.boxTop, rnd(-380, 380), rnd(-900, -250), rnd(.35, .7));
+    }
+    if (T >= TL.ign && T < TL.ign + TL.launch + 60) {
+      for (let i = 0; i < 3; i++) puff(g.cx + rnd(-6, 6), nozY, rnd(-110, 110), rnd(120, 320), rnd(36, 64), rnd(150, 230), rnd(1.1, 1.6), rnd(.5, .75), Math.random() < .1, rnd(-1, 1));
+      puff(g.cx, nozY, rnd(-650, 650), rnd(-60, 80), rnd(50, 80), rnd(260, 400), rnd(1.3, 1.9), rnd(.5, .7), false, rnd(-1.5, 1.5));
+    }
+    if (T >= TL.ign + TL.launch && T < TL.ign + TL.launch + 450) for (let i = 0; i < 4; i++) { const a = rnd(0, 6.28), sp = rnd(250, 1100); puff(ox, oy + g.bh * .2, Math.cos(a) * sp, Math.sin(a) * sp * .8, rnd(70, 120), rnd(300, 520), rnd(1.5, 2.2), rnd(.55, .85), Math.random() < .08, rnd(-1.5, 1.5)); }
+
+    const F = .45 * g.maxD, R = c01((T - TL.clr0) / (TL.clr1 - TL.clr0)) * (g.maxD + F), cover = sm(TL.cover0, TL.cover1, T);
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, st.cv.width, st.cv.height); ctx.globalCompositeOperation = "source-over";
+    const gr = ctx.createRadialGradient(g.cx * K, g.cy * K, Math.max(0, R - F) * K, g.cx * K, g.cy * K, (R + 1) * K);
+    gr.addColorStop(0, "rgba(12,13,20,0)"); gr.addColorStop(1, `rgba(12,13,20,${cover})`);
+    ctx.fillStyle = gr; ctx.fillRect(0, 0, st.cv.width, st.cv.height);
+    for (let i = P.length - 1; i >= 0; i--) {
+      const q = P[i], age = (T - q.born) / 1000, f = age / q.life;
+      if (f >= 1) { P.splice(i, 1); continue; }
+      const dr = Math.exp(-1.5 * dt), an = q.curl * Math.sin(age * 2 + q.ph) * dt, ca = Math.cos(an), sa = Math.sin(an);
+      let vx = q.vx * dr, vy = q.vy * dr - 50 * dt; const dist = Math.hypot(q.x - g.cx, q.y - g.cy);
+      if (T >= TL.clr0) { vx += (q.x - g.cx) / Math.max(dist, 1) * 320 * dt; vy += (q.y - g.cy) / Math.max(dist, 1) * 320 * dt; }
+      q.vx = vx * ca - vy * sa; q.vy = vx * sa + vy * ca; q.x += q.vx * dt; q.y += q.vy * dt; q.r += q.vr * dt;
+      const size = q.s0 + (q.s1 - q.s0) * (1 - Math.pow(1 - c01(f * 1.3), 2));
+      const al = q.peak * sm(0, .12, f) * (1 - sm(.55, 1, f)) * (T < TL.clr0 ? 1 : sm(R - F, R, dist));
+      if (al < .01) continue;
+      const sc = size / SP * K, c = Math.cos(q.r) * sc, s = Math.sin(q.r) * sc;
+      ctx.globalAlpha = al; ctx.setTransform(c, s, -s, c, q.x * K, q.y * K); ctx.drawImage(st.sprites[q.k], -SP / 2, -SP / 2);
+    }
+    ctx.globalAlpha = 1; ctx.setTransform(K, 0, 0, K, 0, 0); ctx.globalCompositeOperation = "lighter";
+    const ga = .14 * sm(TL.ign, TL.ign + 120, T) * (1 - sm(TL.ign + 350, TL.ign + 1100, T));
+    if (ga > .01) { const rg = ctx.createRadialGradient(ox, oy, 0, ox, oy, g.maxD * .5); rg.addColorStop(0, `rgba(${ac},${ga})`); rg.addColorStop(1, `rgba(${ac},0)`); ctx.fillStyle = rg; ctx.fillRect(0, 0, g.vw, g.vh); }
+    if (u < 1) { const na = .3 * Math.min(1, fl), rg = ctx.createRadialGradient(g.cx, nozY, 0, g.cx, nozY, g.rh * .7); rg.addColorStop(0, `rgba(${ac},${na})`); rg.addColorStop(1, `rgba(${ac},0)`); ctx.fillStyle = rg; ctx.fillRect(g.cx - g.rh, nozY - g.rh, g.rh * 2, g.rh * 2); }
+    ctx.lineWidth = 1.6; ctx.lineCap = "round";
+    for (let i = S.length - 1; i >= 0; i--) {
+      const q = S[i], age = (T - q.born) / 1000; if (age >= q.life) { S.splice(i, 1); continue; }
+      q.vy += 700 * dt; q.x += q.vx * dt; q.y += q.vy * dt;
+      ctx.strokeStyle = `rgba(${i % 3 ? ac : "235,230,255"},${1 - age / q.life})`; ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(q.x - q.vx * .03, q.y - q.vy * .03); ctx.stroke();
+    }
+    ctx.globalCompositeOperation = "source-over";
+    if (T >= TL.cover1 && !st.clr) { st.clr = 1; root.classList.add("clr"); }
+    if (T >= TL.clr0 && !st.pe) { st.pe = 1; root.classList.add("nopt"); }
+    if (T >= TL.clr1 && !st.sw) { st.sw = 1; root.classList.add("sw"); }
+    if (T >= TL.end) return finish();
+    st.raf = requestAnimationFrame(frame);
+  }
+
+  function run(readyFn, o = {}) {
+    if (st) return;
+    let root = q("intro"); if (!root) { root = document.createElement("div"); root.id = "intro"; document.body.appendChild(root); }
+    root.className = ""; root.style.cssText = ""; root.innerHTML = HTML;
+    st = { root, cv: root.querySelector("#icv"), timers: [], force: !!o.force, ac: rgb(getComputedStyle(document.documentElement).getPropertyValue("--v").trim() || "#8B5CF6") };
+    st.onR = setVars; addEventListener("resize", st.onR); setVars();
+    requestAnimationFrame(() => root.classList.add("in"));
+    if (!shown) { shown = true; requestAnimationFrame(() => requestAnimationFrame(() => { try { Promise.resolve(window.__TAURI__.window.getCurrentWindow().show()).catch(() => {}); } catch (e) {} })); }
+    st.timers.push(setTimeout(() => { if (st && !st.sprites) st.sprites = makeSprites(st.ac); }, 60));
+    begin(readyFn);
+  }
+  return { run, active: () => !!st };
+})();
+
+================================================================
+FILE: src/meas.js   (42 lines, 3326 bytes)
+================================================================
+
+"use strict";
+const Meas = (() => {
+  const N = 20; let running = false, cancel = false;
+  const get = () => store.get("meas", {});
+  const stats = (a) => { const m = a.reduce((x, y) => x + y, 0) / a.length; return { m, sd: Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length), n: a.length }; };
+  const busy = (b) => { running = b; q("measB").disabled = q("measA").disabled = b; q("measX").style.display = b ? "" : "none"; };
+  async function capture(slot) {
+    if (running) return;
+    if (typeof invoke === "undefined" || !invoke) return toast("Measurement needs the STRYV backend.", true);
+    busy(true); cancel = false; const cpu = [], mem = [], pc = [];
+    for (let i = 0; i < N && !cancel; i++) {
+      try { const s = await invoke("get_snapshot"); cpu.push(s.cpu_usage); mem.push(s.mem_used / 1073741824); if (s.process_count > 0) pc.push(s.process_count); } catch (e) { Tech.add("measure", e); }
+      q("measS").textContent = `Measuringâ€¦ ${i + 1}/${N}`; await new Promise((r) => setTimeout(r, 1000));
+    }
+    busy(false);
+    if (cancel) { q("measS").textContent = "Cancelled."; return; }
+    if (cpu.length < N * .7) { q("measS").textContent = "Too few samples were collected, so this measurement was discarded."; toast("Measurement failed", true); return; }
+    const d = get(); d[slot] = { t: Date.now(), cpu: stats(cpu), mem: stats(mem), pc: pc.length >= N * .7 ? stats(pc) : null }; store.set("meas", d);
+    Act.log({ text: "Measurement captured: " + (slot === "base" ? "baseline" : "comparison"), detail: JSON.stringify(d[slot]) });
+    q("measS").textContent = "Done."; render();
+  }
+  function row(label, unit, b, a, minStep, dp) {
+    const f = (s) => s ? `${s.m.toFixed(dp)}${unit} <small style="color:var(--m)">Â±${s.sd.toFixed(dp)}</small>` : "â€”";
+    let out = "â€”";
+    if (b && a) {
+      const diff = a.m - b.m, noise = 2 * Math.sqrt(b.sd ** 2 / b.n + a.sd ** 2 / a.n);
+      out = Math.abs(diff) > Math.max(noise, minStep) ? `<b>${diff < 0 ? "Lower" : "Higher"} by ${Math.abs(diff).toFixed(dp)}${unit}</b>` : "No clear change";
+    }
+    return `<tr><td style="color:var(--t)">${label}</td><td class="n">${f(b)}</td><td class="n">${f(a)}</td><td class="n" style="width:170px">${out}</td></tr>`;
+  }
+  function render() {
+    const d = get(), b = d.base, a = d.comp;
+    if (!b && !a) { q("measT").innerHTML = ""; return; }
+    q("measT").innerHTML = `<tr><td></td><td class="n">Baseline</td><td class="n">Comparison</td><td class="n" style="width:170px">Result</td></tr>` +
+      row("CPU use (average)", "%", b && b.cpu, a && a.cpu, 1, 1) + row("Memory in use", " GB", b && b.mem, a && a.mem, .1, 2) + row("Running processes", "", b && b.pc, a && a.pc, 1, 0) +
+      `<tr><td colspan="4"><small style="color:var(--m)">Baseline ${b ? new Date(b.t).toLocaleString() : "not captured"} Â· Comparison ${a ? new Date(a.t).toLocaleString() : "not captured"}. A single before-and-after pair cannot prove what caused a difference; other apps may have changed.</small></td></tr>`;
+  }
+  q("measB").onclick = () => capture("base"); q("measA").onclick = () => capture("comp"); q("measX").onclick = () => { cancel = true; };
+  q("measC").onclick = () => { store.set("meas", {}); q("measS").textContent = ""; render(); toast("Measurements cleared"); };
+  render();
+  return { render };
+})();
+
+================================================================
+FILE: src/opt.js   (61 lines, 5578 bytes)
+================================================================
+
+"use strict";
+const Opt = (() => {
+  let cat = [], snaps = {}, cur = null, su = [];
+  const yn = (b) => b ? "Yes" : "No";
+  async function load() {
+    if (typeof invoke === "undefined" || !invoke) { q("optList").innerHTML = '<p class="empty">Unavailable: the STRYV backend is not connected.</p>'; return; }
+    try { cat = await invoke("opt_catalog"); snaps = await invoke("opt_snapshots"); render(); } catch (e) { Tech.add("opt.load", e); q("optList").innerHTML = '<p class="empty">Could not load optimizations.</p>'; }
+    await loadStartup();
+  }
+  async function loadStartup() {
+    try {
+      su = await invoke("opt_startup");
+      q("startT").innerHTML = su.length ? su.map((x, i) => `<tr><td style="color:var(--t)">${esc(x.name)}<br><small style="color:var(--m)">${esc(x.command.length > 60 ? x.command.slice(0, 60) + "â€¦" : x.command)}</small></td><td class="n"><button class="tog" data-su="${i}" aria-pressed="${x.enabled}" aria-label="Run ${esc(x.name)} at startup"></button></td></tr>`).join("") : "<tr><td>No user startup entries found.</td></tr>";
+      document.querySelectorAll("[data-su]").forEach((b) => b.onclick = () => toggleStartup(su[b.dataset.su]));
+    } catch (e) { Tech.add("opt.startup", e); q("startT").innerHTML = "<tr><td>Unavailable</td></tr>"; }
+  }
+  async function toggleStartup(x) {
+    const next = !x.enabled;
+    if (!await confirmBox({ title: (next ? "Enable " : "Disable ") + x.name + " at startup?", body: next ? "It will start automatically at your next sign-in." : "It will stop starting automatically at your next sign-in. You can turn it back on here at any time. The app itself is not removed.", yes: next ? "Enable" : "Disable" })) return;
+    const aid = Act.log({ text: (next ? "Enabling startup: " : "Disabling startup: ") + x.name, status: "running" });
+    try { const r = await invoke("opt_startup_set", { name: x.name, enabled: next }); Act.update(aid, { status: "done", detail: JSON.stringify({ name: x.name, enabled: next }) }); toast(r.message); }
+    catch (e) { Act.update(aid, { status: "failed", detail: String(e) }); Tech.add("opt.startup_set", e); toast("Could not change startup: " + e, true); }
+    loadStartup();
+  }
+  function render() {
+    q("optList").innerHTML = cat.map((o) => `<div class="orow"><div><b>${esc(o.title)}</b><small>${esc(o.what)}</small><div class="chips"><span class="chip ${o.reversible ? "g" : "w"}">${o.reversible ? "Reversible" : "Not reversible"}</span><span class="chip">Admin: ${yn(o.admin)}</span><span class="chip">Restart: ${yn(o.restart)}</span></div>${o.available ? "" : `<small>${esc(o.reason || "Unavailable")}</small>`}</div>
+      <div class="acts">${snaps[o.id] ? `<button class="btn ghost" data-rb="${o.id}">Roll back</button>` : ""}<button class="btn" data-rv="${o.id}" ${o.available ? "" : "disabled"}>Review</button></div></div>`).join("");
+    document.querySelectorAll("[data-rv]").forEach((b) => b.onclick = () => review(b.dataset.rv));
+    document.querySelectorAll("[data-rb]").forEach((b) => b.onclick = () => rollback(b.dataset.rb));
+  }
+  async function review(id) {
+    cur = cat.find((o) => o.id === id); q("rvT").textContent = cur.title; q("rvB").innerHTML = '<p class="empty">Reading current stateâ€¦</p>'; q("rvYes").disabled = true; q("rv").classList.add("on");
+    try {
+      const pv = await invoke("opt_preview", { id });
+      cur.pv = pv;
+      q("rvB").innerHTML = `<h4>What changes</h4><p>${esc(cur.what)}</p><h4>Why it may help</h4><p>${esc(cur.why)}</p><h4>Trade-offs</h4><p>${esc(cur.tradeoffs)}</p><h4>Preview</h4><p>${esc(pv.summary)}</p>` +
+        (pv.choices.length ? `<select id="rvSel" aria-label="Choice">${pv.choices.map((c) => `<option value="${esc(c.value)}">${esc(c.label)}</option>`).join("")}</select>` : "") +
+        `<h4>Details</h4><p>Admin needed: ${yn(cur.admin)} Â· Restart needed: ${yn(cur.restart)} Â· ${cur.reversible ? "Can be rolled back from this page" : '<span class="warn">Cannot be undone</span>'}</p>`;
+      q("rvYes").disabled = !pv.choices.length && id === "power_plan";
+      q("rvYes").focus();
+    } catch (e) { Tech.add("opt.preview", e); q("rvB").innerHTML = `<p class="warn">Could not read the current state: ${esc(e)}</p>`; }
+  }
+  function close() { q("rv").classList.remove("on"); cur = null; }
+  async function apply() {
+    if (!cur) return; const o = cur, sel = q("rvSel"), value = sel ? sel.value : null; close();
+    const aid = Act.log({ text: "Applying: " + o.title, status: "running" });
+    try { const r = await invoke("opt_apply", { id: o.id, value }); Act.update(aid, { status: "done", detail: JSON.stringify(r) }); toast(r.message); }
+    catch (e) { Act.update(aid, { status: "failed", detail: String(e) }); Tech.add("opt.apply", e); toast("Could not apply: " + e, true); }
+    load();
+  }
+  async function rollback(id) {
+    const o = cat.find((x) => x.id === id);
+    if (!await confirmBox({ title: "Roll back " + o.title.toLowerCase() + "?", body: "STRYV will restore the setting it saved before the change.", yes: "Roll back" })) return;
+    const aid = Act.log({ text: "Rolling back: " + o.title, status: "running" });
+    try { const r = await invoke("opt_rollback", { id }); Act.update(aid, { status: "done", detail: JSON.stringify(r) }); toast(r.message); }
+    catch (e) { Act.update(aid, { status: "failed", detail: String(e) }); Tech.add("opt.rollback", e); toast("Rollback failed: " + e, true); }
+    load();
+  }
+  q("rvNo").onclick = close; q("rvYes").onclick = apply; q("rv").onmousedown = (e) => { if (e.target === q("rv")) close(); };
+  return { load, close };
+})();
+
+================================================================
+FILE: src/sensors.js   (34 lines, 2589 bytes)
+================================================================
+
+"use strict";
+const Sensors = (() => {
+  const on = (id) => q(id).classList.contains("on");
+  let busy = false, lastLink = 0, gpuNote = "";
+  const n = (v, d = 0, u = "") => v == null ? "N/A" : v.toFixed(d) + u;
+  async function poll() {
+    if (busy || typeof invoke === "undefined" || !invoke) return;
+    const dash = on("dashboard"), perf = on("performance"), net = on("network");
+    if (!dash && !perf && !net) return;
+    busy = true;
+    try {
+      if (dash || perf) {
+        let gpus = [], temps = [], gpuErr = "";
+        try { gpus = await invoke("get_gpu"); } catch (e) { gpuErr = String(e); }
+        try { temps = await invoke("get_temps"); } catch (e) { Tech.add("sensors.temps", e); }
+        const hot = [...temps.map((t) => ({ l: t.label, c: t.celsius })), ...gpus.filter((g) => g.temp != null).map((g) => ({ l: g.name, c: g.temp }))].sort((a, b) => b.c - a.c)[0];
+        q("tempB").textContent = hot ? hot.c.toFixed(0) + " Â°C" : "Unavailable";
+        q("tempD").textContent = hot ? "Highest reading: " + hot.l : "Windows did not expose temperature sensors to STRYV.";
+        if (perf) {
+          q("gpuB").innerHTML = gpus.length ? gpus.map((g) => `<table><tr><td style="color:var(--t)">${esc(g.name)}</td><td class="n">${n(g.util, 0, "% load")}</td><td class="n">${n(g.temp, 0, " Â°C")}</td></tr><tr><td>Memory</td><td class="n">${g.mem_used != null && g.mem_total ? (g.mem_used / 1024).toFixed(1) + " / " + (g.mem_total / 1024).toFixed(1) + " GB" : "N/A"}</td><td class="n">${n(g.clock, 0, " MHz")}</td></tr></table>`).join("") : `<small>Unavailable: ${esc(gpuErr || "no GPU data returned.")}</small>`;
+          q("tempT").innerHTML = temps.length ? temps.map((t) => `<tr><td style="color:var(--t)">${esc(t.label)}</td><td class="n">${t.celsius.toFixed(0)} Â°C</td></tr>`).join("") : "<tr><td>Unavailable</td></tr>";
+          q("tempN").textContent = temps.length ? "" : "Many Windows PCs do not expose CPU temperature without a dedicated sensor driver. STRYV shows nothing rather than guessing.";
+        }
+      }
+      if (net && Date.now() - lastLink > 9000) {
+        lastLink = Date.now();
+        try { const l = await invoke("get_link_speeds"); q("linkT").innerHTML = l.length ? l.map((x) => `<tr><td style="color:var(--t)">${esc(x.name)}</td><td class="n">${esc(x.speed)}</td></tr>`).join("") : "<tr><td>No active adapters reported.</td></tr>"; }
+        catch (e) { Tech.add("sensors.link", e); q("linkT").innerHTML = "<tr><td>Unavailable</td></tr>"; }
+      }
+    } finally { busy = false; }
+  }
+  setInterval(poll, 5000);
+  return { poll };
+})();
+
+================================================================
+FILE: src/health.js   (25 lines, 2306 bytes)
+================================================================
+
+"use strict";
+const Health = (() => {
+  const cpu = []; let last = null;
+  const lvl = (v, w, h) => v >= h ? "high" : v >= w ? "watch" : "ok";
+  const LAB = { ok: "Good", watch: "Watch", high: "High", na: "Collecting" };
+  const gb = (b) => (b / 1073741824).toFixed(1);
+  function push(s) { cpu.push(s.cpu_usage); if (cpu.length > 30) cpu.shift(); last = s; render(); }
+  function render() {
+    const el = q("health"); if (!el || !last) return;
+    const s = last, rows = [], secs = cpu.length * (Cfg.v.interval || 2);
+    const memP = s.mem_used / s.mem_total * 100;
+    rows.push(["Memory", lvl(memP, 70, 85), `${memP.toFixed(0)}% in use (${gb(s.mem_used)} of ${gb(s.mem_total)} GB)`, "Current reading"]);
+    if (cpu.length < 5) rows.push(["CPU load", "na", "Gathering enough readings to judge sustained load.", `${cpu.length} readings so far`]);
+    else {
+      const avg = cpu.reduce((a, b) => a + b, 0) / cpu.length, l = lvl(avg, 70, 90), top = window.LastProcs && window.LastProcs[0];
+      rows.push(["CPU load", l, `${avg.toFixed(0)}% average over the last ${secs}s` + (l !== "ok" && top ? `. Top process: ${top.name} (${top.cpu.toFixed(1)}% of total CPU).` : ""), `Average of ${cpu.length} readings`]);
+    }
+    const ds = (s.disks || []).filter((d) => d.total > 0).map((d) => ({ n: d.name, f: d.available / d.total * 100 })).sort((a, b) => a.f - b.f)[0];
+    rows.push(ds ? ["Storage space", ds.f < 10 ? "high" : ds.f < 20 ? "watch" : "ok", `${ds.n} has ${ds.f.toFixed(0)}% free, the lowest of your drives`, "Current reading"] : ["Storage space", "na", "No drive information was returned.", "Unavailable"]);
+    const days = s.uptime_secs / 86400;
+    rows.push(["Uptime", days >= 14 ? "watch" : "ok", `${days.toFixed(1)} days since the last restart` + (days >= 14 ? ". A restart applies pending updates and clears long-running memory use." : ""), "Current reading"]);
+    el.innerHTML = `<label>System health</label>` + rows.map((r) => `<div class="hrow"><i class="hd ${r[1]}"></i><div><b>${esc(r[0])}</b><span class="hl ${r[1]}">${LAB[r[1]]}</span><small>${esc(r[2])} Â· <em>${esc(r[3])}</em></small></div></div>`).join("") + `<small class="hnote">Based on simple guideline thresholds, not a diagnosis. Temperatures and GPU data are not measured yet.</small>`;
+  }
+  return { push };
+})();
+
+================================================================
+END OF CONTEXT
+================================================================

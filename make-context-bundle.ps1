@@ -1,11 +1,11 @@
-# Bundles the files Claude needs into ONE pasteable text file.
-# Claude cannot read local paths, so everything has to travel as plain text.
-# Run:  powershell -File make-claude-bundle.ps1
+# Bundles the files a coding agent needs into ONE pasteable text file.
+# An agent cannot read local paths, so everything has to travel as plain text.
+# Run:  powershell -File make-context-bundle.ps1
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$out = Join-Path $root "CLAUDE-CONTEXT.txt"
+$out = Join-Path $root "CONTEXT-BUNDLE.txt"
 
-# Frontend files Claude needs to do UI work. main.rs is deliberately excluded:
+# Frontend files an agent needs to do UI work. main.rs is deliberately excluded:
 # 608 lines of backend Rust is dead weight for a design task.
 $files = @(
   "README.md",
@@ -26,7 +26,7 @@ $sb = New-Object System.Text.StringBuilder
 function Add-Line($s) { [void]$sb.AppendLine($s) }
 
 Add-Line "================================================================"
-Add-Line "STRYV - CODE CONTEXT FOR CLAUDE"
+Add-Line "STRYV - CODE CONTEXT"
 Add-Line "Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 Add-Line "================================================================"
 Add-Line ""
