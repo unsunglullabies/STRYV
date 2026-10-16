@@ -122,9 +122,15 @@ jobs:
           TAG: ${{ steps.tag.outputs.tag }}
         run: |
           set -euo pipefail
+          # download-artifact keeps the nsis/ and msi/ subdirectories, so a
+          # plain "dist/*" glob hands gh the directories themselves and it
+          # fails with "read dist/nsis: is a directory". Collect real files.
+          mapfile -t assets < <(find dist -type f | sort)
+          echo "Publishing ${#assets[@]} assets:"
+          printf '  %s\n' "${assets[@]}"
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists; updating its assets."
-            gh release upload "$TAG" dist/* --clobber
+            gh release upload "$TAG" "${assets[@]}" --clobber
           else
-            gh release create "$TAG" dist/* --title "STRYV $TAG" --generate-notes
+            gh release create "$TAG" "${assets[@]}" --title "STRYV $TAG" --generate-notes
           fi
