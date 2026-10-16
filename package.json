@@ -1,12 +1,12 @@
 {
     "name":  "stryv",
-    "version":  "0.2.3",
+    "version":  "0.2.4",
     "private":  true,
     "scripts":  {
                     "tauri":  "tauri",
                     "dev":  "tauri dev",
                     "build":  "tauri build",
-                    "test": "node tests/atlas.test.js && node tests/aery.test.js && node tests/rust-structure-check.js src-tauri/src/main.rs src-tauri/src/aery.rs",
+                    "test": "node tests/boot.test.js && node tests/atlas.test.js && node tests/aery.test.js && node tests/rust-structure-check.js src-tauri/src/main.rs src-tauri/src/aery.rs",
                     "check":  "node --check src/app.js \u0026\u0026 npm test",
                     "build:fast":  "tauri build --debug --no-bundle"
                 },

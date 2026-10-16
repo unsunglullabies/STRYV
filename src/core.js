@@ -2,8 +2,18 @@
 const q = (id) => document.getElementById(id);
 const PAGES = ["dashboard", "performance", "network", "aery", "atlas", "optimizations", "system", "syn", "activity", "settings", "whatsnew", "help"];
 const ACCENTS = { Amber: "#F5A623", Cyan: "#38BDF8", Violet: "#8B5CF6" };
-const VERSION = "0.2.3";
+const VERSION = "0.2.4";
 const CHANGELOG = [{
+    v: "0.2.4", date: "2026-10-16", tag: "launch fix",
+    groups: {
+      Fixed: [
+        "STRYV launched to a black screen. The launch screen file had lost the wrapper every page script uses, so the browser refused to parse it, the page never got past it, and nothing rendered. You should never have seen 0.2.3.",
+        "Aery's page script declared the same top-level name as ATLAS's. Loading both together failed, so Aery could not be opened at all.",
+        "A boot test now parses every script the page loads the way a browser does, refuses a top-level return, and catches two scripts claiming the same name. None of that is visible to a per-file syntax check, which is why it reached a release."
+      ]
+    }
+  },
+  {
     v: "0.2.3", date: "2026-10-16", tag: "ATLAS 2.0",
     groups: {
       New: [

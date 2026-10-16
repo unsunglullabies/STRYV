@@ -6,7 +6,7 @@
 // after the user pauses typing.
 // ============================================================================
 
-const Atlas = (() => {
+const Aery = (() => {
   const E = (id) => document.getElementById(id);
   const ST = (typeof store === "object" && store) ? store : { get: (_k, d) => d, set: () => false };
   const T = typeof toast === "function" ? toast : () => {};
@@ -360,4 +360,4 @@ const Atlas = (() => {
   return { refresh, open, create, flush, render, active, current: () => cur };
 })();
 
-if (typeof window !== "undefined") window.Aery = Atlas;
+if (typeof window !== "undefined") window.Aery = Aery;

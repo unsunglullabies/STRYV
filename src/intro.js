@@ -1,3 +1,10 @@
+"use strict";
+// The launch screen.
+//
+// Wrapped in an IIFE for the same reason the other pages are: a bare
+// <script> tag shares one global scope with every other file on the page,
+// and this one deliberately reuses ordinary names like st, msg and finish.
+const Intro = (() => {
 // STRYV launch screen.
 // A machine coming up and reporting that it is awake — no rocket, no confetti.
 // Honest: it says what is PREPARING. It never claims readings it does not have.
@@ -173,3 +180,5 @@ function run(backendFn, o = {}) {
 }
 
 return { run, active: () => !!st };
+
+})();
