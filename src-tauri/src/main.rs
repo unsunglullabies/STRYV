@@ -828,19 +828,22 @@ fn atlas_add_manual(app: tauri::AppHandle, name: Option<String>, exe_path: Strin
 
 // Edits a stored game. The frontend may only name a library id: it never sends
 // a path that gets used without being checked here first.
+//
+// Validation runs before anything is borrowed mutably, because the duplicate
+// check needs to read the rest of the list while the entry is being edited.
 #[tauri::command]
 fn atlas_update(app: tauri::AppHandle, id: String, name: Option<String>, exe_path: Option<String>) -> Result<Game, String> {
     let tid = id.trim().to_string();
     let mut store = read_atlas(&app);
-    let Some(g) = store.manual.iter_mut().find(|m| m.id == tid) else {
+    let Some(idx) = store.manual.iter().position(|m| m.id == tid) else {
         return Err("That game is no longer in your library. Rescan and try again.".into());
     };
+    let old_id = store.manual[idx].id.clone();
 
-    if let Some(n) = name {
-        let n = n.trim();
-        if !n.is_empty() { g.name = n.to_string(); }
-    }
-
+    // Resolve and validate the new executable against the whole list first.
+    let mut new_id = String::new();
+    let mut new_exe = String::new();
+    let mut new_dir = String::new();
     if let Some(p) = exe_path {
         let raw = p.trim().trim_matches('"').to_string();
         if !raw.is_empty() {
@@ -849,25 +852,41 @@ fn atlas_update(app: tauri::AppHandle, id: String, name: Option<String>, exe_pat
             if !pb.extension().map(|e| e.eq_ignore_ascii_case("exe")).unwrap_or(false) {
                 return Err("That is not an .exe. Shortcuts, folders and documents cannot be launched.".into());
             }
-            // Re-key so the identity follows the executable it points at, and so
-            // an edit cannot quietly create a second entry for the same game.
-            let new_id = format!("manual:{}", stable_id(&pb));
-            if new_id != g.id && store.manual.iter().any(|m| m.id == new_id) {
+            let nid = format!("manual:{}", stable_id(&pb));
+            if nid != old_id && store.manual.iter().any(|m| m.id == nid) {
                 return Err("Another entry in your library already points at that executable.".into());
             }
-            g.id = new_id.clone();
-            g.exe_path = pb.to_string_lossy().into_owned();
-            g.install_dir = pb.parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
-            // An existing launch entry belongs to the old identity.
-            store.sessions.retain(|s| s.game_id != new_id);
-            store.hidden.retain(|h| h != &new_id);
-            let fav = store.favorites.iter().any(|f| f == &g.id);
-            store.favorites.retain(|f| f != &g.id);
-            if fav { store.favorites.push(new_id.clone()); }
+            new_id = nid;
+            new_exe = pb.to_string_lossy().into_owned();
+            new_dir = pb.parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
         }
     }
 
-    let out = g.clone();
+    let renamed = !new_exe.is_empty() && new_id != old_id;
+    {
+        let g = &mut store.manual[idx];
+        if let Some(n) = name {
+            let n = n.trim();
+            if !n.is_empty() { g.name = n.to_string(); }
+        }
+        if !new_exe.is_empty() {
+            g.id = new_id.clone();
+            g.exe_path = new_exe;
+            g.install_dir = new_dir;
+        }
+    }
+
+    // A re-pointed entry is a new identity, so carry its flags across and drop
+    // the launch history that belonged to the old executable.
+    if renamed {
+        store.sessions.retain(|s| s.game_id != new_id);
+        store.hidden.retain(|h| h != &new_id);
+        let was_fav = store.favorites.iter().any(|f| f == &old_id);
+        store.favorites.retain(|f| f != &old_id);
+        if was_fav { store.favorites.push(new_id.clone()); }
+    }
+
+    let out = store.manual[idx].clone();
     write_atlas(&app, &store)?;
     Ok(out)
 }
