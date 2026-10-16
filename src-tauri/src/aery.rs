@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
+use tauri::Manager;
 use super::now_unix;
 // ============================================================================
 // AERY - the vault
@@ -36,7 +37,7 @@ struct AeryNote {
 
 const AERY_META: &str = ".aery.json";
 
-fn aery_root(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+pub fn aery_root(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let d = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let v = d.join("vault");
     std::fs::create_dir_all(&v).map_err(|e| e.to_string())?;
@@ -46,7 +47,7 @@ fn aery_root(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 // ---- ids ------------------------------------------------------------------
 // Derived from the note's relative path, so moving or renaming a note keeps the
 // same identity. Renaming therefore cannot silently break somebody's links.
-fn aery_id(rel: &str) -> String {
+pub fn aery_id(rel: &str) -> String {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     for b in rel.to_lowercase().bytes() {
         h ^= b as u64;
@@ -55,7 +56,7 @@ fn aery_id(rel: &str) -> String {
     format!("a{:016x}", h)
 }
 
-fn aery_rel_of(root: &Path, p: &Path) -> String {
+pub fn aery_rel_of(root: &Path, p: &Path) -> String {
     p.strip_prefix(root)
         .unwrap_or(p)
         .to_string_lossy()
@@ -69,19 +70,19 @@ struct AeryMeta {
     created: Vec<(String, u64)>,
 }
 
-fn aery_read_meta(root: &Path) -> AeryMeta {
+pub fn aery_read_meta(root: &Path) -> AeryMeta {
     let Ok(t) = std::fs::read_to_string(root.join(AERY_META)) else { return AeryMeta::default() };
     serde_json::from_str(&t).unwrap_or_default()
 }
 
-fn aery_write_meta(root: &Path, m: &AeryMeta) -> Result<(), String> {
+pub fn aery_write_meta(root: &Path, m: &AeryMeta) -> Result<(), String> {
     let body = serde_json::to_string_pretty(m).map_err(|e| e.to_string())?;
     aery_atomic_write(&root.join(AERY_META), body.as_bytes())
 }
 
 // Write to a sibling temp file, then rename over the target. A crash mid-write
 // leaves the original note untouched.
-fn aery_atomic_write(target: &Path, bytes: &[u8]) -> Result<(), String> {
+pub fn aery_atomic_write(target: &Path, bytes: &[u8]) -> Result<(), String> {
     if let Some(parent) = target.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -100,7 +101,7 @@ fn aery_atomic_write(target: &Path, bytes: &[u8]) -> Result<(), String> {
 // Only what the vault actually needs to understand: the title from front matter
 // or the first heading, and inline and front-matter tags. This is a reader, not
 // a renderer - the app writes Markdown, it never rewrites it.
-fn aery_title(text: &str, fallback: &str) -> String {
+pub fn aery_title(text: &str, fallback: &str) -> String {
     if let Some(rest) = text.strip_prefix("---\n") {
         if let Some(end) = rest.find("\n---") {
             for line in rest[..end].lines() {
@@ -122,7 +123,7 @@ fn aery_title(text: &str, fallback: &str) -> String {
     fallback.to_string()
 }
 
-fn aery_front_tags(text: &str) -> Vec<String> {
+pub fn aery_front_tags(text: &str) -> Vec<String> {
     let mut out = Vec::new();
     if let Some(rest) = text.strip_prefix("---\n") {
         if let Some(end) = rest.find("\n---") {
@@ -154,7 +155,7 @@ fn aery_front_tags(text: &str) -> Vec<String> {
 }
 
 // [[Title]] or [[Title|shown text]]
-fn aery_links(text: &str) -> Vec<String> {
+pub fn aery_links(text: &str) -> Vec<String> {
     let mut out = Vec::new();
     let b: Vec<char> = text.chars().collect();
     let mut i = 0;
@@ -188,7 +189,7 @@ fn aery_links(text: &str) -> Vec<String> {
 }
 
 // A note body used for the list view and for search.
-fn aery_excerpt(text: &str) -> String {
+pub fn aery_excerpt(text: &str) -> String {
     text.lines()
         .map(|l| l.trim())
         .filter(|l| !l.is_empty() && !l.starts_with('#') && !l.starts_with("---") && !l.starts_with("```"))
@@ -200,7 +201,7 @@ fn aery_excerpt(text: &str) -> String {
 }
 
 // ---- scanning -------------------------------------------------------------
-fn aery_scan_dir(root: &Path, dir: &Path, meta: &AeryMeta, out: &mut Vec<AeryNote>, depth: u32) {
+pub fn aery_scan_dir(root: &Path, dir: &Path, meta: &AeryMeta, out: &mut Vec<AeryNote>, depth: u32) {
     // Bounded so a symlink loop or a pathological tree cannot hang the app.
     if depth > 12 {
         return;
@@ -245,7 +246,7 @@ fn aery_scan_dir(root: &Path, dir: &Path, meta: &AeryMeta, out: &mut Vec<AeryNot
     }
 }
 
-fn aery_resolve(root: &Path, rel: &str) -> Result<PathBuf, String> {
+pub fn aery_resolve(root: &Path, rel: &str) -> Result<PathBuf, String> {
     let p = root.join(rel.replace('/', "\\"));
     // A note path may not escape the vault, however it was asked for.
     let canon_root = root.canonicalize().map_err(|e| e.to_string())?;
@@ -259,7 +260,7 @@ fn aery_resolve(root: &Path, rel: &str) -> Result<PathBuf, String> {
 // ---- commands -------------------------------------------------------------
 
 #[tauri::command]
-fn aery_list(app: tauri::AppHandle, q: Option<String>, tag: Option<String>) -> Result<Vec<AeryNote>, String> {
+pub fn aery_list(app: tauri::AppHandle, q: Option<String>, tag: Option<String>) -> Result<Vec<AeryNote>, String> {
     let root = aery_root(&app)?;
     let meta = aery_read_meta(&root);
     let mut notes: Vec<AeryNote> = Vec::new();
@@ -285,7 +286,7 @@ fn aery_list(app: tauri::AppHandle, q: Option<String>, tag: Option<String>) -> R
 }
 
 #[tauri::command]
-fn aery_read(app: tauri::AppHandle, id: String) -> Result<serde_json::Value, String> {
+pub fn aery_read(app: tauri::AppHandle, id: String) -> Result<serde_json::Value, String> {
     let root = aery_root(&app)?;
     let meta = aery_read_meta(&root);
     let mut notes: Vec<AeryNote> = Vec::new();
@@ -338,7 +339,7 @@ fn aery_read(app: tauri::AppHandle, id: String) -> Result<serde_json::Value, Str
 }
 
 #[tauri::command]
-fn aery_save(app: tauri::AppHandle, id: String, content: String) -> Result<(), String> {
+pub fn aery_save(app: tauri::AppHandle, id: String, content: String) -> Result<(), String> {
     let root = aery_root(&app)?;
     let meta = aery_read_meta(&root);
     let mut notes: Vec<AeryNote> = Vec::new();
@@ -351,7 +352,7 @@ fn aery_save(app: tauri::AppHandle, id: String, content: String) -> Result<(), S
 }
 
 #[tauri::command]
-fn aery_create(app: tauri::AppHandle, title: Option<String>, folder: Option<String>) -> Result<AeryNote, String> {
+pub fn aery_create(app: tauri::AppHandle, title: Option<String>, folder: Option<String>) -> Result<AeryNote, String> {
     let root = aery_root(&app)?;
     let want = title.unwrap_or_default().trim().to_string();
     let base = if want.is_empty() { "Untitled".to_string() } else { want.clone() };
@@ -396,7 +397,7 @@ fn aery_create(app: tauri::AppHandle, title: Option<String>, folder: Option<Stri
 }
 
 // Keeps a title usable as a Windows filename.
-fn aery_safe_stem(title: &str) -> String {
+pub fn aery_safe_stem(title: &str) -> String {
     let cleaned: String = title
         .chars()
         .map(|c| match c {
@@ -416,7 +417,7 @@ fn aery_safe_stem(title: &str) -> String {
 }
 
 #[tauri::command]
-fn aery_rename(app: tauri::AppHandle, id: String, title: String) -> Result<(), String> {
+pub fn aery_rename(app: tauri::AppHandle, id: String, title: String) -> Result<(), String> {
     let root = aery_root(&app)?;
     let meta = aery_read_meta(&root);
     let mut notes: Vec<AeryNote> = Vec::new();
@@ -468,7 +469,7 @@ fn aery_rename(app: tauri::AppHandle, id: String, title: String) -> Result<(), S
 }
 
 #[tauri::command]
-fn aery_delete(app: tauri::AppHandle, id: String) -> Result<(), String> {
+pub fn aery_delete(app: tauri::AppHandle, id: String) -> Result<(), String> {
     let root = aery_root(&app)?;
     let meta = aery_read_meta(&root);
     let mut notes: Vec<AeryNote> = Vec::new();
@@ -491,7 +492,7 @@ fn aery_delete(app: tauri::AppHandle, id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn aery_restore(app: tauri::AppHandle) -> Result<usize, String> {
+pub fn aery_restore(app: tauri::AppHandle) -> Result<usize, String> {
     let root = aery_root(&app)?;
     let trash = root.join(".trash");
     let Ok(rd) = std::fs::read_dir(&trash) else { return Ok(0) };
@@ -516,7 +517,7 @@ fn aery_restore(app: tauri::AppHandle) -> Result<usize, String> {
 }
 
 #[tauri::command]
-fn aery_set_pinned(app: tauri::AppHandle, id: String, pinned: bool) -> Result<(), String> {
+pub fn aery_set_pinned(app: tauri::AppHandle, id: String, pinned: bool) -> Result<(), String> {
     let root = aery_root(&app)?;
     let mut meta = aery_read_meta(&root);
     if pinned {
@@ -530,7 +531,7 @@ fn aery_set_pinned(app: tauri::AppHandle, id: String, pinned: bool) -> Result<()
 }
 
 #[tauri::command]
-fn aery_set_folder(app: tauri::AppHandle, id: String, folder: String) -> Result<(), String> {
+pub fn aery_set_folder(app: tauri::AppHandle, id: String, folder: String) -> Result<(), String> {
     let root = aery_root(&app)?;
     let meta = aery_read_meta(&root);
     let mut notes: Vec<AeryNote> = Vec::new();
@@ -551,12 +552,12 @@ fn aery_set_folder(app: tauri::AppHandle, id: String, folder: String) -> Result<
 }
 
 #[tauri::command]
-fn aery_vault_path(app: tauri::AppHandle) -> Result<String, String> {
+pub fn aery_vault_path(app: tauri::AppHandle) -> Result<String, String> {
     Ok(aery_root(&app)?.to_string_lossy().to_string())
 }
 
 #[tauri::command]
-fn aery_counts(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+pub fn aery_counts(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let root = aery_root(&app)?;
     let meta = aery_read_meta(&root);
     let mut notes: Vec<AeryNote> = Vec::new();
