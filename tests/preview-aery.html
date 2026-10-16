@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aery preview</title>
+<link rel="stylesheet" href="../src/style.css">
+<style>
+  body { margin:0; background:var(--bg); color:var(--t); font-family:var(--f); }
+  .pwrap { padding:26px 28px; }
+  .pnote { color:var(--m); font-size:11px; letter-spacing:.14em; text-transform:uppercase; margin:0 0 14px; }
+  .pwrap h1 { margin:0 0 4px; }
+</style>
+</head>
+<body>
+  <div class="pwrap">
+    <p class="pnote">Aery preview &mdash; sample vault, not real data</p>
+    <div class="aery-shell">
+        <aside class="aery-rail">
+          <div class="aery-railhead">
+            <div id="aeryCounts" class="aery-counts"><b>0</b><small>notes</small></div>
+          </div>
+          <div class="aery-tools">
+            <input id="aeryQ" type="search" placeholder="Search notes" aria-label="Search notes" autocomplete="off">
+            <select id="aeryTag" aria-label="Filter by tag"><option value="">All tags</option></select>
+            <button class="btn" id="aeryNew">New</button>
+            <button class="btn ghost" id="aeryPin" title="Pin this note">Pin</button>
+            <button class="btn ghost" id="aeryRestore">Restore</button>
+            <button class="btn ghost" id="aeryDel" title="Move to trash">Trash</button>
+          </div>
+          <div id="aeryList" class="aery-list" role="list"></div>
+          <small class="aery-path" id="aeryVaultPath" title="Where your notes are stored"></small>
+        </aside>
+
+        <div class="aery-main">
+          <div class="aery-bar">
+            <input id="aeryTitle" class="aery-title" placeholder="Note title" aria-label="Note title">
+            <span id="aerySave" class="a-save clean">Saved</span>
+          </div>
+          <div id="aeryPlaceholder" class="aery-placeholder"></div>
+          <textarea id="aeryEditor" class="aery-editor" spellcheck="false"
+            placeholder="Write in Markdown. Link another note with [[double brackets]]." hidden></textarea>
+        </div>
+
+        <aside class="aery-ctx">
+          <div id="aeryContext"></div>
+          <div class="aery-help">
+            <h4>Markdown Aery understands</h4>
+            <p><code>[[Note title]]</code> links to another note.</p>
+            <p><code>[[Note title|shown text]]</code> links with different words.</p>
+            <p><code>#tag</code> on its own line tags the note.</p>
+            <p><code>--- title: Name ---</code> at the top names it.</p>
+            <p><b>Ctrl+S</b> saves now. Typing saves on its own once you pause.</p>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </div>
+
+  <script>
+  (function () {
+    var N = {
+      one:   { id:"a1", title:"Ideas worth keeping",   path:"Ideas.md",                        folder:"",       pinned:true,  created:1, modified:1750000000, size:820, excerpt:"A note that exists.", tags:["idea","deep-work"] },
+      two:   { id:"a2", title:"Reading list",           path:"work/Reading list.md",           folder:"work",   pinned:false, created:1, modified:1749000000, size:400, excerpt:"Books and things.", tags:["deep-work"] },
+      three: { id:"a3", title:"Journal 2026-10-16",     path:"Journal/Journal 2026-10-16.md", folder:"Journal", pinned:false, created:1, modified:1749900000, size:200, excerpt:"Today so far.", tags:[] }
+    };
+    var LIST = [N.one, N.two, N.three];
+    var BODY = "---\ntitle: Ideas worth keeping\ntags: [idea, deep-work]\n---\n\nSome opening line.\n\nThis links to [[Reading list]] and to [[Missing note|one I have not written yet]].\n\n- a bullet\n- another\n";
+    window.invoke = function (cmd) {
+      if (cmd === "aery_list") return Promise.resolve(LIST);
+      if (cmd === "aery_counts") return Promise.resolve({ notes:3, tags:["idea","deep-work"], folders:["work","Journal"] });
+      if (cmd === "aery_vault_path") return Promise.resolve("C:\\Users\\you\\AppData\\Roaming\\com.stryv.app\\vault");
+      if (cmd === "aery_read") return Promise.resolve({ note:LIST[0], content:BODY,
+        outgoing:[{title:"Reading list",resolved:"a2",path:"work/Reading list.md"},{title:"Missing note",resolved:null,path:null}],
+        backlinks:[{id:"a3",title:"Journal 2026-10-16"}], tags:["idea","deep-work"] });
+      return Promise.resolve(null);
+    };
+    window.confirmBox = function () { return Promise.resolve(true); };
+    var errs = [];
+    window.addEventListener("error", function (e) { errs.push(String(e.message)); });
+    setTimeout(function () {
+      var d = document.createElement("pre");
+      d.style.cssText = "position:fixed;left:0;bottom:0;z-index:99999;background:#000;color:#0f0;padding:4px 8px;font:11px monospace;margin:0";
+      d.textContent = errs.length ? "JS ERRORS: " + errs.join(" | ") : "no js errors";
+      document.body.appendChild(d);
+    }, 1500);
+  })();
+  </script>
+  <script src="../src/aery.js"></script>
+</body>
+</html>
