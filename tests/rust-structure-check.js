@@ -12,7 +12,12 @@
 //   4. Game/Session/AtlasStore derive what serialization needs
 const fs = require("fs");
 
-const src = fs.readFileSync(process.argv[2], "utf8");
+// main.rs plus any sibling modules. Aery lives in its own file, and its commands
+// have to be checked just as strictly as ATLAS's.
+const src = [process.argv[2], ...process.argv.slice(3)]
+  .filter(Boolean)
+  .map((f) => { try { return fs.readFileSync(f, "utf8"); } catch { return ""; } })
+  .join("\n");
 let failures = 0;
 const fail = (m) => { console.log("  FAIL  " + m); failures++; };
 const pass = (m) => console.log("  ok    " + m);
@@ -40,6 +45,15 @@ const need = [
   "fn atlas_set_favorite",
   "fn atlas_sessions",
   "fn atlas_clear_sessions",
+  "fn aery_list",
+  "fn aery_read",
+  "fn aery_save",
+  "fn aery_create",
+  "fn aery_rename",
+  "fn aery_delete",
+  "fn aery_restore",
+  "fn aery_set_pinned",
+  "fn aery_set_folder",
   "fn merge_library",
   "fn detected_games",
   "fn push_session",

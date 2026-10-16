@@ -11,7 +11,8 @@
     <button data-p="system"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg><span>System</span></button>
     <div class="grp">Tools</div>
     <button data-p="atlas"><svg viewBox="0 0 24 24"><path d="M6.5 7h11a4.5 4.5 0 0 1 4.4 5.4l-.8 4A3 3 0 0 1 18 18l-1.4-2h-9.2L6 18a3 3 0 0 1-5.1-1.6l-.8-4A4.5 4.5 0 0 1 6.5 7Z"/><path d="M7.5 11.2v2.6M6.2 12.5h2.6"/><circle cx="15.6" cy="11.6" r=".9"/><circle cx="17.9" cy="13.4" r=".9"/></svg><span>ATLAS</span></button>
-    <button data-p="optimizations"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg><span>Optimizations</span></button>
+    <button data-p="aery"><svg viewBox="0 0 24 24"><path d="M5 4h9l5 5v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/><path d="M14 4v5h5M8 13h8M8 17h5"/></svg><span>Aery</span></button>
+      <button data-p="optimizations"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg><span>Optimizations</span></button>
     <div class="grp">STRYV</div>
     <button data-p="activity"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h16"/></svg><span>Activity</span></button>
     <button data-p="syn" class="syn"><img src="assets/syn-logo.png" alt=""><span>SYN Assistant</span></button>
@@ -148,7 +149,51 @@
   <div class="at-detailwrap" id="atlasDetailWrap" hidden>
     <div class="at-detail" id="atlasDetail" role="dialog" aria-modal="false" aria-label="Game details"></div>
   </div>
-</section><section id="optimizations" class="page"><h1>Optimizations</h1><p class="sub">Fixed, reviewed actions. Nothing runs without your confirmation, and every action is logged.</p>
+</section><section id="aery" class="page">
+      <h1>Aery</h1>
+      <p class="sub">Your notes, as Markdown files in a folder you own. Nothing here is locked inside STRYV.</p>
+
+      <div class="aery-shell">
+        <aside class="aery-rail">
+          <div class="aery-railhead">
+            <div id="aeryCounts" class="aery-counts"><b>0</b><small>notes</small></div>
+          </div>
+          <div class="aery-tools">
+            <input id="aeryQ" type="search" placeholder="Search notes" aria-label="Search notes" autocomplete="off">
+            <select id="aeryTag" aria-label="Filter by tag"><option value="">All tags</option></select>
+            <button class="btn" id="aeryNew">New</button>
+            <button class="btn ghost" id="aeryPin" title="Pin this note">Pin</button>
+            <button class="btn ghost" id="aeryRestore">Restore</button>
+            <button class="btn ghost" id="aeryDel" title="Move to trash">Trash</button>
+          </div>
+          <div id="aeryList" class="aery-list" role="list"></div>
+          <small class="aery-path" id="aeryVaultPath" title="Where your notes are stored"></small>
+        </aside>
+
+        <div class="aery-main">
+          <div class="aery-bar">
+            <input id="aeryTitle" class="aery-title" placeholder="Note title" aria-label="Note title">
+            <span id="aerySave" class="a-save clean">Saved</span>
+          </div>
+          <div id="aeryPlaceholder" class="aery-placeholder"></div>
+          <textarea id="aeryEditor" class="aery-editor" spellcheck="false"
+            placeholder="Write in Markdown. Link another note with [[double brackets]]." hidden></textarea>
+        </div>
+
+        <aside class="aery-ctx">
+          <div id="aeryContext"></div>
+          <div class="aery-help">
+            <h4>Markdown Aery understands</h4>
+            <p><code>[[Note title]]</code> links to another note.</p>
+            <p><code>[[Note title|shown text]]</code> links with different words.</p>
+            <p><code>#tag</code> on its own line tags the note.</p>
+            <p><code>--- title: Name ---</code> at the top names it.</p>
+            <p><b>Ctrl+S</b> saves now. Typing saves on its own once you pause.</p>
+          </div>
+        </aside>
+      </div>
+    </section>
+    <section id="optimizations" class="page"><h1>Optimizations</h1><p class="sub">Fixed, reviewed actions. Nothing runs without your confirmation, and every action is logged.</p>
   <div id="optList"></div>
   <div class="sec" style="margin-top:26px"><h3>Measure impact</h3>
     <p class="note">Capture a baseline before a change and a comparison after it. Each capture samples for 20 seconds, so keep the PC as idle as you can. STRYV only reports a difference when it is larger than the measurement noise. Readings include STRYV's own usage.</p>
@@ -192,4 +237,5 @@
 <div id="dlg" class="ov mid" role="dialog" aria-modal="true"><div class="dbox"><h2 id="dT"></h2><p id="dB"></p><div class="dact"><button class="btn ghost" id="dNo">Cancel</button><button class="btn" id="dYes">Confirm</button></div></div></div>
 <div id="rv" class="ov mid" role="dialog" aria-modal="true"><div class="dbox rvb"><h2 id="rvT"></h2><div id="rvB"></div><div class="dact"><button class="btn ghost" id="rvNo">Cancel</button><button class="btn" id="rvYes">Apply</button></div></div></div>
 <div id="toasts"></div>
-<script src="core.js"></script><script src="intro.js"></script><script src="opt.js"></script><script src="meas.js"></script><script src="health.js"></script><script src="sensors.js"></script><script src="atlas.js"></script><script src="updater.js"></script><script src="app.js"></script></body></html>
+<script src="core.js"></script><script src="intro.js"></script><script src="opt.js"></script><script src="meas.js"></script><script src="health.js"></script><script src="sensors.js"></script><script src="aery.js"></script>
+    <script src="atlas.js"></script><script src="updater.js"></script><script src="app.js"></script></body></html>
