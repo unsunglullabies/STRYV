@@ -9,7 +9,11 @@ const CHANGELOG = [{
       Fixed: [
         "STRYV launched to a black screen. The launch screen file had lost the wrapper every page script uses, so the browser refused to parse it, the page never got past it, and nothing rendered. You should never have seen 0.2.3.",
         "Aery's page script declared the same top-level name as ATLAS's. Loading both together failed, so Aery could not be opened at all.",
-        "A boot test now parses every script the page loads the way a browser does, refuses a top-level return, and catches two scripts claiming the same name. None of that is visible to a per-file syntax check, which is why it reached a release."
+        "A boot test now parses every script the page loads the way a browser does, refuses a top-level return, and catches two scripts claiming the same name. None of that is visible to a per-file syntax check, which is why it reached a release.",
+        "STRYV took about five seconds to appear when you launched it from the Windows Start menu. The window is created hidden so the launch screen is the first thing painted, but nothing was revealing it - a fallback in Rust was doing the job after a fixed five-second sleep. The launch screen now reveals the window on its first painted frame, so you see the boot sequence immediately instead of nothing. That sleep is now a genuine safety net rather than the mechanism."
+      ],
+      Signature: [
+        "Signed, like every STRYV release. STRYV checks the published release feed, downloads the installer, and verifies its signature against the key built into the app before running it."
       ]
     }
   },

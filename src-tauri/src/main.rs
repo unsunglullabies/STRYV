@@ -1099,10 +1099,10 @@ fn main() {
             // Signed self-update. The public key lives in tauri.conf.json; Tauri
             // refuses any artifact whose signature does not match it.
             app.handle().plugin(tauri_plugin_updater::Builder::new().build());
-            // Safety net: the frontend shows the window once the intro has painted.
+            // Safety net ONLY. The frontend reveals the window on the first painted frame;
             if let Some(w) = app.get_webview_window("main") {
                 std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_secs(5));
+                    std::thread::sleep(std::time::Duration::from_secs(20));
                     let _ = w.show();
                 });
             }

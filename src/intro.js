@@ -154,17 +154,34 @@ async function begin(readyFn) {
   sequence();
 }
 
-function run(backendFn, o = {}) {
-  if (st) return;
-  const root = q("#intro") || document.body.appendChild(Object.assign(document.createElement("div"), { id: "intro" }));
-  root.className = "";
-  root.style.cssText = "";
-  root.innerHTML = HTML;
-  document.body.appendChild(root);
+// The window is created hidden so the launch screen is the first thing painted.
+  // That means something has to reveal it, and it should happen on the very next
+  // frame - otherwise the user stares at nothing while this screen sits behind an
+  // invisible window. Rust keeps a long safety net for the case where this never
+  // runs, but the honest reveal is here, immediately.
+  function reveal() {
+    try {
+      const t = typeof window !== "undefined" ? window.__TAURI__ : null;
+      const w = t && t.window && t.window.getCurrentWindow ? t.window.getCurrentWindow() : null;
+      if (w && typeof w.show === "function") { Promise.resolve(w.show()).catch(() => {}); return true; }
+    } catch (e) { /* not running under Tauri, or no window API */ }
+    return false;
+  }
 
-  st = { root, timers: [], raf: 0, force: !!o.force };
-  const v = st.root.querySelector(".iv");
-  if (v && typeof VERSION !== "undefined") v.textContent = "STRYV " + VERSION;
+  function run(backendFn, o = {}) {
+    if (st) return;
+    const root = q("#intro") || document.body.appendChild(Object.assign(document.createElement("div"), { id: "intro" }));
+    root.className = "";
+    root.style.cssText = "";
+    root.innerHTML = HTML;
+    document.body.appendChild(root);
+
+    st = { root, timers: [], raf: 0, force: !!o.force };
+    const v = st.root.querySelector(".iv");
+    if (v && typeof VERSION !== "undefined") v.textContent = "STRYV " + VERSION;
+
+    // Reveal on the next frame, once the first paint is genuinely on screen.
+    requestAnimationFrame(() => { if (!reveal()) setTimeout(reveal, 60); });
 
   // Esc always gets you in. Don't trap anyone in here.
   st.onK = (e) => {
