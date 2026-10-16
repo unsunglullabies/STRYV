@@ -20,3 +20,9 @@ tauri-plugin-dialog = "2"
 # compiles fast. Tauri's bundling step, not the codegen, dominates the time.
 [profile.release]
 incremental = true
+
+[patch.crates-io]
+# Temporary: every zip 4.x release is yanked on crates.io, and the Tauri updater
+# needs zip ^4. This points at the unmodified published source, vendored under
+# vendor/zip. Remove this block once crates.io restores the crate.
+zip = { path = "../vendor/zip" }
