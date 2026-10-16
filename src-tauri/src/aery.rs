@@ -19,7 +19,7 @@ use super::now_unix;
 // ============================================================================
 
 #[derive(Serialize, Deserialize, Clone, Default)]
-struct AeryNote {
+pub struct AeryNote {
     id: String,
     title: String,
     path: String,          // relative to the vault root, using forward slashes
@@ -65,7 +65,7 @@ pub fn aery_rel_of(root: &Path, p: &Path) -> String {
 
 // ---- metadata -------------------------------------------------------------
 #[derive(Serialize, Deserialize, Default, Clone)]
-struct AeryMeta {
+pub struct AeryMeta {
     pinned: Vec<String>,        // note ids
     created: Vec<(String, u64)>,
 }
