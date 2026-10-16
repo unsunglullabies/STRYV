@@ -1,5 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tauri::Manager;
 use serde_json::{json, Value};
@@ -388,12 +388,93 @@ async fn get_link_speeds() -> Result<Vec<Link>, String> {
     }).await.map_err(|e| e.to_string())?
 }
 
-// ---------- ATLAS: game discovery ----------
-// Reads the files the launchers have already written. Nothing is launched,
-// changed or written back; this only looks.
+// ---------- ATLAS: game library ----------
+// Discovery is read-only. It reads the files the launchers have already written
+// and never writes back to them. Everything the user adds, hides, favourites or
+// reorders lives in ATLAS's own store beside the app data, so nothing outside
+// STRYV is ever modified.
 
-#[derive(Serialize)]
-struct Game { launcher: &'static str, app_id: String, name: String, install_dir: String, size_bytes: u64, last_played: u64 }
+const ATLAS_STORE: &str = "atlas.json";
+
+// Additive on purpose: the fields the 0.2.0 frontend already reads
+// (launcher, app_id, name, install_dir, size_bytes, last_played) keep their
+// names and meaning, so an older UI still works against a newer backend.
+#[derive(Serialize, Deserialize, Clone, Default)]
+struct Game {
+    id: String,
+    launcher: String,
+    app_id: String,
+    name: String,
+    install_dir: String,
+    exe_path: String,
+    size_bytes: u64,
+    last_played: u64,
+    // "detected" (found by scanning) or "manual" (the user pointed at an exe)
+    source: String,
+    favorite: bool,
+    hidden: bool,
+    plays: u64,
+    last_launch: u64,
+    // Only set when the session was actually observed. Never guessed.
+    last_session_secs: Option<u64>,
+    total_secs: u64,
+}
+
+// One launch attempt. duration/cpu/mem stay null when they could not be
+// measured, rather than being filled in with something plausible.
+#[derive(Serialize, Deserialize, Clone, Default)]
+struct Session {
+    id: String,
+    game_id: String,
+    name: String,
+    launcher: String,
+    started: u64,
+    ended: u64,
+    duration_secs: Option<u64>,
+    cpu_pct: Option<f64>,
+    mem_bytes: Option<u64>,
+    // true only when a real process was observed running for the duration
+    measured: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Default)]
+struct AtlasStore {
+    #[serde(default)]
+    version: u32,
+    #[serde(default)]
+    hidden: Vec<String>,
+    #[serde(default)]
+    favorites: Vec<String>,
+    #[serde(default)]
+    manual: Vec<Game>,
+    #[serde(default)]
+    sessions: Vec<Session>,
+    #[serde(default)]
+    sort: String,
+}
+
+fn atlas_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let d = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&d).map_err(|e| e.to_string())?;
+    Ok(d.join(ATLAS_STORE))
+}
+
+fn read_atlas(app: &tauri::AppHandle) -> AtlasStore {
+    atlas_path(app)
+        .ok()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn write_atlas(app: &tauri::AppHandle, s: &AtlasStore) -> Result<(), String> {
+    let body = serde_json::to_string_pretty(s).map_err(|e| e.to_string())?;
+    std::fs::write(atlas_path(app)?, body).map_err(|e| e.to_string())
+}
+
+fn now_unix() -> u64 {
+    SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
 
 // Valve KeyValues text, as Steam writes it. Only what discovery needs: quoted
 // keys, quoted or bare values, nested blocks, and // comments.
@@ -517,69 +598,322 @@ fn steam_games(lib: &Path) -> Vec<Game> {
         let Some(root) = read_vdf(&e.path()) else { continue; };
         let Some(state) = vdf_obj(&root, "AppState") else { continue; };
         let (Some(name), Some(dir)) = (vdf_val(state, "name"), vdf_val(state, "installdir")) else { continue; };
+        let app_id = vdf_val(state, "appid").unwrap_or_default();
         out.push(Game {
-            launcher: "Steam",
-            app_id: vdf_val(state, "appid").unwrap_or_default(),
+            id: format!("steam:{}", app_id),
+            launcher: "Steam".to_string(),
+            app_id,
             name,
             install_dir: apps.join("common").join(dir).to_string_lossy().into_owned(),
+            // Steam starts the game itself, so no executable is recorded here.
+            exe_path: String::new(),
             size_bytes: vdf_u64(state, "SizeOnDisk"),
             last_played: vdf_u64(state, "LastPlayed"),
+            source: "detected".to_string(),
+            ..Default::default()
         });
     }
     out
 }
 
-#[tauri::command]
-async fn atlas_scan() -> Vec<Game> {
-    tauri::async_runtime::spawn_blocking(|| {
-        let mut games: Vec<Game> = Vec::new();
-        if let Some(steam) = steam_dir() {
-            let mut libs = steam_libraries(&steam);
-            if libs.is_empty() { libs.push(steam); }
-            for lib in libs { games.extend(steam_games(&lib)); }
+fn detected_games() -> Vec<Game> {
+    let mut games: Vec<Game> = Vec::new();
+    if let Some(steam) = steam_dir() {
+        let mut libs = steam_libraries(&steam);
+        if libs.is_empty() { libs.push(steam); }
+        for lib in libs { games.extend(steam_games(&lib)); }
+    }
+    games
+}
+
+// Detected games come from the launchers, while hidden/favourite flags and
+// hand-added games come from ATLAS's own store. Merging by id means a game
+// that was both scanned and hand-added only ever appears once.
+fn merge_library(store: &AtlasStore, detected: Vec<Game>) -> Vec<Game> {
+    let mut out: Vec<Game> = Vec::new();
+    let mut seen: Vec<String> = Vec::new();
+
+    for mut g in detected {
+        if let Some(m) = store.manual.iter().find(|m| m.id == g.id) {
+            // The hand-added entry carries the executable, which detection cannot know.
+            if !m.exe_path.is_empty() { g.exe_path = m.exe_path.clone(); }
         }
-        games.sort_by(|a, b| b.last_played.cmp(&a.last_played).then(a.name.cmp(&b.name)));
-        games
-    }).await.unwrap_or_default()
+        if store.favorites.contains(&g.id) { g.favorite = true; }
+        if store.hidden.contains(&g.id) { continue; }
+        seen.push(g.id.clone());
+        out.push(g);
+    }
+
+    for m in &store.manual {
+        if seen.contains(&m.id) { continue; }
+        let mut g = m.clone();
+        if store.favorites.contains(&g.id) { g.favorite = true; }
+        if store.hidden.contains(&g.id) { continue; }
+        out.push(g);
+    }
+
+    // Plays and durations come from the recorded sessions, which stay the single
+    // source of truth. Nothing here is estimated.
+    for g in out.iter_mut() {
+        let s: Vec<&Session> = store.sessions.iter().filter(|x| x.game_id == g.id).collect();
+        g.plays = s.len() as u64;
+        g.last_launch = s.iter().map(|x| x.started).max().unwrap_or(0);
+        g.total_secs = s.iter().filter_map(|x| x.duration_secs).sum();
+        g.last_session_secs = s
+            .iter()
+            .filter(|x| x.measured && x.duration_secs.is_some())
+            .max_by_key(|x| x.started)
+            .and_then(|x| x.duration_secs);
+    }
+
+    out.sort_by(|a, b| {
+        b.favorite.cmp(&a.favorite)
+            .then(b.last_played.cmp(&a.last_played))
+            .then(b.last_launch.cmp(&a.last_launch))
+            .then(a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+    out
+}
+
+fn push_session(app: &tauri::AppHandle, game_id: &str, name: &str, launcher: &str, secs: Option<u64>, cpu: Option<f64>, mem: Option<u64>, measured: bool) {
+    let t = now_unix();
+    let mut store = read_atlas(app);
+    store.sessions.push(Session {
+        id: format!("{}:{}", game_id, t),
+        game_id: game_id.to_string(),
+        name: name.to_string(),
+        launcher: launcher.to_string(),
+        started: t,
+        ended: t,
+        duration_secs: secs,
+        cpu_pct: cpu,
+        mem_bytes: mem,
+        measured,
+    });
+    if store.sessions.len() > 100 { store.sessions.remove(0); }
+    let _ = write_atlas(app, &store);
+}
+
+#[tauri::command]
+async fn atlas_scan(app: tauri::AppHandle) -> Vec<Game> {
+    let store = read_atlas(&app);
+    let detected = tauri::async_runtime::spawn_blocking(detected_games).await.unwrap_or_default();
+    merge_library(&store, detected)
+}
+
+#[tauri::command]
+fn atlas_sessions(app: tauri::AppHandle) -> Vec<Session> {
+    let mut s = read_atlas(&app).sessions;
+    s.sort_by(|a, b| b.started.cmp(&a.started));
+    s.truncate(50);
+    s
+}
+
+#[tauri::command]
+fn atlas_clear_sessions(app: tauri::AppHandle) -> Result<(), String> {
+    let mut store = read_atlas(&app);
+    store.sessions.clear();
+    write_atlas(&app, &store)
+}
+
+fn stable_id(p: &Path) -> String {
+    let s = p.to_string_lossy().to_lowercase();
+    let mut h: u64 = 14695981039346656037;
+    for b in s.as_bytes() { h ^= *b as u64; h = h.wrapping_mul(1099511628211); }
+    format!("{:016x}", h)
+}
+
+#[tauri::command]
+fn atlas_add_manual(app: tauri::AppHandle, name: Option<String>, exe_path: String) -> Result<Game, String> {
+    let mut path = exe_path.trim().to_string();
+    if path.is_empty() { return Err("Choose the game's .exe file.".into()); }
+    // Tolerate a path pasted straight out of Explorer, which quotes it.
+    if path.len() > 1 && path.starts_with('"') && path.ends_with('"') { path = path[1..path.len() - 1].to_string(); }
+    let p = PathBuf::from(&path);
+    if !p.is_file() { return Err(format!("{} is not a file on this PC.", path)); }
+    if !p.extension().map(|e| e.eq_ignore_ascii_case("exe")).unwrap_or(false) {
+        return Err("That is not an .exe. Shortcuts, folders and documents cannot be launched.".into());
+    }
+    let stem = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| path.clone());
+    let final_name = name.unwrap_or_default();
+    let final_name = if final_name.trim().is_empty() { stem } else { final_name.trim().to_string() };
+
+    let mut store = read_atlas(&app);
+    let id = format!("manual:{}", stable_id(&p));
+    if store.manual.iter().any(|m| m.id == id) { return Err("That game is already in your library.".into()); }
+
+    let g = Game {
+        id: id.clone(),
+        launcher: "Manual".to_string(),
+        app_id: String::new(),
+        name: final_name,
+        install_dir: p.parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default(),
+        exe_path: p.to_string_lossy().into_owned(),
+        // Left at zero on purpose: walking a whole install tree is slow and a
+        // partial figure would be a wrong number dressed up as a real one.
+        size_bytes: 0,
+        last_played: 0,
+        source: "manual".to_string(),
+        ..Default::default()
+    };
+    store.manual.push(g.clone());
+    store.hidden.retain(|h| h != &id);
+    store.sessions.retain(|s| s.game_id != id);
+    write_atlas(&app, &store)?;
+    Ok(g)
+}
+
+#[tauri::command]
+fn atlas_remove(app: tauri::AppHandle, id: String, forget: Option<bool>) -> Result<(), String> {
+    let tid = id.trim().to_string();
+    let mut store = read_atlas(&app);
+    if !store.hidden.contains(&tid) { store.hidden.push(tid.clone()); }
+    if forget.unwrap_or(false) {
+        store.manual.retain(|m| m.id != tid);
+        store.favorites.retain(|f| f != &tid);
+        store.sessions.retain(|s| s.game_id != tid);
+    }
+    write_atlas(&app, &store)
+}
+
+#[tauri::command]
+fn atlas_restore(app: tauri::AppHandle) -> Result<(), String> {
+    let mut store = read_atlas(&app);
+    store.hidden.clear();
+    write_atlas(&app, &store)
+}
+
+#[tauri::command]
+fn atlas_set_favorite(app: tauri::AppHandle, id: String, favorite: bool) -> Result<(), String> {
+    let tid = id.trim().to_string();
+    let mut store = read_atlas(&app);
+    store.favorites.retain(|f| f != &tid);
+    if favorite { store.favorites.push(tid.clone()); }
+    write_atlas(&app, &store)
 }
 
 fn steam_uri_registered() -> bool {
     run("reg", &["query", r"HKCU\Software\Classes\steam\shell\open\command"]).is_ok()
 }
 
-// Launching is a separate, explicit action from scanning. The frontend may only
-// name an app: it never supplies a path or a command line.
+// Steam start is kept as its own function so both the old appid entry point and
+// the newer id-based one share exactly the same validation and URL handling.
+fn steam_start(appid: &str) -> Result<String, String> {
+    let t = appid.trim();
+    // Bare decimal only, and it must round-trip, so nothing but digits can
+    // reach the URL that is built below.
+    let id: u64 = t.parse().map_err(|_| "That is not a valid Steam app id.".to_string())?;
+    if id.to_string() != t { return Err("That is not a valid Steam app id.".to_string()); }
+
+    let steam = steam_dir().ok_or_else(|| "Steam does not appear to be installed on this PC.".to_string())?;
+    if !steam_uri_registered() { return Err("Steam's link handler is not registered, so STRYV cannot ask it to launch a game.".to_string()); }
+
+    // Allowlist: the id must be one this scan actually found on this PC, so the
+    // frontend cannot ask for an arbitrary id.
+    let mut libs = steam_libraries(&steam);
+    if libs.is_empty() { libs.push(steam); }
+    let known = libs.iter().flat_map(|l| steam_games(l)).any(|g| g.app_id == t);
+    if !known { return Err("That game is not in the Steam library STRYV can see.".to_string()); }
+
+    // steam://rungameid/<id> is Steam's own protocol; explorer.exe only resolves
+    // the registered handler. The URL is assembled here from a validated integer,
+    // so no part of it comes from the frontend. Spawned, not waited on, so a slow
+    // handler cannot block the caller.
+    let url = format!("steam://rungameid/{}", id);
+    let mut c = std::process::Command::new("explorer");
+    c.arg(&url);
+    #[cfg(windows)]
+    { use std::os::windows::process::CommandExt; c.creation_flags(0x08000000); }
+    c.spawn().map_err(|e| format!("Could not ask Steam to launch the game: {}.", e))?;
+    Ok(format!("Steam was asked to launch this game (app {}). If nothing starts, open Steam and check you are signed in.", id))
+}
+
+// Kept for the 0.2.0 frontend, which sends a Steam app id rather than a library id.
 #[tauri::command]
 async fn atlas_launch(appid: String) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || -> Result<String, String> {
-        let t = appid.trim();
-        // Bare decimal only, and it must round-trip, so nothing but digits can
-        // reach the URL that is built below.
-        let id: u64 = t.parse().map_err(|_| "That is not a valid Steam app id.".to_string())?;
-        if id.to_string() != t { return Err("That is not a valid Steam app id.".to_string()); }
+    let t = appid.clone();
+    tauri::async_runtime::spawn_blocking(move || steam_start(&t))
+        .await
+        .map_err(|e| e.to_string())?
+}
 
-        let steam = steam_dir().ok_or_else(|| "Steam does not appear to be installed on this PC.".to_string())?;
-        if !steam_uri_registered() { return Err("Steam's link handler is not registered, so STRYV cannot ask it to launch a game.".to_string()); }
+// The frontend only ever names a library id. The executable is resolved here from
+// ATLAS's own library, so a path can never arrive from the UI.
+#[tauri::command]
+async fn atlas_launch_id(app: tauri::AppHandle, id: String) -> Result<String, String> {
+    let tid = id.trim().to_string();
+    if tid.is_empty() { return Err("No game was selected.".into()); }
 
-        // Allowlist: the id must be one this scan actually found on this PC, so the
-        // frontend cannot ask for an arbitrary id.
-        let mut libs = steam_libraries(&steam);
-        if libs.is_empty() { libs.push(steam); }
-        let known = libs.iter().flat_map(|l| steam_games(l)).any(|g| g.app_id == t);
-        if !known { return Err("That game is not in the Steam library STRYV can see.".to_string()); }
+    let store = read_atlas(&app);
+    let detected = tauri::async_runtime::spawn_blocking(detected_games).await.unwrap_or_default();
+    let game = merge_library(&store, detected)
+        .into_iter()
+        .find(|g| g.id == tid)
+        .ok_or_else(|| "That game is not in the library STRYV can see. Rescan and try again.".to_string())?;
 
-        // steam://rungameid/<id> is Steam's own protocol; explorer.exe only resolves
-        // the registered handler. The URL is assembled here from a validated integer,
-        // so no part of it comes from the frontend. Spawned, not waited on, so a slow
-        // handler cannot block the caller.
-        let url = format!("steam://rungameid/{}", id);
-        let mut c = std::process::Command::new("explorer");
-        c.arg(&url);
-        #[cfg(windows)]
-        { use std::os::windows::process::CommandExt; c.creation_flags(0x08000000); }
-        c.spawn().map_err(|e| format!("Could not ask Steam to launch the game: {}.", e))?;
-        Ok(format!("Steam was asked to launch this game (app {}). If nothing starts, open Steam and check you are signed in.", id))
-    }).await.map_err(|e| e.to_string())?
+    if game.launcher == "Steam" {
+        let msg = steam_start(&game.app_id)?;
+        // Steam starts the game itself, so STRYV never gets a process handle.
+        // The launch is recorded, but the duration is left unmeasured rather
+        // than guessed.
+        push_session(&app, &game.id, &game.name, &game.launcher, None, None, None, false);
+        return Ok(msg);
+    }
+
+    let exe = PathBuf::from(&game.exe_path);
+    if game.exe_path.is_empty() { return Err(format!("{} has no executable recorded. Remove it and add it again.", game.name)); }
+    if !exe.is_file() {
+        // A moved or deleted install is the common case, so say exactly that.
+        return Err(format!("{} is no longer at {}. It may have been moved, updated or uninstalled.", game.name, exe.display()));
+    }
+
+    let mut child = std::process::Command::new(&exe)
+        .current_dir(exe.parent().unwrap_or_else(|| Path::new(".")))
+        .spawn()
+        .map_err(|e| format!("Could not start {}: {}.", game.name, e))?;
+
+    let pid = child.id();
+    let gid = game.id.clone();
+    let gname = game.name.clone();
+    let glaunch = game.launcher.clone();
+    let handle = app.clone();
+
+    // The child is owned by this thread now. It is polled until the process
+    // exits so the duration is measured rather than estimated.
+    std::thread::spawn(move || {
+        let started = Instant::now();
+        let spid = sysinfo::Pid::from_u32(pid);
+        let mut sys = System::new();
+        let mut peak_cpu: f64 = 0.0;
+        let mut peak_mem: u64 = 0;
+        let mut samples = 0u32;
+        loop {
+            match child.try_wait() {
+                Ok(Some(_)) => break,
+                Ok(None) => {}
+                Err(_) => break,
+            }
+            sys.refresh_processes(ProcessesToUpdate::Some(&[spid]), true);
+            if let Some(pr) = sys.process(spid) {
+                let c = pr.cpu_usage() as f64;
+                if c > peak_cpu { peak_cpu = c; }
+                let m = pr.memory();
+                if m > peak_mem { peak_mem = m; }
+                samples += 1;
+            }
+            std::thread::sleep(Duration::from_millis(2000));
+        }
+        let secs = started.elapsed().as_secs();
+        push_session(
+            &handle, &gid, &gname, &glaunch,
+            Some(secs),
+            if samples > 0 { Some(peak_cpu) } else { None },
+            if samples > 0 { Some(peak_mem) } else { None },
+            samples > 0,
+        );
+    });
+
+    Ok(format!("Started {}. ATLAS is watching it and will record the session when it closes.", game.name))
 }
 
 fn main() {
@@ -602,7 +936,7 @@ fn main() {
         })
         .manage(Monitor(Mutex::new(sys)))
         .manage(Net(Mutex::new((Networks::new_with_refreshed_list(), Instant::now()))))
-        .invoke_handler(tauri::generate_handler![get_snapshot, get_system_info, get_processes, get_network, run_network_tests, opt_catalog, opt_snapshots, opt_preview, opt_apply, opt_rollback, opt_startup, opt_startup_set, get_gpu, get_temps, get_link_speeds, atlas_scan, atlas_launch])
+        .invoke_handler(tauri::generate_handler![get_snapshot, get_system_info, get_processes, get_network, run_network_tests, opt_catalog, opt_snapshots, opt_preview, opt_apply, opt_rollback, opt_startup, opt_startup_set, get_gpu, get_temps, get_link_speeds, atlas_scan, atlas_launch, atlas_launch_id, atlas_sessions, atlas_clear_sessions, atlas_add_manual, atlas_remove, atlas_restore, atlas_set_favorite])
         .run(tauri::generate_context!())
         .expect("error while running STRYV");
 }
