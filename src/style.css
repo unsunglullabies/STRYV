@@ -1,4 +1,4 @@
-:root{--bg:#090B12;--p1:#0F1220;--p2:#151929;--line:#232840;--v:#8B5CF6;--c:#38BDF8;--g:#D9A62E;--t:#D1D5DB;--m:#8993A7}
+:root{--bg:#0A0A0C;--p1:#111114;--p2:#18181C;--line:#26262C;--v:#F5A623;--c:#38BDF8;--g:#D9A62E;--t:#C9C9D1;--m:#8A8A94}
 *{box-sizing:border-box;margin:0}
 body{background:var(--bg);color:var(--t);font:14px/1.45 "Segoe UI Variable","Segoe UI",system-ui,sans-serif;overflow:hidden}
 .app{display:grid;grid-template-columns:232px 1fr;height:100vh;transition:grid-template-columns .2s}
@@ -111,3 +111,44 @@ body.rm *{animation:none!important;transition:none!important}
 .hd{width:8px;height:8px;border-radius:50%;margin-top:7px;flex:none;background:var(--m)}.hd.ok{background:#22C55E}.hd.watch{background:#F59E0B}.hd.high{background:#EF4444}
 .hl{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--m)}.hl.ok{color:#22C55E}.hl.watch{color:#F59E0B}.hl.high{color:#EF4444}
 .hnote{display:block;color:var(--m);font-size:11.5px;margin-top:6px}
+
+/* ===== STRYV design system v2: tokens, type, surfaces, navigation, controls ===== */
+:root{--hi:#F4F4F6;--ink:#140E02;--ok:#22C55E;--warn:#F59E0B;--bad:#EF4444;--r:6px}
+::selection{background:color-mix(in srgb,var(--v) 35%,transparent)}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:var(--line);border-radius:5px}::-webkit-scrollbar-thumb:hover{background:#3a3a42}
+body{font-family:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif}
+main{padding:32px 40px}.page{max-width:1280px}
+h1{position:relative;padding-left:14px;font:700 28px/1.1 "Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;letter-spacing:-.02em;color:var(--hi)}
+h1::before{content:"";position:absolute;left:0;top:.12em;bottom:.12em;width:4px;background:var(--v)}
+.sub{font-size:13px;margin:6px 0 24px 14px}
+.card{border-radius:var(--r);background:var(--p1)}
+.card label{font-size:10.5px;font-weight:600;letter-spacing:.14em}
+.card b{font-size:30px;font-weight:650;letter-spacing:-.01em;color:var(--hi)}
+.bar{height:4px;border-radius:0}.bar i{border-radius:0}
+.side{padding:20px 10px}
+.grp{font-size:10px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--m);opacity:.75;padding:16px 12px 6px}
+.grp:first-child{padding-top:0}
+.compact .grp{font-size:0;height:1px;padding:0;margin:12px 14px;background:var(--line);opacity:1}
+nav button{height:38px;border-radius:4px;transition:background .12s,color .12s}
+nav button.on,nav button.syn.on{box-shadow:none;color:var(--hi)}
+nav button.on{background:color-mix(in srgb,var(--v) 9%,transparent)}
+nav button.on::before{content:"";position:absolute;left:0;top:7px;bottom:7px;width:3px;background:var(--v)}
+nav button.syn.on::before{background:var(--c)}
+nav button.on svg{color:var(--v)}
+nav svg{width:18px;height:18px;stroke-width:1.6}
+.btn{background:var(--v);color:var(--ink);font-weight:600;border-radius:4px;transition:filter .12s,transform .08s}
+.btn.ghost{color:var(--t)}.btn.danger{color:#fff}
+.tog[aria-pressed=true]::after{background:var(--ink)}
+table tr:hover td{background:rgba(255,255,255,.02)}td.n{font-variant-numeric:tabular-nums}
+/* Dashboard hierarchy: CPU and memory lead, the rest support */
+#dashboard .grid{grid-template-columns:repeat(4,1fr)}
+#dashboard .grid>.card:nth-child(-n+2){grid-column:span 2}
+#dashboard .grid>.card:nth-child(-n+2) b{font-size:44px}
+@media(max-width:1180px){#dashboard .grid{grid-template-columns:repeat(2,1fr)}#dashboard .grid>.card:nth-child(-n+2){grid-column:span 1}}
+@media(max-width:1180px){main{padding:24px}}
+.hrow b{font-size:14px;font-weight:600;letter-spacing:0;margin-right:8px}
+#health{display:grid;grid-template-columns:1fr 1fr;column-gap:40px}
+#health>label,#health>.hnote,#health>small{grid-column:1/-1}
+#health .hrow{border-top:1px solid var(--line)}
+@media(max-width:1180px){#health{grid-template-columns:1fr}}
+#dashboard .grid>.card:nth-child(n+3) b{font-size:22px;line-height:1.25}

@@ -1,7 +1,7 @@
 "use strict";
 const q = (id) => document.getElementById(id);
 const PAGES = ["dashboard", "performance", "network", "atlas", "optimizations", "system", "syn", "activity", "settings", "whatsnew", "help"];
-const ACCENTS = { Violet: "#8B5CF6", Cyan: "#38BDF8", Gold: "#D9A62E" };
+const ACCENTS = { Amber: "#F5A623", Cyan: "#38BDF8", Violet: "#8B5CF6" };
 const VERSION = "0.2.0";
 const CHANGELOG = [{
   v: "0.2.0", date: "2026-10-15", tag: "Signed updates",
@@ -54,7 +54,7 @@ addEventListener("error", (e) => Tech.add("window.error", e.error || e.message))
 addEventListener("unhandledrejection", (e) => Tech.add("unhandledrejection", e.reason));
 
 const Cfg = {
-  d: { accent: "#8B5CF6", compact: false, reduceMotion: false, interval: 2, startPage: "dashboard", keepActivity: true, intro: true }, v: {},
+  d: { accent: "#F5A623", compact: false, reduceMotion: false, interval: 2, startPage: "dashboard", keepActivity: true, intro: true }, v: {},
   load() {
     const s = store.get("settings", {}), v = { ...this.d };
     if (Object.values(ACCENTS).includes(s.accent)) v.accent = s.accent;

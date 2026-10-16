@@ -4,12 +4,15 @@
 <aside class="side">
   <div class="brand"><img class="wordmark" src="assets/stryv-wordmark.png" alt="STRYV"><span class="mono">S</span></div>
   <nav id="nav">
+    <div class="grp">Monitor</div>
     <button data-p="dashboard" class="on"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg><span>Dashboard</span></button>
     <button data-p="performance"><svg viewBox="0 0 24 24"><path d="M3 17l5-6 4 3 8-9"/><path d="M15 5h5v5"/></svg><span>Performance</span></button>
     <button data-p="network"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><path d="M12 7v5M12 12l-6 5M12 12l6 5"/></svg><span>Network</span></button>
+    <button data-p="system"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg><span>System</span></button>
+    <div class="grp">Tools</div>
     <button data-p="atlas"><svg viewBox="0 0 24 24"><path d="M6.5 7h11a4.5 4.5 0 0 1 4.4 5.4l-.8 4A3 3 0 0 1 18 18l-1.4-2h-9.2L6 18a3 3 0 0 1-5.1-1.6l-.8-4A4.5 4.5 0 0 1 6.5 7Z"/><path d="M7.5 11.2v2.6M6.2 12.5h2.6"/><circle cx="15.6" cy="11.6" r=".9"/><circle cx="17.9" cy="13.4" r=".9"/></svg><span>ATLAS</span></button>
     <button data-p="optimizations"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg><span>Optimizations</span></button>
-    <button data-p="system"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg><span>System</span></button>
+    <div class="grp">STRYV</div>
     <button data-p="activity"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h16"/></svg><span>Activity</span></button>
     <button data-p="syn" class="syn"><img src="assets/syn-logo.png" alt=""><span>SYN Assistant</span></button>
     <button data-p="settings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span>Settings</span></button>
@@ -62,7 +65,7 @@
   <div class="tabs"><button data-tab="feed" class="on">Activity</button><button data-tab="tech">Technical log</button></div><div id="actList"></div></section>
 <section id="settings" class="page"><h1>Settings</h1><p class="sub">Saved on this PC. Changes apply immediately.</p>
   <div class="sec"><h3>Appearance</h3>
-    <div class="set"><div><b>Accent color</b><small>Used for highlights and graphs.</small></div><div class="sws"><button class="sw" data-accent="Violet" style="--c:#8B5CF6" aria-label="Violet"></button><button class="sw" data-accent="Cyan" style="--c:#38BDF8" aria-label="Cyan"></button><button class="sw" data-accent="Gold" style="--c:#D9A62E" aria-label="Gold"></button></div></div>
+    <div class="set"><div><b>Accent color</b><small>Used for highlights and graphs.</small></div><div class="sws"><button class="sw" data-accent="Amber" style="--c:#F5A623" aria-label="Amber"></button><button class="sw" data-accent="Cyan" style="--c:#38BDF8" aria-label="Cyan"></button><button class="sw" data-accent="Violet" style="--c:#8B5CF6" aria-label="Violet"></button></div></div>
     <div class="set"><div><b>Compact sidebar</b><small>Show icons only.</small></div><button class="tog" data-set="compact" data-label="Compact sidebar" aria-label="Compact sidebar"></button></div>
     <div class="set"><div><b>Reduce motion</b><small>Turns off transitions and animations.</small></div><button class="tog" data-set="reduceMotion" data-label="Reduce motion" aria-label="Reduce motion"></button></div>
     <div class="set"><div><b>Launch animation</b><small>Plays when STRYV starts. Skipped when Reduce motion is on.</small></div><div class="acts"><button class="btn ghost" id="replay">Replay</button><button class="tog" data-set="intro" data-label="Launch animation" aria-label="Launch animation"></button></div></div></div>

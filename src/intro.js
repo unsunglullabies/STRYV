@@ -161,7 +161,7 @@ const Intro = (() => {
     if (st) return;
     let root = q("intro"); if (!root) { root = document.createElement("div"); root.id = "intro"; document.body.appendChild(root); }
     root.className = ""; root.style.cssText = ""; root.innerHTML = HTML;
-    st = { root, cv: root.querySelector("#icv"), timers: [], force: !!o.force, ac: rgb(getComputedStyle(document.documentElement).getPropertyValue("--v").trim() || "#8B5CF6") };
+    st = { root, cv: root.querySelector("#icv"), timers: [], force: !!o.force, ac: rgb(getComputedStyle(document.documentElement).getPropertyValue("--v").trim() || "#F5A623") };
     st.onR = setVars; addEventListener("resize", st.onR); setVars();
     requestAnimationFrame(() => root.classList.add("in"));
     if (!shown) { shown = true; requestAnimationFrame(() => requestAnimationFrame(() => { try { Promise.resolve(window.__TAURI__.window.getCurrentWindow().show()).catch(() => {}); } catch (e) {} })); }
