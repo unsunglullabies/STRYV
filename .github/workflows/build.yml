@@ -37,6 +37,13 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      # Without this every build re-compiles every Rust dependency from scratch,
+      # which costs ~6 minutes. With it, an unchanged dependency tree is reused
+      # and only the changed crates rebuild, which is roughly 1-2 minutes.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
       - name: Install dependencies
         run: npm ci
 

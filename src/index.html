@@ -46,12 +46,49 @@
   <div class="card" style="margin-top:14px"><label>Link speed</label><table id="linkT"></table><small>The negotiated rate of the connection to your router, not your internet speed.</small></div>
   <div class="card" style="margin-top:14px"><label>Connection tests</label><div id="tests"><small>Measures TCP connection time to public servers and DNS lookup time. It does not test download speed.</small></div>
   <button class="btn" id="runT">Run tests</button></div></section>
-<section id="atlas" class="page"><h1>ATLAS</h1><p class="sub">Games found on this PC, read from the files each launcher has already written.</p>
-  <div class="grid2"><div class="card"><label>Library</label><b id="atlasN">—</b><small id="atlasSum">Reading launcher files…</small></div>
-    <div class="card"><label>Total install size</label><b id="atlasSize">—</b><small>Sum of the sizes the launcher itself reports.</small></div></div>
-  <div class="acts" style="margin-top:14px"><button class="btn" id="atlasScan">Rescan library</button></div>
-  <div class="card" style="margin-top:14px"><label>Installed games</label><table id="atlasT"></table><small id="atlasNote"></small></div></section>
-<section id="optimizations" class="page"><h1>Optimizations</h1><p class="sub">Fixed, reviewed actions. Nothing runs without your confirmation, and every action is logged.</p>
+<section id="atlas" class="page"><h1>ATLAS</h1><p class="sub">Every game STRYV can see on this PC, read from the files each launcher has already written. Nothing is scanned behind your back.</p>
+  <div class="at-bar">
+    <div class="at-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="atlasQ" type="search" placeholder="Search your library" aria-label="Search games" autocomplete="off"></div>
+    <label class="at-sortl" for="atlasSort">Sort</label>
+    <select id="atlasSort" aria-label="Sort games">
+      <option value="recent">Recently played</option>
+      <option value="lastLaunch">Last launched</option>
+      <option value="name">Name</option>
+      <option value="plays">Most played</option>
+      <option value="size">Install size</option>
+    </select>
+    <div class="at-btns">
+      <button class="btn ghost" id="atlasAdd">Add game</button>
+      <button class="btn" id="atlasScan">Rescan</button>
+    </div>
+  </div>
+  <div class="at-add" id="atlasAddBox" hidden>
+    <label class="at-addl" for="atlasExe">Game executable</label>
+    <input id="atlasExe" placeholder="C:\Games\Something\game.exe" aria-label="Path to the game executable" spellcheck="false">
+    <input id="atlasName" placeholder="Display name (optional)" aria-label="Display name" autocomplete="off">
+    <div class="at-btns">
+      <button class="btn ghost" id="atlasAddNo">Cancel</button>
+      <button class="btn" id="atlasAddGo">Add to library</button>
+    </div>
+    <small class="at-addhint">Paste the path to the game's .exe. STRYV checks the file exists, then launches it directly and records how long it runs.</small>
+  </div>
+  <div class="at-stats">
+    <div><b id="atlasN">-</b><small id="atlasSum">Reading launcher files</small></div>
+    <div><b id="atlasSize">-</b><small>Install size the launchers report</small></div>
+    <div><b id="atlasPlays">-</b><small>Launches recorded from ATLAS</small></div>
+    <div><b id="atlasTime">-</b><small>Measured play time</small></div>
+  </div>
+  <div class="at-grid" id="atlasGrid"></div>
+  <div class="at-empty" id="atlasEmpty" hidden></div>
+  <div class="at-foot">
+    <small id="atlasNote">STRYV reads only what the launcher wrote. Launching a Steam game asks Steam to start it through Steam's own link handler; ATLAS never runs a Steam title's files directly. Games you add yourself are launched directly, because there is no launcher to ask.</small>
+    <button class="lnk" id="atlasRestore" hidden>Restore removed games</button>
+  </div>
+  <div class="at-sess">
+    <div class="at-sessh"><h3>Recent sessions</h3><button class="lnk" id="atlasSessClr">Clear</button></div>
+    <div id="atlasSess"></div>
+  </div>
+</section><section id="optimizations" class="page"><h1>Optimizations</h1><p class="sub">Fixed, reviewed actions. Nothing runs without your confirmation, and every action is logged.</p>
   <div id="optList"></div>
   <div class="sec" style="margin-top:26px"><h3>Measure impact</h3>
     <p class="note">Capture a baseline before a change and a comparison after it. Each capture samples for 20 seconds, so keep the PC as idle as you can. STRYV only reports a difference when it is larger than the measurement noise. Readings include STRYV's own usage.</p>

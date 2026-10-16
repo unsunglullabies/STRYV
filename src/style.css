@@ -152,3 +152,224 @@ table tr:hover td{background:rgba(255,255,255,.02)}td.n{font-variant-numeric:tab
 #health .hrow{border-top:1px solid var(--line)}
 @media(max-width:1180px){#health{grid-template-columns:1fr}}
 #dashboard .grid>.card:nth-child(n+3) b{font-size:22px;line-height:1.25}
+
+/* ===== ATLAS: the game library ============================================
+   Everything below is scoped to what src/atlas.js actually emits.
+
+     shell    .at-bar .at-search .at-sortl .at-btns .at-add .at-addl
+              .at-addhint .at-stats .at-grid .at-empty .at-foot
+              .at-sess .at-sessh
+     card     .at-card .at-covw .at-cov .at-covf .at-cbody .at-ch
+              .at-badge (+ .at-steam / .at-manual) .at-meta .at-path
+              .at-cbtns .at-fav .at-del .at-why
+     session  .at-srow .at-sx
+
+   Selectors are deliberately one class deep, or two compounds where a shared
+   generic rule (.btn, .btn.ghost, .st.running, .lnk) would otherwise outrank
+   them. Same specificity + later in the file wins, so no !important is needed. */
+
+/* --- toolbar --------------------------------------------------------------- */
+.at-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding-bottom:16px;margin-bottom:22px;border-bottom:1px solid var(--line)}
+
+.at-search{position:relative;display:flex;align-items:center;flex:1 1 240px;min-width:0}
+.at-search svg{width:16px;height:16px;flex:none;margin-left:10px;fill:none;
+  stroke:var(--m);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;
+  transition:stroke .12s}
+.at-search:focus-within svg{stroke:var(--v)}
+/* Matches the app's existing control look (see the global select rule) rather
+   than inventing browser defaults. */
+.at-search input{width:100%;min-width:0;-webkit-appearance:none;appearance:none;
+  background:var(--p2);color:var(--t);border:1px solid var(--line);
+  border-radius:var(--r);padding:8px 10px 8px 32px;font:inherit;font-size:13px;
+  outline:0;transition:border-color .12s,background .12s}
+.at-search input::placeholder{color:var(--m);opacity:.75}
+.at-search input:focus{border-color:color-mix(in srgb,var(--v) 55%,var(--line));background:var(--p1)}
+.at-search input::-webkit-search-cancel-button{-webkit-appearance:none;height:13px;
+  width:13px;cursor:pointer;background:var(--m);opacity:.7;
+  -webkit-mask:linear-gradient(45deg,transparent 43%,#000 43% 57%,transparent 57%),linear-gradient(135deg,transparent 43%,#000 43% 57%,transparent 57%);
+  mask:linear-gradient(45deg,transparent 43%,#000 43% 57%,transparent 57%),linear-gradient(135deg,transparent 43%,#000 43% 57%,transparent 57%)}
+
+.at-sortl{flex:none;font-size:10px;font-weight:600;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--m);opacity:.8}
+/* Native arrow is kept on purpose so this select still matches Settings. */
+.at-bar select{flex:none;padding:8px 10px;font-size:13px;border-radius:var(--r);
+  transition:border-color .12s}
+.at-bar select:hover{border-color:#33333c}
+
+.at-btns{display:flex;align-items:center;gap:8px;flex:none;margin-left:auto}
+
+/* --- add panel ------------------------------------------------------------- */
+/* Three-deep grid: label spans, two inputs side by side, actions, then the hint.
+   The amber left rule repeats the h1 / nav motif so the panel reads as
+   deliberate rather than as a stray form. */
+.at-add{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;
+  padding:16px;margin:0 0 22px;background:var(--p1);border:1px solid var(--line);
+  border-left:3px solid var(--v);border-radius:var(--r)}
+/* Author display values beat the UA [hidden]{display:none}, so put it back. */
+.at-add[hidden]{display:none}
+.at-addl{grid-column:1/-1;font-size:10px;font-weight:600;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--m);opacity:.85}
+.at-add input{min-width:0;background:var(--p2);color:var(--t);
+  border:1px solid var(--line);border-radius:var(--r);padding:8px 10px;
+  font:inherit;font-size:13px;outline:0;
+  transition:border-color .12s,background .12s}
+.at-add input::placeholder{color:var(--m);opacity:.7}
+.at-add input:focus{border-color:color-mix(in srgb,var(--v) 55%,var(--line));background:var(--p1)}
+.at-add .at-btns{grid-column:1/-1;margin-left:0}
+.at-addhint{grid-column:1/-1;max-width:660px;color:var(--m);font-size:11.5px;line-height:1.5}
+
+/* --- figures --------------------------------------------------------------- */
+/* One leader, three supporters, the way CPU and memory lead the dashboard.
+   The first <div> is #atlasN + #atlasSum and carries the amber rule; the other
+   three are single figures whose <small> reads as a label. */
+.at-stats{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:18px 24px;
+  padding-bottom:22px;margin-bottom:24px;border-bottom:1px solid var(--line)}
+.at-stats>div{display:flex;flex-direction:column;gap:4px;min-width:0}
+/* Figures share a top and a bottom: a value that wraps ("Not measured") must
+   not drop its caption below the others. Collapses to the 4px gap when the
+   cells are exactly as tall as their content. */
+.at-stats>div small{margin-top:auto}
+.at-stats b{font-size:22px;font-weight:650;line-height:1.15;letter-spacing:-.01em;
+  color:var(--hi);font-variant-numeric:tabular-nums}
+.at-stats>div:first-child{position:relative;padding-left:14px}
+.at-stats>div:first-child::before{content:"";position:absolute;left:0;top:2px;
+  bottom:2px;width:3px;background:var(--v)}
+.at-stats>div:first-child b{font-size:38px;letter-spacing:-.02em}
+.at-stats>div:first-child small{font-size:13px;line-height:1.5;color:var(--m)}
+.at-stats>div:not(:first-child) small{font-size:10px;font-weight:600;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--m);opacity:.8}
+
+/* --- grid ------------------------------------------------------------------ */
+.at-grid{display:grid;align-items:stretch;gap:14px;
+  grid-template-columns:repeat(auto-fill,minmax(264px,1fr))}
+.at-grid:empty{display:none}
+
+.at-card{display:flex;flex-direction:column;min-width:0;overflow:hidden;
+  background:var(--p1);border:1px solid var(--line);border-radius:var(--r);
+  transition:border-color .12s,background .12s}
+.at-card:hover{border-color:#32323c;background:#131318}
+.at-card:focus-within{border-color:color-mix(in srgb,var(--v) 45%,var(--line))}
+/* atlas.js puts no flag class on .at-card: the state only exists on the star
+   button's aria-pressed. :has() derives the card accent from that one source. */
+.at-card:has(.at-fav[aria-pressed=true]){box-shadow:inset 3px 0 0 var(--v)}
+
+/* Cover art bleeds to the card edges so a library reads as media, not as a
+   stack of equal stat cards. */
+.at-covw{display:block;aspect-ratio:16/9;overflow:hidden;background:var(--p2)}
+.at-cov{display:block;width:100%;height:100%;object-fit:cover}
+/* Placeholder for manually added games and for a Steam header that 404s. */
+.at-covf{display:flex;align-items:center;justify-content:center;height:100%;
+  padding:0 18px;background:var(--p2);color:var(--m);font-size:10px;
+  font-weight:600;letter-spacing:.14em;text-transform:uppercase;text-align:center;
+  box-shadow:inset 0 0 0 1px var(--line)}
+
+.at-cbody{display:flex;flex-direction:column;gap:10px;flex:1;min-width:0;
+  padding:13px 14px 14px}
+.at-ch{display:flex;align-items:center;gap:8px;min-width:0}
+.at-ch h4{flex:1;min-width:0;font-size:14px;font-weight:600;letter-spacing:-.01em;
+  color:var(--hi);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.at-badge{flex:none;padding:2px 6px;border:1px solid var(--line);border-radius:3px;
+  font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--m)}
+/* atlas.js labels anything that is not Steam .at-manual, so Epic and friends
+   land here too. Amber reads as "not a Steam entry". */
+.at-steam{color:var(--c);border-color:color-mix(in srgb,var(--c) 32%,transparent)}
+.at-manual{color:var(--v);border-color:color-mix(in srgb,var(--v) 32%,transparent)}
+
+.at-meta{display:flex;flex-direction:column;gap:5px;margin:0}
+.at-meta>div{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.at-meta dt{white-space:nowrap;font-size:10px;font-weight:600;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--m);opacity:.8}
+.at-meta dd{margin:0;text-align:right;color:var(--t);font-size:12.5px;
+  font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+
+.at-path{padding-top:9px;border-top:1px solid var(--line);opacity:.8;
+  font:11px/1.4 "Cascadia Mono",Consolas,monospace;color:var(--m);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.at-cbtns{display:flex;align-items:center;gap:8px;margin-top:auto;padding-top:2px}
+/* .btn still carries align-self:flex-start from the base rule, which would
+   top-align Play against a centred star. Reset it for this row. */
+.at-cbtns .btn{align-self:center;padding:7px 14px;font-size:13px}
+
+.at-cbtns .at-fav{width:30px;min-width:30px;height:30px;margin:0;padding:0;
+  display:inline-flex;align-items:center;justify-content:center;border-radius:var(--r);
+  color:var(--m);font-size:14px;line-height:1;
+  transition:color .12s,border-color .12s,background .12s}
+.at-cbtns .at-fav:hover{color:var(--hi);border-color:#3a3a44;background:var(--p2)}
+.at-cbtns .at-fav[aria-pressed=true]{color:var(--v);
+  border-color:color-mix(in srgb,var(--v) 45%,transparent);
+  background:color-mix(in srgb,var(--v) 9%,transparent)}
+
+.at-cbtns .at-del{margin-left:auto;min-height:28px;padding:0 6px;
+  display:inline-flex;align-items:center;border-radius:4px;color:var(--m);
+  transition:color .12s,background .12s}
+.at-cbtns .at-del:hover{color:var(--bad);
+  background:color-mix(in srgb,var(--bad) 10%,transparent)}
+
+.at-why{padding-left:9px;border-left:2px solid var(--line);
+  font-size:11.5px;line-height:1.45;color:var(--m)}
+
+/* --- empty state, footnote ------------------------------------------------- */
+.at-empty{max-width:760px;padding:22px 24px;background:var(--p1);
+  border:1px solid var(--line);border-radius:var(--r);color:var(--m);
+  font-size:13px;line-height:1.6}
+.at-empty[hidden]{display:none}
+.at-empty b{display:block;margin-bottom:2px;color:var(--hi);font-weight:600}
+
+.at-foot{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-top:26px;
+  padding-top:16px;border-top:1px solid var(--line)}
+.at-foot>small{flex:1 1 420px;min-width:0;max-width:760px;color:var(--m);
+  font-size:11.5px;line-height:1.55}
+/* The two ATLAS link-buttons keep the shared .lnk cyan treatment; only their
+   hit target and hover surface are set here. */
+.at-foot .lnk,#atlasRestore{flex:none;min-height:28px;margin-top:-5px;padding:0 8px;
+  display:inline-flex;align-items:center;border-radius:4px;
+  transition:background .12s}
+.at-foot .lnk:hover,.at-foot .lnk:focus-visible{background:var(--p2)}
+#atlasRestore[hidden]{display:none}
+
+/* --- sessions -------------------------------------------------------------- */
+.at-sess{margin-top:28px}
+.at-sessh{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding-bottom:10px;border-bottom:1px solid var(--line)}
+.at-sessh h3{font-size:11px;font-weight:600;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--m)}
+.at-sessh .lnk{min-height:28px;margin-right:-8px;padding:0 8px;
+  display:inline-flex;align-items:center;border-radius:4px;
+  transition:background .12s}
+.at-sessh .lnk:hover,.at-sessh .lnk:focus-visible{background:var(--p2)}
+
+/* Grid rather than flex so every duration lines up in its own column. */
+.at-srow{display:grid;grid-template-columns:8px minmax(0,1fr) auto;gap:12px;
+  align-items:start;padding:11px 0;border-bottom:1px solid var(--line);
+  font-variant-numeric:tabular-nums;transition:background .12s}
+.at-srow:hover{background:rgba(255,255,255,.02)}
+/* atlas.js emits .st.done, which the shared .st rules never defined. */
+.at-srow .st{margin-top:6px;background:var(--ok)}
+.at-srow .st.done{background:var(--ok)}
+/* A session row is a list, not a live feed: no pulse. */
+.at-srow .st.running{background:var(--c);animation:none}
+.at-srow>div{min-width:0}
+.at-srow b{display:block;font-size:14px;font-weight:600;color:var(--hi);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.at-srow small{display:block;margin-top:2px;color:var(--m);font-size:12px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.at-srow .at-sx{margin:4px 0 0;text-align:right;color:var(--t);overflow:visible}
+
+/* --- responsive ------------------------------------------------------------ */
+/* The figure row stays four up for the whole supported range (960 to 1280+):
+   at 960 the content column is 680px, so the three support labels wrap to two
+   lines, which reads better than a 2x2 that orphans the lead figure. */
+@media(max-width:900px){.at-stats{grid-template-columns:1fr 1fr;gap:14px 24px}}
+
+/* Every ATLAS transition is already .12s. This removes them outright for the OS
+   setting; the in-app "Reduce motion" toggle is handled globally by body.rm. */
+@media(prefers-reduced-motion:reduce){
+  .at-card,.at-search svg,.at-search input,.at-bar select,.at-add input,
+  .at-cbtns .at-fav,.at-cbtns .at-del,.at-srow,.at-foot .lnk,.at-sessh .lnk
+    {transition:none}
+}
