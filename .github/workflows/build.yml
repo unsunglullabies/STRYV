@@ -53,7 +53,7 @@ jobs:
       # Secrets are not exposed to pull requests from forks, so signing only
       # happens where the secrets exist. A pull request still proves it compiles.
       - name: Check signing secrets are present
-        if: github.event_name != 'pull_request'
+        if: github.ref_type == 'tag'
         shell: pwsh
         run: |
           if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
