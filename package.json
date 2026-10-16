@@ -1,1 +1,1 @@
-{"name":"stryv","version":"0.1.0","private":true,"scripts":{"tauri":"tauri","dev":"tauri dev","build":"tauri build"},"devDependencies":{"@tauri-apps/cli":"^2"}}
+{"name":"stryv","version":"0.2.0","private":true,"scripts":{"tauri":"tauri","dev":"tauri dev","build":"tauri build","test":"node tests/atlas.test.js"},"devDependencies":{"@tauri-apps/cli":"^2"}}

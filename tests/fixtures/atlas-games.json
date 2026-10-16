@@ -1,0 +1,37 @@
+{
+  "_comment": "Sample shape returned by the Rust `atlas_scan` command. Used by tests/atlas.test.js so the frontend can be tested without a Steam install.",
+  "games": [
+    {
+      "launcher": "Steam",
+      "app_id": "359550",
+      "name": "Tom Clancy's Rainbow Six Siege",
+      "install_dir": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Tom Clancy's Rainbow Six Siege",
+      "size_bytes": 53041648640,
+      "last_played": 1792033906
+    },
+    {
+      "launcher": "Steam",
+      "app_id": "228980",
+      "name": "Steamworks Common Redistributables",
+      "install_dir": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Steamworks Shared",
+      "size_bytes": 224575958,
+      "last_played": 0
+    },
+    {
+      "launcher": "Steam",
+      "app_id": "<img src=x onerror=alert(1)>",
+      "name": "Quote \" and <angle> & ampersand",
+      "install_dir": "C:\\Games\\Weird <dir>",
+      "size_bytes": 0,
+      "last_played": 1789767964
+    },
+    {
+      "launcher": "Epic",
+      "app_id": "",
+      "name": "A game from a launcher STRYV cannot launch yet",
+      "install_dir": "C:\\Epic\\Something",
+      "size_bytes": 0,
+      "last_played": 0
+    }
+  ]
+}

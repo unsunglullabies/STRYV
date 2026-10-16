@@ -388,11 +388,209 @@ async fn get_link_speeds() -> Result<Vec<Link>, String> {
     }).await.map_err(|e| e.to_string())?
 }
 
+// ---------- ATLAS: game discovery ----------
+// Reads the files the launchers have already written. Nothing is launched,
+// changed or written back; this only looks.
+
+#[derive(Serialize)]
+struct Game { launcher: &'static str, app_id: String, name: String, install_dir: String, size_bytes: u64, last_played: u64 }
+
+// Valve KeyValues text, as Steam writes it. Only what discovery needs: quoted
+// keys, quoted or bare values, nested blocks, and // comments.
+enum Vdf { Val(String), Obj(Vec<(String, Vdf)>) }
+
+struct VdfReader<'a> { s: &'a [u8], i: usize }
+
+impl<'a> VdfReader<'a> {
+    fn new(s: &'a str) -> Self { VdfReader { s: s.as_bytes(), i: 0 } }
+
+    fn ws(&mut self) {
+        loop {
+            while self.i < self.s.len() && self.s[self.i] <= b' ' { self.i += 1; }
+            if self.i + 1 < self.s.len() && self.s[self.i] == b'/' && self.s[self.i + 1] == b'/' {
+                while self.i < self.s.len() && self.s[self.i] != b'\n' { self.i += 1; }
+                continue;
+            }
+            return;
+        }
+    }
+
+    fn quoted(&mut self) -> Option<String> {
+        self.ws();
+        if self.i >= self.s.len() || self.s[self.i] != b'"' { return None; }
+        self.i += 1;
+        let mut out: Vec<u8> = Vec::new();
+        while self.i < self.s.len() {
+            let c = self.s[self.i];
+            self.i += 1;
+            if c == b'"' { return Some(String::from_utf8_lossy(&out).into_owned()); }
+            // \" and \\ are escaped in KeyValues; keep the second byte literally.
+            if c == b'\\' && self.i < self.s.len() { out.push(self.s[self.i]); self.i += 1; } else { out.push(c); }
+        }
+        None
+    }
+
+    fn bare(&mut self) -> Option<String> {
+        let start = self.i;
+        while self.i < self.s.len() && self.s[self.i] > b' ' && self.s[self.i] != b'}' { self.i += 1; }
+        if self.i > start { Some(String::from_utf8_lossy(&self.s[start..self.i]).into_owned()) } else { None }
+    }
+
+    fn obj(&mut self) -> Vec<(String, Vdf)> {
+        let mut v: Vec<(String, Vdf)> = Vec::new();
+        loop {
+            self.ws();
+            if self.i >= self.s.len() { return v; }
+            if self.s[self.i] == b'}' { self.i += 1; return v; }
+            let Some(k) = self.quoted() else { return v; };
+            self.ws();
+            if self.i < self.s.len() && self.s[self.i] == b'{' {
+                self.i += 1;
+                v.push((k, Vdf::Obj(self.obj())));
+            } else {
+                match self.quoted() {
+                    Some(val) => v.push((k, Vdf::Val(val))),
+                    None => match self.bare() { Some(b) => v.push((k, Vdf::Val(b))), None => return v },
+                }
+            }
+        }
+    }
+}
+
+fn read_vdf(p: &Path) -> Option<Vec<(String, Vdf)>> {
+    let t = std::fs::read_to_string(p).ok()?;
+    let mut r = VdfReader::new(&t);
+    Some(r.obj())
+}
+fn vdf_obj<'t>(node: &'t [(String, Vdf)], key: &str) -> Option<&'t Vec<(String, Vdf)>> {
+    for (k, v) in node { if k == key { if let Vdf::Obj(c) = v { return Some(c); } } }
+    None
+}
+fn vdf_val(node: &[(String, Vdf)], key: &str) -> Option<String> {
+    for (k, v) in node { if k == key { if let Vdf::Val(val) = v { return Some(val.clone()); } } }
+    None
+}
+fn vdf_u64(node: &[(String, Vdf)], key: &str) -> u64 {
+    vdf_val(node, key).and_then(|v| v.parse().ok()).unwrap_or(0)
+}
+
+fn steam_dir() -> Option<PathBuf> {
+    if let Ok(out) = run("reg", &["query", r"HKCU\Software\Valve\Steam", "/v", "SteamPath"]) {
+        for l in out.lines() {
+            if let Some((_, v)) = l.split_once("    REG_SZ") {
+                let p = v.trim().trim_matches('"');
+                if !p.is_empty() { return Some(PathBuf::from(p)); }
+            }
+        }
+    }
+    let d = PathBuf::from(r"C:\Program Files (x86)\Steam");
+    if d.join("steamapps").is_dir() { Some(d) } else { None }
+}
+
+fn steam_libraries(steam: &Path) -> Vec<PathBuf> {
+    let Some(root) = read_vdf(&steam.join("steamapps").join("libraryfolders.vdf")) else { return Vec::new(); };
+    let Some(libs) = vdf_obj(&root, "libraryfolders") else { return Vec::new(); };
+    let mut out: Vec<PathBuf> = Vec::new();
+    for (key, node) in libs {
+        match node {
+            // Current format: "0" { "path" "C:\\..." ... }
+            Vdf::Obj(fields) => { if let Some(p) = vdf_val(fields, "path") { out.push(PathBuf::from(p)); } }
+            // Older format: "0"  "C:\\..." with no block around it.
+            Vdf::Val(p) => { if !key.is_empty() && key.chars().all(|c| c.is_ascii_digit()) { out.push(PathBuf::from(p)); } }
+        }
+    }
+    out
+}
+
+fn steam_games(lib: &Path) -> Vec<Game> {
+    let apps = lib.join("steamapps");
+    let Ok(rd) = std::fs::read_dir(&apps) else { return Vec::new(); };
+    let mut out: Vec<Game> = Vec::new();
+    for e in rd.flatten() {
+        // Bind the lossy name to a variable first: strip_prefix borrows from it,
+        // and a temporary would be dropped at the end of the let statement.
+        let fname = e.file_name();
+        let fname = fname.to_string_lossy();
+        let Some(rest) = fname.strip_prefix("appmanifest_") else { continue; };
+        let Some(digits) = rest.strip_suffix(".acf") else { continue; };
+        if digits.is_empty() || !digits.chars().all(|c| c.is_ascii_digit()) { continue; }
+        let Some(root) = read_vdf(&e.path()) else { continue; };
+        let Some(state) = vdf_obj(&root, "AppState") else { continue; };
+        let (Some(name), Some(dir)) = (vdf_val(state, "name"), vdf_val(state, "installdir")) else { continue; };
+        out.push(Game {
+            launcher: "Steam",
+            app_id: vdf_val(state, "appid").unwrap_or_default(),
+            name,
+            install_dir: apps.join("common").join(dir).to_string_lossy().into_owned(),
+            size_bytes: vdf_u64(state, "SizeOnDisk"),
+            last_played: vdf_u64(state, "LastPlayed"),
+        });
+    }
+    out
+}
+
+#[tauri::command]
+async fn atlas_scan() -> Vec<Game> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let mut games: Vec<Game> = Vec::new();
+        if let Some(steam) = steam_dir() {
+            let mut libs = steam_libraries(&steam);
+            if libs.is_empty() { libs.push(steam); }
+            for lib in libs { games.extend(steam_games(&lib)); }
+        }
+        games.sort_by(|a, b| b.last_played.cmp(&a.last_played).then(a.name.cmp(&b.name)));
+        games
+    }).await.unwrap_or_default()
+}
+
+fn steam_uri_registered() -> bool {
+    run("reg", &["query", r"HKCU\Software\Classes\steam\shell\open\command"]).is_ok()
+}
+
+// Launching is a separate, explicit action from scanning. The frontend may only
+// name an app: it never supplies a path or a command line.
+#[tauri::command]
+async fn atlas_launch(appid: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<String, String> {
+        let t = appid.trim();
+        // Bare decimal only, and it must round-trip, so nothing but digits can
+        // reach the URL that is built below.
+        let id: u64 = t.parse().map_err(|_| "That is not a valid Steam app id.".to_string())?;
+        if id.to_string() != t { return Err("That is not a valid Steam app id.".to_string()); }
+
+        let steam = steam_dir().ok_or_else(|| "Steam does not appear to be installed on this PC.".to_string())?;
+        if !steam_uri_registered() { return Err("Steam's link handler is not registered, so STRYV cannot ask it to launch a game.".to_string()); }
+
+        // Allowlist: the id must be one this scan actually found on this PC, so the
+        // frontend cannot ask for an arbitrary id.
+        let mut libs = steam_libraries(&steam);
+        if libs.is_empty() { libs.push(steam); }
+        let known = libs.iter().flat_map(|l| steam_games(l)).any(|g| g.app_id == t);
+        if !known { return Err("That game is not in the Steam library STRYV can see.".to_string()); }
+
+        // steam://rungameid/<id> is Steam's own protocol; explorer.exe only resolves
+        // the registered handler. The URL is assembled here from a validated integer,
+        // so no part of it comes from the frontend. Spawned, not waited on, so a slow
+        // handler cannot block the caller.
+        let url = format!("steam://rungameid/{}", id);
+        let mut c = std::process::Command::new("explorer");
+        c.arg(&url);
+        #[cfg(windows)]
+        { use std::os::windows::process::CommandExt; c.creation_flags(0x08000000); }
+        c.spawn().map_err(|e| format!("Could not ask Steam to launch the game: {}.", e))?;
+        Ok(format!("Steam was asked to launch this game (app {}). If nothing starts, open Steam and check you are signed in.", id))
+    }).await.map_err(|e| e.to_string())?
+}
+
 fn main() {
     let mut sys = System::new();
     sys.refresh_cpu_usage();
     tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
+            // Signed self-update. The public key lives in tauri.conf.json; Tauri
+            // refuses any artifact whose signature does not match it.
+            app.handle().plugin(tauri_plugin_updater::Builder::new().build());
             // Safety net: the frontend shows the window once the intro has painted.
             if let Some(w) = app.get_webview_window("main") {
                 std::thread::spawn(move || {
@@ -404,7 +602,7 @@ fn main() {
         })
         .manage(Monitor(Mutex::new(sys)))
         .manage(Net(Mutex::new((Networks::new_with_refreshed_list(), Instant::now()))))
-        .invoke_handler(tauri::generate_handler![get_snapshot, get_system_info, get_processes, get_network, run_network_tests, opt_catalog, opt_snapshots, opt_preview, opt_apply, opt_rollback, opt_startup, opt_startup_set, get_gpu, get_temps, get_link_speeds])
+        .invoke_handler(tauri::generate_handler![get_snapshot, get_system_info, get_processes, get_network, run_network_tests, opt_catalog, opt_snapshots, opt_preview, opt_apply, opt_rollback, opt_startup, opt_startup_set, get_gpu, get_temps, get_link_speeds, atlas_scan, atlas_launch])
         .run(tauri::generate_context!())
         .expect("error while running STRYV");
 }

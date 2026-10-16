@@ -72,4 +72,4 @@ async function startup() {
   const [snap, info] = await Promise.all([tick(), sys(), procs(), net(), document.fonts && document.fonts.ready, ...[...document.images].map((i) => i.decode().catch(() => null))]);
   return snap && info ? { ok: true } : { ok: false, reason: !invoke ? "The STRYV backend is not available in this window." : "Could not read " + [!snap && "live system data", !info && "system information"].filter(Boolean).join(" or ") + "." };
 }
-startTimers(); Intro.run(startup);
+startTimers(); Intro.run(startup, { ready: async () => { const r = await startup(); if (r.ok && typeof Updater !== "undefined") Updater.check(false); return r; } });

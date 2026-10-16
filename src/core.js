@@ -1,13 +1,20 @@
 "use strict";
 const q = (id) => document.getElementById(id);
-const PAGES = ["dashboard", "performance", "network", "optimizations", "system", "syn", "activity", "settings", "whatsnew", "help"];
+const PAGES = ["dashboard", "performance", "network", "atlas", "optimizations", "system", "syn", "activity", "settings", "whatsnew", "help"];
 const ACCENTS = { Violet: "#8B5CF6", Cyan: "#38BDF8", Gold: "#D9A62E" };
-const VERSION = "0.1.0";
+const VERSION = "0.2.0";
 const CHANGELOG = [{
+  v: "0.2.0", date: "2026-10-15", tag: "Signed updates",
+  groups: {
+    New: ["Signed in-app updates. STRYV checks the published release feed, downloads the installer and verifies its signature against the key built into the app before running it. An update that does not verify is discarded.", "Updates can be checked manually from Settings, and STRYV also looks quietly in the background and tells you when a newer version exists."],
+    "Known limits": ["Updates are only offered once a signed release has been published. Until then, Check now reports that you are up to date."]
+  }
+}, {
   v: "0.1.0", date: "2026-10-15", tag: "Development build",
   groups: {
-    New: ["Dashboard with live CPU, memory, uptime and storage readings.", "Performance page with 2-minute CPU and memory graphs and a top-processes list.", "Network page with live throughput, adapter list, TCP latency and DNS tests.", "System page with hardware and OS details and a copy-diagnostics button.", "Optimizations page with power-plan switching (reversible) and old temp-file cleanup, both with review and confirmation. Startup apps list with reversible enable/disable.", "GPU load, memory, temperature and clock (NVIDIA only), temperature sensors where Windows exposes them, and adapter link speed.", "Dashboard system-health summary (memory, sustained CPU, storage space, uptime) with data-quality labels.", "Settings, activity feed, technical log, command palette (Ctrl+K), data export and reset."],
-    "Known limits": ["AMD and Intel GPU readings are not supported yet, and many PCs do not expose CPU temperature.", "Switching the Windows power plan needs Administrator rights, so STRYV must be started with Run as administrator for that action.", "SYN Assistant is not connected.", "There is no update mechanism yet; install new builds manually."]
+    New: ["Dashboard with live CPU, memory, uptime and storage readings.", "Performance page with 2-minute CPU and memory graphs and a top-processes list.", "Network page with live throughput, adapter list, TCP latency and DNS tests.", "System page with hardware and OS details and a copy-diagnostics button.", "Optimizations page with power-plan switching (reversible) and old temp-file cleanup, both with review and confirmation. Startup apps list with reversible enable/disable.", "GPU load, memory, temperature and clock (NVIDIA only), temperature sensors where Windows exposes them, and adapter link speed.", "Dashboard system-health summary (memory, sustained CPU, storage space, uptime) with data-quality labels.", "ATLAS page that finds installed games by reading the library files the launcher has already written, showing each game's launcher, app id, install path, size and last-played date.", "Launch a discovered Steam game from the ATLAS library. STRYV asks Steam to start it through Steam's own link handler and never runs a game's files itself.", "Settings, activity feed, technical log, command palette (Ctrl+K), data export and reset."],
+    Fixed: ["A power-plan change that fails no longer leaves a Roll back button behind for a change that did not happen."],
+    "Known limits": ["AMD and Intel GPU readings are not supported yet, and many PCs do not expose CPU temperature.", "Switching the Windows power plan needs Administrator rights, so STRYV must be started with Run as administrator for that action.", "ATLAS reads Steam libraries only. Epic, Riot, Battle.net and GOG are not read yet, and only Steam games can be launched from the library.", "SYN Assistant is not connected.", "There is no update mechanism yet; install new builds manually."]
   }
 }];
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -106,6 +113,7 @@ function go(p) {
   document.querySelectorAll("[data-p]").forEach((b) => b.classList.toggle("on", b.dataset.p === p));
   document.querySelectorAll(".page").forEach((s) => s.classList.toggle("on", s.id === p));
   if (p === "whatsnew") renderNews(); if (p === "activity") renderActivity(); if (p === "optimizations" && typeof Opt !== "undefined") Opt.load();
+  if (p === "atlas" && typeof Atlas !== "undefined") Atlas.scan();
   if (typeof Sensors !== "undefined") { if (p === "network") Sensors.poll(); else setTimeout(Sensors.poll, 0); }
   document.querySelector("main").scrollTop = 0;
 }
@@ -114,7 +122,7 @@ function exportData() { return { app: "STRYV", version: VERSION, exported: new D
 
 const COMMANDS = [
   ["Go to Dashboard", "Ctrl+1", () => go("dashboard")], ["Go to Performance", "Ctrl+2", () => go("performance")],
-  ["Go to Network", "Ctrl+3", () => go("network")], ["Go to Optimizations", "", () => go("optimizations")], ["Go to System", "Ctrl+4", () => go("system")],
+  ["Go to Network", "Ctrl+3", () => go("network")], ["Go to ATLAS", "", () => go("atlas")], ["Go to Optimizations", "", () => go("optimizations")], ["Go to System", "Ctrl+4", () => go("system")],
   ["Go to Activity", "Ctrl+5", () => go("activity")], ["Go to Settings", "Ctrl+,", () => go("settings")],
   ["Go to What's New", "", () => go("whatsnew")], ["Go to Help & About", "", () => go("help")],
   ["Run network connection tests", "", () => { go("network"); q("runT").click(); }],

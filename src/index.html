@@ -7,6 +7,7 @@
     <button data-p="dashboard" class="on"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg><span>Dashboard</span></button>
     <button data-p="performance"><svg viewBox="0 0 24 24"><path d="M3 17l5-6 4 3 8-9"/><path d="M15 5h5v5"/></svg><span>Performance</span></button>
     <button data-p="network"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><path d="M12 7v5M12 12l-6 5M12 12l6 5"/></svg><span>Network</span></button>
+    <button data-p="atlas"><svg viewBox="0 0 24 24"><path d="M6.5 7h11a4.5 4.5 0 0 1 4.4 5.4l-.8 4A3 3 0 0 1 18 18l-1.4-2h-9.2L6 18a3 3 0 0 1-5.1-1.6l-.8-4A4.5 4.5 0 0 1 6.5 7Z"/><path d="M7.5 11.2v2.6M6.2 12.5h2.6"/><circle cx="15.6" cy="11.6" r=".9"/><circle cx="17.9" cy="13.4" r=".9"/></svg><span>ATLAS</span></button>
     <button data-p="optimizations"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg><span>Optimizations</span></button>
     <button data-p="system"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg><span>System</span></button>
     <button data-p="activity"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h16"/></svg><span>Activity</span></button>
@@ -42,6 +43,11 @@
   <div class="card" style="margin-top:14px"><label>Link speed</label><table id="linkT"></table><small>The negotiated rate of the connection to your router, not your internet speed.</small></div>
   <div class="card" style="margin-top:14px"><label>Connection tests</label><div id="tests"><small>Measures TCP connection time to public servers and DNS lookup time. It does not test download speed.</small></div>
   <button class="btn" id="runT">Run tests</button></div></section>
+<section id="atlas" class="page"><h1>ATLAS</h1><p class="sub">Games found on this PC, read from the files each launcher has already written.</p>
+  <div class="grid2"><div class="card"><label>Library</label><b id="atlasN">—</b><small id="atlasSum">Reading launcher files…</small></div>
+    <div class="card"><label>Total install size</label><b id="atlasSize">—</b><small>Sum of the sizes the launcher itself reports.</small></div></div>
+  <div class="acts" style="margin-top:14px"><button class="btn" id="atlasScan">Rescan library</button></div>
+  <div class="card" style="margin-top:14px"><label>Installed games</label><table id="atlasT"></table><small id="atlasNote"></small></div></section>
 <section id="optimizations" class="page"><h1>Optimizations</h1><p class="sub">Fixed, reviewed actions. Nothing runs without your confirmation, and every action is logged.</p>
   <div id="optList"></div>
   <div class="sec" style="margin-top:26px"><h3>Measure impact</h3>
@@ -60,6 +66,10 @@
     <div class="set"><div><b>Compact sidebar</b><small>Show icons only.</small></div><button class="tog" data-set="compact" data-label="Compact sidebar" aria-label="Compact sidebar"></button></div>
     <div class="set"><div><b>Reduce motion</b><small>Turns off transitions and animations.</small></div><button class="tog" data-set="reduceMotion" data-label="Reduce motion" aria-label="Reduce motion"></button></div>
     <div class="set"><div><b>Launch animation</b><small>Plays when STRYV starts. Skipped when Reduce motion is on.</small></div><div class="acts"><button class="btn ghost" id="replay">Replay</button><button class="tog" data-set="intro" data-label="Launch animation" aria-label="Launch animation"></button></div></div></div>
+  <div class="sec"><h3>Updates</h3>
+    <div class="set"><div><b>STRYV updates</b><small>Signed updates only. Every download is checked against the key built into this app, and an update that fails that check is discarded.</small></div><div class="acts"><button class="btn ghost" id="updCheck">Check now</button><button class="btn" id="updInstall" style="display:none">Install update</button></div></div>
+    <div id="updFound" style="display:none"><p class="note" id="updFoundV" style="color:var(--v);font-weight:600"></p><p class="note" id="updNotes"></p></div>
+    <p class="note" id="updStatus"></p></div>
   <div class="sec"><h3>Startup and monitoring</h3>
     <div class="set"><div><b>Open on</b><small>Page shown when STRYV starts.</small></div><select data-sel="startPage" data-label="Start page"><option value="dashboard">Dashboard</option><option value="performance">Performance</option><option value="network">Network</option><option value="system">System</option><option value="activity">Activity</option></select></div>
     <div class="set"><div><b>Refresh interval</b><small>How often live readings update. Longer uses less CPU.</small></div><select data-sel="interval" data-label="Refresh interval"><option value="1">1 second</option><option value="2">2 seconds</option><option value="5">5 seconds</option></select></div></div>
@@ -76,10 +86,10 @@
 <section id="whatsnew" class="page"><h1>What's New</h1><p class="sub">Release notes for this build.</p><div id="newsList"></div><button class="btn" id="markSeen">Mark as viewed</button></section>
 <section id="help" class="page"><h1>Help &amp; About</h1><p class="sub" id="aboutV"></p>
   <div class="sec"><h3>About</h3><p class="note">STRYV: push your performance. A Windows PC performance and diagnostics utility. Built with Tauri and the sysinfo library. License: not yet specified.</p></div>
-  <div class="sec"><h3>Updates</h3><p class="note">Update checking is not implemented. It needs a hosted release feed and signing keys (Tauri's updater plugin). Until then, install new builds manually.</p></div>
+  <div class="sec"><h3>Updates</h3><p class="note">STRYV checks for signed updates and can install them from inside the app. Every download is verified against the public key built into this version; an update that fails verification is discarded and never run. If no signed release has been published yet, Check now simply reports that you are up to date.</p></div>
   <div class="sec"><h3>Troubleshooting</h3><ul class="tips"><li><b>A reading says Unavailable.</b> That measurement isn't supported yet or the system didn't provide it. STRYV never fills in guessed values.</li><li><b>Connection tests fail.</b> A firewall or VPN may block outbound connections on port 443. Check the Technical log in Activity.</li><li><b>Something looks wrong.</b> Open Activity, copy the details, and include them in a bug report.</li><li><b>Start fresh.</b> Settings, then Data, then Reset settings or Delete all STRYV data.</li></ul></div></section>
 </main></div><div id="pal" class="ov"><div class="pbox"><input id="pin" placeholder="Type a command…" autocomplete="off" aria-label="Command palette"><div id="plist"></div></div></div>
 <div id="dlg" class="ov mid" role="dialog" aria-modal="true"><div class="dbox"><h2 id="dT"></h2><p id="dB"></p><div class="dact"><button class="btn ghost" id="dNo">Cancel</button><button class="btn" id="dYes">Confirm</button></div></div></div>
 <div id="rv" class="ov mid" role="dialog" aria-modal="true"><div class="dbox rvb"><h2 id="rvT"></h2><div id="rvB"></div><div class="dact"><button class="btn ghost" id="rvNo">Cancel</button><button class="btn" id="rvYes">Apply</button></div></div></div>
 <div id="toasts"></div>
-<script src="core.js"></script><script src="intro.js"></script><script src="opt.js"></script><script src="meas.js"></script><script src="health.js"></script><script src="sensors.js"></script><script src="app.js"></script></body></html>
+<script src="core.js"></script><script src="intro.js"></script><script src="opt.js"></script><script src="meas.js"></script><script src="health.js"></script><script src="sensors.js"></script><script src="atlas.js"></script><script src="updater.js"></script><script src="app.js"></script></body></html>

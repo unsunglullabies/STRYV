@@ -34,6 +34,15 @@ yarn-error.log*
 .env
 .env.local
 
+# --- Signing keys (NEVER commit these) ---------------------------------------
+# The updater's private key belongs in the GitHub Actions secret
+# TAURI_SIGNING_PRIVATE_KEY only. Losing it means you can never sign another
+# update for the installs that already exist.
+.tauri/
+*.key
+*.key.pub
+*.sig
+
 # --- Editor / OS clutter -----------------------------------------------------
 .DS_Store
 Thumbs.db
