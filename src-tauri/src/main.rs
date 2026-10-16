@@ -413,6 +413,11 @@ struct Game {
     source: String,
     favorite: bool,
     hidden: bool,
+    // A local image the user assigned, which wins over anything fetched online.
+    art_path: String,
+    // Whether the recorded executable is still on disk. Recomputed on every
+    // read, never stored, so a moved game cannot claim to be ready.
+    available: bool,
     plays: u64,
     last_launch: u64,
     // Only set when the session was actually observed. Never guessed.
@@ -459,12 +464,61 @@ fn atlas_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(d.join(ATLAS_STORE))
 }
 
+// Paths are compared case-insensitively with separators collapsed, so the same
+// executable cannot be added twice by picking it two different ways.
+fn norm_path(p: &str) -> String {
+    let t = p.trim().trim_matches('"').replace('/', "\\");
+    let mut out = String::with_capacity(t.len());
+    let mut prev = '\\';
+    for c in t.chars() {
+        if c == '\\' && prev == '\\' { continue; }
+        out.push(c);
+        prev = c;
+    }
+    while out.len() > 3 && out.ends_with('\\') { out.pop(); }
+    out.to_lowercase()
+}
+
+// Reads the store field by field. One malformed game entry costs you that entry
+// and nothing else, and a file that cannot be parsed at all is set aside as
+// atlas.corrupt.json rather than being silently overwritten on the next save.
 fn read_atlas(app: &tauri::AppHandle) -> AtlasStore {
-    atlas_path(app)
-        .ok()
-        .and_then(|p| std::fs::read_to_string(p).ok())
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
+    let Ok(p) = atlas_path(app) else { return AtlasStore::default() };
+    let Ok(text) = std::fs::read_to_string(&p) else { return AtlasStore::default() };
+    let Ok(v) = serde_json::from_str::<Value>(&text) else {
+        let _ = std::fs::rename(&p, p.with_extension("corrupt.json"));
+        return AtlasStore::default();
+    };
+
+    let strings = |key: &str| -> Vec<String> {
+        v.get(key)
+            .and_then(|x| x.as_array())
+            .map(|a| a.iter().filter_map(|s| s.as_str().map(|t| t.to_string())).collect())
+            .unwrap_or_default()
+    };
+
+    let mut manual: Vec<Game> = Vec::new();
+    if let Some(arr) = v.get("manual").and_then(|x| x.as_array()) {
+        for item in arr {
+            // A broken entry is skipped; every other entry survives.
+            if let Ok(g) = serde_json::from_value::<Game>(item.clone()) { manual.push(g); }
+        }
+    }
+
+    let sessions: Vec<Session> = v
+        .get("sessions")
+        .and_then(|x| x.as_array())
+        .map(|a| a.iter().filter_map(|s| serde_json::from_value::<Session>(s.clone()).ok()).collect())
+        .unwrap_or_default();
+
+    AtlasStore {
+        version: v.get("version").and_then(|x| x.as_u64()).unwrap_or(0) as u32,
+        hidden: strings("hidden"),
+        favorites: strings("favorites"),
+        manual,
+        sessions,
+        sort: v.get("sort").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+    }
 }
 
 fn write_atlas(app: &tauri::AppHandle, s: &AtlasStore) -> Result<(), String> {
@@ -655,6 +709,9 @@ fn merge_library(store: &AtlasStore, detected: Vec<Game>) -> Vec<Game> {
     // Plays and durations come from the recorded sessions, which stay the single
     // source of truth. Nothing here is estimated.
     for g in out.iter_mut() {
+        // Steam starts the game itself, so it only needs the id; a hand-added entry
+        // is only ready while the executable it names is still on disk.
+        g.available = if g.launcher == "Steam" { !g.app_id.is_empty() } else { !g.exe_path.is_empty() && Path::new(&g.exe_path).is_file() };
         let s: Vec<&Session> = store.sessions.iter().filter(|x| x.game_id == g.id).collect();
         g.plays = s.len() as u64;
         g.last_launch = s.iter().map(|x| x.started).max().unwrap_or(0);
@@ -740,6 +797,12 @@ fn atlas_add_manual(app: tauri::AppHandle, name: Option<String>, exe_path: Strin
 
     let mut store = read_atlas(&app);
     let id = format!("manual:{}", stable_id(&p));
+    // Compared on the normalised path rather than the id, so C:\Games\a.exe and
+    // C:/Games/a.exe are recognised as the same executable.
+    let npath = norm_path(&p.to_string_lossy());
+    if store.manual.iter().any(|m| !m.exe_path.is_empty() && norm_path(&m.exe_path) == npath) {
+        return Err("That game is already in your library.".into());
+    }
     if store.manual.iter().any(|m| m.id == id) { return Err("That game is already in your library.".into()); }
 
     let g = Game {
@@ -763,6 +826,81 @@ fn atlas_add_manual(app: tauri::AppHandle, name: Option<String>, exe_path: Strin
     Ok(g)
 }
 
+// Edits a stored game. The frontend may only name a library id: it never sends
+// a path that gets used without being checked here first.
+#[tauri::command]
+fn atlas_update(app: tauri::AppHandle, id: String, name: Option<String>, exe_path: Option<String>) -> Result<Game, String> {
+    let tid = id.trim().to_string();
+    let mut store = read_atlas(&app);
+    let Some(g) = store.manual.iter_mut().find(|m| m.id == tid) else {
+        return Err("That game is no longer in your library. Rescan and try again.".into());
+    };
+
+    if let Some(n) = name {
+        let n = n.trim();
+        if !n.is_empty() { g.name = n.to_string(); }
+    }
+
+    if let Some(p) = exe_path {
+        let raw = p.trim().trim_matches('"').to_string();
+        if !raw.is_empty() {
+            let pb = PathBuf::from(&raw);
+            if !pb.is_file() { return Err(format!("{} is not a file on this PC.", raw)); }
+            if !pb.extension().map(|e| e.eq_ignore_ascii_case("exe")).unwrap_or(false) {
+                return Err("That is not an .exe. Shortcuts, folders and documents cannot be launched.".into());
+            }
+            // Re-key so the identity follows the executable it points at, and so
+            // an edit cannot quietly create a second entry for the same game.
+            let new_id = format!("manual:{}", stable_id(&pb));
+            if new_id != g.id && store.manual.iter().any(|m| m.id == new_id) {
+                return Err("Another entry in your library already points at that executable.".into());
+            }
+            g.id = new_id.clone();
+            g.exe_path = pb.to_string_lossy().into_owned();
+            g.install_dir = pb.parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
+            // An existing launch entry belongs to the old identity.
+            store.sessions.retain(|s| s.game_id != new_id);
+            store.hidden.retain(|h| h != &new_id);
+            let fav = store.favorites.iter().any(|f| f == &g.id);
+            store.favorites.retain(|f| f != &g.id);
+            if fav { store.favorites.push(new_id.clone()); }
+        }
+    }
+
+    let out = g.clone();
+    write_atlas(&app, &store)?;
+    Ok(out)
+}
+
+// Attaches a local image to a game. The file has to exist and look like an
+// image, so ATLAS never ends up pointing at a directory or an .exe.
+#[tauri::command]
+fn atlas_set_art(app: tauri::AppHandle, id: String, art_path: Option<String>) -> Result<(), String> {
+    let tid = id.trim().to_string();
+    let mut store = read_atlas(&app);
+    let Some(g) = store.manual.iter_mut().find(|m| m.id == tid) else {
+        return Err("That game is no longer in your library.".into());
+    };
+
+    let raw = art_path.unwrap_or_default().trim().trim_matches('"').to_string();
+    if raw.is_empty() {
+        g.art_path.clear();
+    } else {
+        let pb = PathBuf::from(&raw);
+        if !pb.is_file() { return Err(format!("{} is not a file on this PC.", raw)); }
+        let ok = pb
+            .extension()
+            .map(|e| {
+                let e = e.to_ascii_lowercase();
+                e == "png" || e == "jpg" || e == "jpeg" || e == "webp" || e == "bmp" || e == "gif"
+            })
+            .unwrap_or(false);
+        if !ok { return Err("Choose an image file (png, jpg, webp, bmp or gif).".into()); }
+        g.art_path = pb.to_string_lossy().into_owned();
+    }
+
+    write_atlas(&app, &store)
+}
 #[tauri::command]
 fn atlas_remove(app: tauri::AppHandle, id: String, forget: Option<bool>) -> Result<(), String> {
     let tid = id.trim().to_string();
@@ -921,6 +1059,7 @@ fn main() {
     sys.refresh_cpu_usage();
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // Signed self-update. The public key lives in tauri.conf.json; Tauri
             // refuses any artifact whose signature does not match it.
@@ -936,7 +1075,7 @@ fn main() {
         })
         .manage(Monitor(Mutex::new(sys)))
         .manage(Net(Mutex::new((Networks::new_with_refreshed_list(), Instant::now()))))
-        .invoke_handler(tauri::generate_handler![get_snapshot, get_system_info, get_processes, get_network, run_network_tests, opt_catalog, opt_snapshots, opt_preview, opt_apply, opt_rollback, opt_startup, opt_startup_set, get_gpu, get_temps, get_link_speeds, atlas_scan, atlas_launch, atlas_launch_id, atlas_sessions, atlas_clear_sessions, atlas_add_manual, atlas_remove, atlas_restore, atlas_set_favorite])
+        .invoke_handler(tauri::generate_handler![get_snapshot, get_system_info, get_processes, get_network, run_network_tests, opt_catalog, opt_snapshots, opt_preview, opt_apply, opt_rollback, opt_startup, opt_startup_set, get_gpu, get_temps, get_link_speeds, atlas_scan, atlas_launch, atlas_launch_id, atlas_sessions, atlas_clear_sessions, atlas_add_manual, atlas_update, atlas_set_art, atlas_remove, atlas_restore, atlas_set_favorite])
         .run(tauri::generate_context!())
         .expect("error while running STRYV");
 }
