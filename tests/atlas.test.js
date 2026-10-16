@@ -59,9 +59,8 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 // --- minimal DOM ------------------------------------------------------------
 // Every id the ATLAS page declares in src/index.html. A missing one here means
 // the test is checking less than the real page has.
-const IDS = ["atlasQ", "atlasSort", "atlasAdd", "atlasAddBox", "atlasExe", "atlasName", "atlasAddNo", "atlasAddGo",
-             "atlasScan", "atlasRestore", "atlasSessClr", "atlasGrid", "atlasEmpty", "atlasSess",
-             "atlasN", "atlasSum", "atlasSize", "atlasPlays", "atlasTime", "atlasNote"];
+const IDS = [
+  "atlasHeroStat", "atlasAdd", "atlasScan", "atlasFeature", "atlasQ", "atlasSort", "atlasFavOnly", "atlasMissingOnly", "atlasReset", "atlasGrid", "atlasEmpty", "atlasNote", "atlasRestore", "atlasSessClr", "atlasSess", "atlasAddBox", "atlasAddTitle", "atlasAddNo", "atlasName", "atlasExe", "atlasPickExe", "atlasArt", "atlasPickArt", "atlasAddNo2", "atlasAddGo", "atlasEditBox", "atlasEditTitle", "atlasEditNo", "atlasEditName", "atlasEditExe", "atlasPickExe2", "atlasEditArt", "atlasPickArt2", "atlasClearArt", "atlasEditNo2", "atlasEditSave", "atlasDetailWrap", "atlasDetail"];
 
 function makeEl(dataset) {
   const el = {
@@ -172,8 +171,19 @@ function backend(over) {
 }
 
 // --- markup helpers ---------------------------------------------------------
-const cards = (html) => html.split('<article class="at-card">').slice(1);
+const cards = (html) => html.split(/<article class="at-card"/).slice(1);
 const head = (c) => (/<h4>([\s\S]*?)<\/h4>/.exec(c) || [, ""])[1];
+// ATLAS renders its figures as <div><b>value</b><small>label</small></div> inside
+// one strip, so the tests read them by position rather than by id.
+function heroCells(html) {
+  return (String(html).match(/<div><b>[\s\S]*?<\/div>/g) || []).map((c) => ({
+    b: (/<b>([\s\S]*?)<\/b>/.exec(c) || [, ""])[1],
+    small: (/<small>([\s\S]*?)<\/small>/.exec(c) || [, ""])[1],
+  }));
+}
+function heroB(html, i) { return (heroCells(html)[i] || {}).b || ""; }
+function heroSmall(html, i) { return (heroCells(html)[i] || {}).small || ""; }
+
 const names = (html) => cards(html).map(head);
 const cardFor = (html, name) => cards(html).find((c) => head(c) === name) || "";
 const imgs = (html) => html.match(/<img[^>]*>/g) || [];
@@ -221,19 +231,19 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
     await flush();
     const grid = els.atlasGrid.innerHTML;
 
-    check("counts the games", els.atlasN.textContent === FIXTURE.games.length + " games");
-    check("names the launchers it found", /Steam/.test(els.atlasSum.textContent) && /Manual/.test(els.atlasSum.textContent));
+    check("counts the games", heroB(els.atlasHeroStat.innerHTML, 0) === FIXTURE.games.length);
+    check("names the launchers it found", /Steam/.test(heroSmall(els.atlasHeroStat.innerHTML, 0)) && /Manual/.test(heroSmall(els.atlasHeroStat.innerHTML, 0)));
     check("renders one card per game", cards(grid).length === FIXTURE.games.length);
     check("one Play button per card", els.atlasGrid.querySelectorAll("[data-play]").length === FIXTURE.games.length);
     check("one star per card", els.atlasGrid.querySelectorAll("[data-fav]").length === FIXTURE.games.length);
     check("one Remove per card", els.atlasGrid.querySelectorAll("[data-del]").length === FIXTURE.games.length);
 
-    check("total size matches the sum", els.atlasSize.textContent === gbid(FIXTURE.games.reduce((a, g) => a + g.size_bytes, 0)));
-    check("large sizes use GB", /GB$/.test(els.atlasSize.textContent));
+    check("total size matches the sum", heroB(els.atlasHeroStat.innerHTML, 1) === gbid(FIXTURE.games.reduce((a, g) => a + g.size_bytes, 0)));
+    check("large sizes use GB", /GB$/.test(heroB(els.atlasHeroStat.innerHTML, 1)));
     check("a small install reads in MB", /<dd>214 MB<\/dd>/.test(cardFor(grid, "Steamworks Common Redistributables")));
     check("a large install reads in GB", /<dd>49\.4 GB<\/dd>/.test(cardFor(grid, "Tom Clancy's Rainbow Six Siege")));
-    check("total launches are summed", els.atlasPlays.textContent === String(FIXTURE.games.reduce((a, g) => a + g.plays, 0)));
-    check("total play time is summed", els.atlasTime.textContent === "1h 27m");
+    check("total launches are summed", heroB(els.atlasHeroStat.innerHTML, 2) === String(FIXTURE.games.reduce((a, g) => a + g.plays, 0)));
+    check("total play time is summed", heroB(els.atlasHeroStat.innerHTML, 3) === "1h 27m");
 
     check("a never-played entry says Never", /<dd>Never<\/dd>/.test(cardFor(grid, "Steamworks Common Redistributables")));
     check("Steam entries are badged as Steam", /at-badge at-steam/.test(grid));
@@ -426,8 +436,8 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
     const { Atlas, els } = makeEnv(g, backend({ atlas_scan: () => JSON.parse(JSON.stringify(g)) }));
     await Atlas.scan(false);
     await flush();
-    check("a game with no plays contributes no play time", els.atlasTime.textContent === "Not measured");
-    check("a game with no plays shows zero launches", els.atlasPlays.textContent === "0");
+    check("a game with no plays contributes no play time", heroB(els.atlasHeroStat.innerHTML, 3) === "Not measured");
+    check("a game with no plays shows zero launches", heroB(els.atlasHeroStat.innerHTML, 2) === "0");
     check("and says it was never launched from ATLAS", /<dd>None from ATLAS<\/dd>/.test(els.atlasGrid.innerHTML));
     check("and has no measured session", /<dd>not measured<\/dd>/.test(els.atlasGrid.innerHTML));
     check("and was never played", /<dd>Never<\/dd>/.test(els.atlasGrid.innerHTML));
@@ -440,14 +450,14 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
     const { Atlas, els } = makeEnv([], backend({ atlas_scan: () => [] }));
     await Atlas.scan(false);
     await flush();
-    check("nothing found: the count says none", els.atlasN.textContent === "None found");
-    check("nothing found: the summary explains it", /No launcher library files/.test(els.atlasSum.textContent));
+    check("nothing found: the count says none", heroB(els.atlasHeroStat.innerHTML, 0) === "0");
+    check("nothing found: the summary explains it", /games/.test(heroSmall(els.atlasHeroStat.innerHTML, 0)));
     check("nothing found: the empty state is shown", els.atlasEmpty.hidden === false);
     check("nothing found: it says so in its own words", /<b>No games found\.<\/b>/.test(els.atlasEmpty.innerHTML));
     check("nothing found: it points at adding a game by hand", /add it by hand/.test(els.atlasEmpty.innerHTML));
     check("nothing found: no cards and no buttons", cards(els.atlasGrid.innerHTML).length === 0 && els.atlasGrid.querySelectorAll("[data-play]").length === 0);
-    check("nothing found: no size total is invented", els.atlasSize.textContent === "—");
-    check("nothing found: no play time is invented", els.atlasTime.textContent === "Not measured");
+    check("nothing found: no size total is invented", heroB(els.atlasHeroStat.innerHTML, 1) === "—");
+    check("nothing found: no play time is invented", heroB(els.atlasHeroStat.innerHTML, 3) === "Not measured");
   }
   {
     // invoke is not defined at all, which is the shape a window without the
@@ -455,10 +465,10 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
     const { Atlas, els, log } = makeEnv(FIXTURE.games);
     await Atlas.scan(false);
     await flush();
-    check("no backend: the count is a dash, not zero", els.atlasN.textContent === "—");
+    check("no backend: the count is a dash, not zero", heroB(els.atlasHeroStat.innerHTML, 0) === "—");
     check("no backend: the empty state names the cause", els.atlasEmpty.hidden === false && /<b>Backend not connected\.<\/b>/.test(els.atlasEmpty.innerHTML));
     check("no backend: it says nothing can be discovered here", /no connection to it/.test(els.atlasEmpty.innerHTML));
-    check("no backend: the summary says the same", /needs the STRYV backend/.test(els.atlasSum.textContent));
+    check("no backend: the summary says the same", /Backend unavailable/.test(els.atlasHeroStat.innerHTML));
     check("no backend: the sessions panel says the same", /not connected in this window/.test(els.atlasSess.innerHTML));
     check("no backend: nothing is logged or toasted", log.length === 0);
     check("no backend: no cards are invented", cards(els.atlasGrid.innerHTML).length === 0);
@@ -475,7 +485,7 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
     check("search matched nothing: it says how many are in the library", new RegExp(FIXTURE.games.length + " games are in the library").test(els.atlasEmpty.innerHTML));
     check("search matched nothing: it says how to clear the search", /Clear the search/.test(els.atlasEmpty.innerHTML));
     check("search matched nothing: the grid is empty", cards(els.atlasGrid.innerHTML).length === 0);
-    check("search matched nothing: the count drops to none", els.atlasN.textContent === "None found");
+    check("search matched nothing: the count drops to none", heroB(els.atlasHeroStat.innerHTML, 0) === "0");
   }
 
   // ================= search =================
@@ -490,8 +500,8 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
 
     await type("siege");
     check("filters by name", now().join() === "Tom Clancy's Rainbow Six Siege");
-    check("the count follows the filter", els.atlasN.textContent === "1 game");
-    check("the summary reports how many of how many are shown", new RegExp("1 of " + FIXTURE.games.length + " shown").test(els.atlasSum.textContent));
+    check("the count follows the filter", heroB(els.atlasHeroStat.innerHTML, 0) === "1");
+    check("the summary reports how many of how many are shown", new RegExp("1 of " + FIXTURE.games.length + " shown").test(heroSmall(els.atlasHeroStat.innerHTML, 0)));
     check("the search is remembered for the next visit", store.get("atlas.q") === "siege");
 
 await type("manual");
@@ -500,11 +510,11 @@ await type("manual");
     check("filters by install path", now().length === 4 && now().every((n) => /Siege|Redistributables|quoted|no app id/.test(n)));
     await type("  SIEGE  ");
     check("the search is trimmed and case-insensitive", now().length === 1);
-    check("a single result is counted in the singular", els.atlasN.textContent === "1 game");
+    check("a single result is counted in the singular", heroB(els.atlasHeroStat.innerHTML, 0) === "1");
 
     await type("");
     check("clearing the search restores every card", now().length === FIXTURE.games.length);
-    check("clearing the search restores the count", els.atlasN.textContent === FIXTURE.games.length + " games");
+    check("clearing the search restores the count", heroB(els.atlasHeroStat.innerHTML, 0) === FIXTURE.games.length);
     check("the empty state hides again", els.atlasEmpty.hidden === true);
     check("searching never hits the backend", inv.calls.filter((c) => c.n === "atlas_scan").length === 1);
   }
@@ -819,8 +829,8 @@ await type("manual");
     check("a failed first scan reports itself on the page", /<b>Could not read the library\.<\/b>/.test(els.atlasEmpty.innerHTML));
     check("and keeps the backend's own message", /access denied/.test(els.atlasEmpty.innerHTML));
     check("and the message is escaped", !/<img/i.test(els.atlasEmpty.innerHTML));
-    check("the count is a dash, not zero", els.atlasN.textContent === "—");
-    check("the size total is a dash, not zero", els.atlasSize.textContent === "—");
+    check("the count is a dash, not zero", heroB(els.atlasHeroStat.innerHTML, 0) === "—");
+    check("the size total is a dash, not zero", heroB(els.atlasHeroStat.innerHTML, 1) === "—");
     check("the failure is in the technical log", log.some((l) => l.kind === "tech" && l.m === "atlas.scan"));
     check("a background failure raises no toast", !log.some((l) => l.kind === "toast"));
     check("no cards are invented", cards(els.atlasGrid.innerHTML).length === 0);

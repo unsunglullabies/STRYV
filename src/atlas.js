@@ -1,433 +1,607 @@
 "use strict";
-// ATLAS - the game library: discovery, launching, favourites and sessions.
+// ATLAS - the game library.
 //
-// Discovery is read-only. It reads the files the launcher has already written and
-// never writes back to them. What the user adds, hides or favourites lives in
-// ATLAS's own store beside the app data.
-//
-// Cover art is the only outbound request this page makes. Steam library headers
-// come from Valve's public CDN, keyed on the numeric app id. A game added by hand
-// has no app id, so it gets a plain placeholder rather than a request that cannot
-// succeed.
+// Discovery is read-only: it reads the files the launchers have already written
+// and never writes back to them. Launching is a separate, explicit action.
+// Nothing here invents a figure. A duration that was never measured is rendered
+// as "not measured", and an install size the launcher did not report is a dash.
 const Atlas = (() => {
-  const NO_BACKEND = "The STRYV backend is not connected.";
-  const SORTS = ["recent", "lastLaunch", "name", "plays", "size"];
-
-  // --- guarded access to the globals core.js provides ------------------------
-  // This file also runs inside a bare vm sandbox in the tests, so nothing here
-  // may assume a helper, an element or the backend actually exists.
+  // ---- shared helpers, all guarded so this runs even with no page around it ----
   const E = (id) => { try { return typeof q === "function" ? q(id) : null; } catch { return null; } };
   const txt = (id, v) => { const e = E(id); if (e) { try { e.textContent = v; } catch { /* detached */ } } };
   const html = (id, v) => { const e = E(id); if (e) { try { e.innerHTML = v; } catch { /* detached */ } } };
-  // Use core.js's escaper when the page has provided it, but never fall back to a
-// no-op: a launcher manifest is untrusted input, so name, app id, install path
-// and cover url all have to be escaped before they reach innerHTML.
-const ESC_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
-const escF = (s) => (typeof esc === "function" ? esc(s) : String(s).replace(/[&<>"']/g, (c) => ESC_MAP[c]));
+  const show = (id, on) => { const e = E(id); if (e) { try { e.hidden = !on; } catch { /* detached */ } } };
+
+  // core.js normally provides esc. Fall back to a local escaper rather than to
+  // String(): launcher manifests are untrusted input.
+  const ESC_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+  const escF = (s) => (typeof esc === "function" ? esc(s) : String(s).replace(/[&<>"']/g, (c) => ESC_MAP[c]));
+
   const T = typeof toast === "function" ? toast : () => {};
   const ST = (typeof store === "object" && store) ? store : { get: (_k, d) => d, set: () => false };
   const A = (typeof Act === "object" && Act) ? Act : { log: () => null, update: () => {} };
   const TG = (typeof Tech === "object" && Tech) ? Tech : { add: () => {} };
   const ASK = typeof confirmBox === "function" ? confirmBox : async () => false;
-  const mk = (cls, text) => { if (typeof document === "undefined") return null; const d = document.createElement("div"); d.className = cls; d.textContent = text; return d; };
+  const mk = (cls, text) => { if (typeof document === "undefined" || typeof document.createElement !== "function") return null; const d = document.createElement("div"); d.className = cls; d.textContent = text; return d; };
 
-  function call(cmd, args) {
-    try {
-      // invoke is a top-level const in app.js, which loads after this file, so
-      // it is only ever safe to touch from inside a function.
-      if (typeof invoke !== "function") return Promise.reject(new Error(NO_BACKEND));
-      return Promise.resolve(invoke(cmd, args));
-    } catch (e) { return Promise.reject(e); }
-  }
-  const hasBackend = () => { try { return typeof invoke === "function"; } catch { return false; } };
+  const stop = (ev) => { if (ev && typeof ev.stopPropagation === "function") ev.stopPropagation(); };
+const hasBackend = () => typeof invoke === "function";
+  const call = (cmd, args) => {
+    if (!hasBackend()) return Promise.reject(new Error("STRYV is not connected to its backend."));
+    try { return Promise.resolve(invoke(cmd, args)); } catch (e) { return Promise.reject(e); }
+  };
 
-  // --- formatting -----------------------------------------------------------
-  const bytes = (b) => {
-    const n = Number(b) || 0;
-    if (n <= 0) return "—";                       // honest: 0 means "not reported"
-    if (n >= 1073741824) return (n / 1073741824).toFixed(1) + " GB";
-    return Math.max(1, Math.round(n / 1048576)) + " MB";
+  // ---- formatting -------------------------------------------------------------
+  const mb = (b) => {
+    if (!b) return "—";
+    if (b >= 1073741824) return (b / 1073741824).toFixed(1) + " GB";
+    if (b >= 1048576) return Math.round(b / 1048576) + " MB";
+    return Math.max(1, Math.round(b / 1024)) + " KB";
   };
   const dur = (s) => {
-    if (s === null || s === undefined) return "not measured";
+    if (s === null || s === undefined) return "Not measured";
     const n = Number(s);
-    if (!isFinite(n) || n <= 0) return "under a minute";
-    if (n < 60) return Math.round(n) + "s";
+    if (!isFinite(n) || n < 60) return n > 0 ? Math.max(1, Math.round(n)) + "s" : "—";
     const m = Math.floor(n / 60);
-    return m < 60 ? m + "m" : Math.floor(m / 60) + "h " + (m % 60) + "m";
+    if (m < 60) return m + "m";
+    return Math.floor(m / 60) + "h " + String(m % 60).padStart(2, "0") + "m";
   };
-  const when = (s) => {
-    if (!s) return "Never";
-    const d = new Date(Number(s) * 1000);
+  const day = (unix) => {
+    if (!unix) return "Never";
+    const d = new Date(unix * 1000);
     if (isNaN(d.getTime()) || d.getFullYear() < 2000) return "Never";
     return d.toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
   };
-  const stamp = (s) => {
-    if (!s) return "unknown time";
-    const d = new Date(Number(s) * 1000);
-    if (isNaN(d.getTime())) return "unknown time";
+  const when = (unix) => {
+    if (!unix) return "Never";
+    const d = new Date(unix * 1000);
+    if (isNaN(d.getTime())) return "Never";
     return d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
   };
-  // Only Steam entries can produce a URL worth fetching, and only a bare decimal
-  // app id is ever allowed near the address bar.
-  const numeric = (s) => /^\d{1,12}$/.test(String(s || ""));
-  const cover = (g) => (g.launcher === "Steam" && numeric(g.app_id)
-    ? "https://cdn.cloudflare.steamstatic.com/steam/apps/" + g.app_id + "/header.jpg" : "");
-  const playWhy = (g) => {
-    if (g.launcher === "Steam") return numeric(g.app_id) ? "" : "Steam has no app id for this entry, so it cannot be launched.";
-    if (String(g.exe_path || "").trim()) return "";
-    return "No executable is recorded, so it cannot be launched.";
-  };
-  const canPlay = (g) => !!g && !!(g.id || "").trim() && !playWhy(g);
 
-  // --- state ----------------------------------------------------------------
-  let games = [], sessions = [], state = "idle"; // idle | loading | nobackend | failed | ready
-  let lastError = "", busy = false, launching = false;
+  // ---- state ------------------------------------------------------------------
+  let games = [], sessions = [], busy = false, launching = false;
+  let editingId = null, detailId = null;
+  // Single source of truth for the toolbar, so the page and the code cannot drift.
+  const SORTS = ["recent", "lastLaunch", "name", "plays", "size"];
+  const filters = { favOnly: false, missingOnly: false };
+  // One store-API lookup per app id, for the life of the session. A grid of forty
+  // games must not make forty requests, and a miss must never be retried.
+  const artCache = new Map();
+  const ART_PENDING = "…";
 
-  const term = () => { const e = E("atlasQ"); return e ? String(e.value || "").trim().toLowerCase() : ST.get("atlas.q", ""); };
-  const sortKey = () => { const s = ST.get("atlas.sort", "recent"); return SORTS.includes(s) ? s : "recent"; };
-
-  const matches = (g, t) => !t || [g.name, g.launcher, g.install_dir].filter(Boolean).join(" ").toLowerCase().includes(t);
-  function view() {
-    const t = term(), k = sortKey();
-    const list = games.filter((g) => matches(g, t));
-    const byName = (a, b) => String(a.name || "").localeCompare(String(b.name || ""));
-    const cmp = (a, b) => {
-      if (!!a.favorite !== !!b.favorite) return a.favorite ? -1 : 1;   // favourites always float
-      switch (k) {
-        case "name": return byName(a, b) || (b.last_played || 0) - (a.last_played || 0);
-        case "plays": return (b.plays || 0) - (a.plays || 0) || byName(a, b);
-        case "size": return (b.size_bytes || 0) - (a.size_bytes || 0) || byName(a, b);
-        case "lastLaunch": return (b.last_launch || 0) - (a.last_launch || 0) || byName(a, b);
-        default: return (b.last_played || 0) - (a.last_played || 0) || byName(a, b);
-      }
-    };
-    return list.sort(cmp);
-  }
-
-  // --- cover art ------------------------------------------------------------
-  function art(g) {
-    const url = cover(g);
-    if (!url) return `<div class="at-covf">${g.launcher === "Manual" ? "No cover art" : "Not a Steam entry"}</div>`;
-    // alt is empty on purpose: the name is already on the card, so a screen
-    // reader must not read the title twice.
-    return `<img class="at-cov" src="${escF(url)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-cover="1">`;
-  }
-  function degrade(img) {
-    // A missing header must never leave a broken-image icon behind.
-    const box = mk("at-covf", "No cover art");
-    if (box && img.parentNode) img.parentNode.replaceChild(box, img);
-    else if (img.parentNode) img.style.display = "none";
-  }
-
-  function card(g, i) {
-    const why = playWhy(g), ok = canPlay(g);
-    const plays = Number(g.plays) || 0;
-    return `<article class="at-card">
-<div class="at-covw">${art(g)}</div>
-<div class="at-cbody">
-<div class="at-ch"><h4>${escF(g.name || "Unnamed entry")}</h4><span class="at-badge at-${/steam/i.test(g.launcher) ? "steam" : "manual"}">${escF(g.launcher || "Unknown")}</span></div>
-<dl class="at-meta">
-${g.app_id ? `<div><dt>App id</dt><dd>${escF(g.app_id)}</dd></div>` : ""}
-<div><dt>Size</dt><dd>${bytes(g.size_bytes)}</dd></div>
-<div><dt>Last played</dt><dd>${when(g.last_played)}</dd></div>
-<div><dt>Launches</dt><dd>${plays ? plays + (plays === 1 ? " launch" : " launches") : "None from ATLAS"}</dd></div>
-<div><dt>Last session</dt><dd>${dur(g.last_session_secs === undefined ? null : g.last_session_secs)}</dd></div>
-</dl>
-${g.install_dir ? `<small class="at-path" title="${escF(g.install_dir)}">${escF(g.install_dir)}</small>` : ""}
-<div class="at-cbtns">
-<button class="btn" data-play="${i}"${ok ? "" : " disabled"}>Play</button>
-<button class="btn ghost at-fav" data-fav="${i}" aria-pressed="${g.favorite ? "true" : "false"}" title="${g.favorite ? "Remove from favourites" : "Add to favourites"}">${g.favorite ? "★" : "☆"}</button>
-<button class="lnk at-del" data-del="${i}">Remove</button>
-</div>
-${ok ? "" : `<small class="at-why">${escF(why)}</small>`}
-</div></article>`;
-  }
-
-  // --- rendering ------------------------------------------------------------
-  function renderGrid(list) {
-    const grid = E("atlasGrid");
-    if (!grid) return;
-    try { grid.innerHTML = list.map(card).join(""); } catch { return; }
-
-    const each = (sel, fn) => { try { grid.querySelectorAll(sel).forEach(fn); } catch { /* detached */ } };
-    each("[data-cover]", (img) => { img.onerror = () => degrade(img); });
-    each("[data-play]", (b) => { b.onclick = () => { const g = list[+b.dataset.play]; if (g) launch(g, b); }; });
-    each("[data-fav]", (b) => { b.onclick = () => { const g = list[+b.dataset.fav]; if (g) favorite(g, b); }; });
-    each("[data-del]", (b) => { b.onclick = () => { const g = list[+b.dataset.del]; if (g) remove(g); }; });
-  }
-
-  function renderStats(list) {
-    const n = list.length;
-    const launchers = [...new Set(games.map((g) => g.launcher).filter(Boolean))];
-    const t = term();
-
-    txt("atlasN", state === "nobackend" ? "—" : state === "failed" ? "—" : n ? n + (n === 1 ? " game" : " games") : "None found");
-    let sum;
-    if (state === "nobackend") sum = "ATLAS needs the STRYV backend to read the library.";
-    else if (state === "failed") sum = "The library could not be read.";
-    else if (state === "loading") sum = "Reading launcher files.";
-    else if (!n) sum = "No launcher library files were found on this PC. Add a game by hand if something is missing.";
-    else {
-      sum = "Found via " + launchers.join(", ") + ".";
-      if (t) sum += " " + n + " of " + games.length + " shown for “" + t + "”.";
+  // ---- artwork ----------------------------------------------------------------
+  // Priority: the user's own image, then Valve's legacy CDN (fast, no API), then
+  // the store API for titles the legacy path does not carry, then a placeholder.
+  // Both remote requests go to Valve.
+  const digits = (v) => typeof v === "string" && /^\d{1,12}$/.test(v);
+  const localSrc = (p) => {
+    if (typeof window !== "undefined" && typeof window.__TAURI__ === "object" && window.__TAURI__ && typeof window.__TAURI__.path === "object") {
+      try { return window.__TAURI__.path.convertFileSrc(p, "asset"); } catch { /* fall through */ }
     }
-    txt("atlasSum", sum);
+    return null;
+  };
 
-    const total = games.reduce((a, g) => a + (Number(g.size_bytes) || 0), 0);
-    const plays = games.reduce((a, g) => a + (Number(g.plays) || 0), 0);
-    const secs = games.reduce((a, g) => a + (Number(g.total_secs) || 0), 0);
-    txt("atlasSize", state === "ready" || state === "failed" ? bytes(total) : "—");
-    txt("atlasPlays", plays ? plays.toLocaleString() : "0");
-    txt("atlasTime", secs ? dur(secs) : "Not measured");
+  function storeArt(id) {
+    if (!digits(id)) return Promise.resolve(null);
+    if (artCache.has(id)) return Promise.resolve(artCache.get(id));
+    if (typeof fetch !== "function") return Promise.resolve(null);
+    const url = "https://store.steampowered.com/api/appdetails?appids=" + encodeURIComponent(id);
+    return fetch(url, { credentials: "omit" })
+      .then((r) => (r && r.ok ? r.json() : null))
+      .then((j) => {
+        const d = j && j[id] && j[id].success ? j[id].data : null;
+        const img = d && d.header_image ? d.header_image : null;
+        artCache.set(id, img);
+        return img;
+      })
+      .catch(() => { artCache.set(id, null); return null; });
   }
 
-  function renderEmpty(list) {
-    const e = E("atlasEmpty");
-    if (!e) return;
-    const t = term();
-    let msg = "";
-    if (state === "nobackend") msg = "<b>Backend not connected.</b><br>ATLAS reads the library through the STRYV backend. This window has no connection to it, so nothing can be discovered here.";
-    else if (state === "failed") msg = "<b>Could not read the library.</b><br>" + escF(lastError);
-    else if (state === "loading") msg = "Reading launcher files…";
-    else if (state === "ready" && !games.length) msg = "<b>No games found.</b><br>No launcher library files were found on this PC. If a game is installed, add it by hand with Add game.";
-    else if (state === "ready" && !list.length) msg = "<b>Nothing matches “" + escF(t) + "”.</b><br>" + games.length + (games.length === 1 ? " game is" : " games are") + " in the library. Clear the search to see " + (games.length === 1 ? "it" : "them") + ".";
-    try { e.innerHTML = msg; e.hidden = !msg; } catch { /* detached */ }
+  // Returns the markup for one artwork slot.
+  function art(g, cls) {
+    const frame = cls || "at-covw";
+    if (g.art_path) {
+      const src = localSrc(g.art_path);
+      if (src) return `<div class="${frame}"><img class="at-cov" src="${escF(src)}" alt="" loading="lazy" decoding="async" data-cover="1" data-local="1"></div>`;
+    }
+    if (/steam/i.test(g.launcher) && digits(g.app_id)) {
+      const url = "https://cdn.cloudflare.steamstatic.com/steam/apps/" + g.app_id + "/header.jpg";
+      return `<div class="${frame}"><img class="at-cov" src="${escF(url)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-cover="1" data-cdn="1"></div>`;
+    }
+    return `<div class="${frame}"><div class="at-covf">No cover art</div></div>`;
   }
 
-  function renderRestore() {
-    const b = E("atlasRestore");
-    if (!b) return;
-    // The backend filters hidden games out of atlas_scan and exposes no "is
-    // anything hidden" command, so this is tracked locally from the user's own
-    // removals and persisted alongside the rest of ATLAS's UI state.
-    const gone = !!ST.get("atlas.removed", false);
-    try { b.hidden = !gone; } catch { /* detached */ }
+  // Valve's legacy path 404s on newer titles. Ask the store once, then let the
+  // placeholder take over if that fails too.
+  function wireArt(root) {
+    if (!root || !root.querySelectorAll) return;
+    root.querySelectorAll("[data-cover]").forEach((img) => {
+      const done = () => {
+        const slot = img.parentElement || img.parentNode;
+        const ph = mk("at-covf", "No cover art");
+        if (ph && slot && typeof slot.replaceChild === "function") slot.replaceChild(ph, img);
+        else if (slot && ph && typeof slot.appendChild === "function") { slot.appendChild(ph); }
+        else if (img.style) img.style.display = "none";
+      };
+      img.onerror = () => {
+        const id = img.getAttribute("data-cdn") ? img.getAttribute("src").match(/apps\/(\d+)\//) : null;
+        const appId = id ? id[1] : null;
+        if (!appId || artCache.get(appId) !== ART_PENDING) { if (!appId) return done(); }
+        if (!appId) return done();
+        if (artCache.get(appId)) { img.src = artCache.get(appId); return; }
+        artCache.set(appId, ART_PENDING);
+        storeArt(appId).then((real) => {
+          if (real && real !== ART_PENDING) img.src = real; else done();
+        });
+      };
+    });
+  }
+
+  // ---- filtering and sorting ---------------------------------------------------
+  const visible = () => {
+    const qtext = (E("atlasQ") && E("atlasQ").value || "").trim().toLowerCase();
+    return games.filter((g) => {
+      if (filters.favOnly && !g.favorite) return false;
+      if (filters.missingOnly && g.available !== false) return false;
+      if (!qtext) return true;
+      return [g.name, g.launcher, g.install_dir, g.exe_path].some((v) => String(v || "").toLowerCase().includes(qtext));
+    });
+  };
+
+  function sorted(list) {
+    const key = (E("atlasSort") && E("atlasSort").value) || "recent";
+    const out = list.slice();
+    out.sort((a, b) => {
+      if (!!b.favorite !== !!a.favorite) return b.favorite ? 1 : -1;
+      if (key === "name") return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+      if (key === "plays") return (b.plays || 0) - (a.plays || 0);
+      if (key === "size") return (b.size_bytes || 0) - (a.size_bytes || 0);
+      if (key === "lastLaunch") return (b.last_launch || 0) - (a.last_launch || 0);
+      return (b.last_played || 0) - (a.last_played || 0);
+    });
+    return out;
+  }
+
+  // ---- featured ---------------------------------------------------------------
+  // Deterministic on purpose: most recently played, else the favourite, else
+  // nothing. It must not shuffle between launches.
+  function featured() {
+    const played = games.filter((g) => g.last_played > 0);
+    if (played.length) return played.slice().sort((a, b) => b.last_played - a.last_played)[0];
+    const fav = games.filter((g) => g.favorite);
+    if (fav.length) return fav[0];
+    return null;
+  }
+
+  function renderFeature() {
+    const g = featured();
+    const host = E("atlasFeature");
+    if (!host) return;
+    if (!g) { host.innerHTML = ""; show("atlasFeature", false); return; }
+    host.innerHTML = `
+      ${art(g, "at-covw")}
+      <div class="at-fbody">
+        <span class="at-badge at-${/steam/i.test(g.launcher) ? "steam" : "manual"}">${escF(g.launcher)}</span>
+        <h2>${escF(g.name)}</h2>
+        <dl class="at-meta">
+          <div><dt>Last played</dt><dd>${escF(day(g.last_played))}</dd></div>
+          <div><dt>Launches</dt><dd>${escF(String(g.plays || 0))}</dd></div>
+          <div><dt>Last session</dt><dd>${escF(dur(g.last_session_secs))}</dd></div>
+        </dl>
+        ${g.available === false ? `<p class="at-why">Executable not found at ${escF(g.exe_path || g.install_dir || "its recorded location")}.</p>` : ""}
+        <div class="at-cbtns">
+          <button class="btn" data-fplay="${escF(g.id)}"${g.available === false ? " disabled" : ""}>Play</button>
+          <button class="btn ghost at-fav" data-fav="${escF(g.id)}" aria-pressed="${g.favorite ? "true" : "false"}" aria-label="Favourite">${g.favorite ? "★" : "☆"}</button>
+        </div>
+      </div>`;
+    show("atlasFeature", true);
+    wireArt(host);
+    const pb = typeof host.querySelector === "function" ? host.querySelector("[data-fplay]") : null;
+    if (pb) pb.onclick = (ev) => { stop(ev); launch(byId(g.id)); };
+    const fb = typeof host.querySelector === "function" ? host.querySelector("[data-fav]") : null;
+    if (fb) fb.onclick = (ev) => { stop(ev); toggleFav(g.id); };
+    host.onclick = () => openDetail(g.id);
+  }
+
+  const byId = (id) => games.find((g) => g.id === id);
+
+  // ---- grid -------------------------------------------------------------------
+  function card(g) {
+    const why = g.available === false
+      ? `<p class="at-why">Executable not found at ${escF(g.exe_path || g.install_dir || "its recorded location")}.</p>`
+      : "";
+    return `<article class="at-card" data-open="${escF(g.id)}">
+      ${art(g)}
+      <div class="at-cbody">
+        <div class="at-ch">
+          <h4>${escF(g.name)}</h4>
+          <span class="at-badge at-${/steam/i.test(g.launcher) ? "steam" : "manual"}">${escF(g.launcher)}</span>
+        </div>
+        <dl class="at-meta">
+          <div><dt>Size</dt><dd>${escF(mb(g.size_bytes))}</dd></div>
+          <div><dt>Played</dt><dd>${escF(day(g.last_played))}</dd></div>
+          <div><dt>Launches</dt><dd>${escF(String(g.plays || 0))}</dd></div>
+          <div><dt>Session</dt><dd>${escF(dur(g.last_session_secs))}</dd></div>
+        </dl>
+        ${g.install_dir ? `<small class="at-path" title="${escF(g.install_dir)}">${escF(g.install_dir)}</small>` : ""}
+        ${why}
+        <div class="at-cbtns">
+          <button class="btn" data-play="${escF(g.id)}"${g.available === false ? " disabled" : ""}>Play</button>
+          <button class="btn ghost at-fav" data-fav="${escF(g.id)}" aria-pressed="${g.favorite ? "true" : "false"}" aria-label="Favourite">${g.favorite ? "★" : "☆"}</button>
+          <button class="btn ghost at-del" data-del="${escF(g.id)}">Remove</button>
+        </div>
+      </div>
+    </article>`;
+  }
+
+  function renderGrid() {
+    const list = sorted(visible());
+    const grid = E("atlasGrid");
+    const empty = E("atlasEmpty");
+    if (grid) grid.innerHTML = list.map(card).join("");
+    if (grid) wireArt(grid);
+
+    if (grid) {
+      grid.querySelectorAll("[data-play]").forEach((b) => { b.onclick = (ev) => { stop(ev); launch(byId(b.dataset.play)); }; });
+      grid.querySelectorAll("[data-fav]").forEach((b) => { b.onclick = (ev) => { stop(ev); toggleFav(b.dataset.fav); }; });
+      grid.querySelectorAll("[data-del]").forEach((b) => { b.onclick = (ev) => { stop(ev); remove(b.dataset.del, false); }; });
+      grid.querySelectorAll("[data-open]").forEach((c) => { c.onclick = () => openDetail(c.dataset.open); });
+    }
+
+    // Four distinct empty states, never one generic message.
+    let state = "";
+    if (!hasBackend()) {
+      state = `<b>STRYV is not connected to its backend.</b><p>The library cannot be read until the backend is running.</p>`;
+    } else if (!games.length) {
+      state = `<b>No games found yet.</b>
+        <p>STRYV reads the library files your launchers have already written. If a game is not listed, add it yourself and ATLAS will launch it directly.</p>
+        <button class="btn" data-emptyadd="1">Add a game</button>`;
+    } else if (!list.length) {
+      const filtered = filters.favOnly || filters.missingOnly || ((E("atlasQ") && E("atlasQ").value || "").trim());
+      state = filtered
+        ? `<b>Nothing matches.</b><p>No game in your library matches the current search or filters.</p><button class="btn ghost" data-reset="1">Clear search and filters</button>`
+        : `<b>No games found yet.</b><p>Add a game and ATLAS will keep it, launch it, and record how long it runs.</p>
+           <button class="btn" data-emptyadd="1">Add a game</button>`;
+    }
+    if (empty) { empty.innerHTML = state; show("atlasEmpty", !!state); }
+    const ea = empty && typeof empty.querySelector === "function" ? empty.querySelector("[data-emptyadd]") : null;
+    if (ea) ea.onclick = () => openAdd();
+    const rs = empty && typeof empty.querySelector === "function" ? empty.querySelector("[data-reset]") : null;
+    if (rs) rs.onclick = () => resetAll();
+  }
+
+  function renderHero() {
+    const host = E("atlasHeroStat");
+    if (!host) return;
+    if (!games.length && !hasBackend()) { host.innerHTML = '<span class="at-loading">Backend unavailable</span>'; return; }
+    const total = games.reduce((a, g) => a + (g.size_bytes || 0), 0);
+    const plays = games.reduce((a, g) => a + (g.plays || 0), 0);
+    const secs = games.reduce((a, g) => a + (g.total_secs || 0), 0);
+    const launchers = [...new Set(games.map((g) => g.launcher))].filter(Boolean);
+    host.innerHTML = `
+      <div><b>${escF(String(games.length))}</b><small>${games.length === 1 ? "game" : "games"}${launchers.length ? " · " + escF(launchers.join(", ")) : ""}</small></div>
+      <div><b>${escF(mb(total))}</b><small>reported install size</small></div>
+      <div><b>${escF(String(plays))}</b><small>launches from ATLAS</small></div>
+      <div><b>${escF(secs ? dur(secs) : "Not measured")}</b><small>measured play time</small></div>`;
   }
 
   function renderSessions() {
-    const box = E("atlasSess");
-    if (!box) return;
-    const rows = sessions.slice().sort((a, b) => (Number(b.started) || 0) - (Number(a.started) || 0));
-    let out;
-    if (state === "nobackend") out = '<p class="empty">Sessions are read from the STRYV backend, which is not connected in this window.</p>';
-    else if (!rows.length) out = '<p class="empty">No sessions recorded yet. Sessions appear here after you launch a game from ATLAS.</p>';
-    else {
-      out = rows.map((s) => {
-        const measured = !!s.measured && s.duration_secs !== null && s.duration_secs !== undefined;
-        return `<div class="at-srow">
-<i class="st ${measured ? "done" : "running"}"></i>
-<div><b>${escF(s.name || "Unknown game")}</b><small>${escF(s.launcher || "Unknown")} · ${stamp(s.started)} · ${escF(dur(s.duration_secs))}</small></div>
-<small class="at-sx">${measured ? escF(bytes(s.mem_bytes)) + " peak" : "duration not measured"}</small>
-</div>`;
-      }).join("");
-    }
-    try { box.innerHTML = out; } catch { /* detached */ }
+    const host = E("atlasSess");
+    if (!host) return;
+    if (!sessions.length) { host.innerHTML = '<p class="at-empty">No sessions recorded yet. Play a game from ATLAS and it will appear here.</p>'; return; }
+    host.innerHTML = sessions.map((s) => `
+      <div class="at-srow">
+        <i class="st ${s.measured ? "done" : "running"}"></i>
+        <div>
+          <b>${escF(s.name)}</b>
+          <small>${escF(when(s.started))} · ${escF(s.launcher)} · ${escF(dur(s.duration_secs))}${s.measured ? "" : " · duration not measured"}</small>
+        </div>
+        <span class="at-sx">${s.measured && s.cpu_pct !== null && s.cpu_pct !== undefined ? "peak " + Math.round(s.cpu_pct) + "% cpu" : ""}</span>
+      </div>`).join("");
   }
 
   function render() {
-    const list = state === "ready" ? view() : [];
-    renderGrid(list);
-    renderStats(list);
-    renderEmpty(list);
+    renderHero();
+    renderFeature();
+    renderGrid();
     renderSessions();
-    renderRestore();
+    const restored = ST.get("atlas.removed", false);
+    show("atlasRestore", !!restored);
+    const active = filters.favOnly || filters.missingOnly || ((E("atlasQ") && E("atlasQ").value || "").trim());
+    show("atlasReset", !!active);
   }
 
-  // --- actions --------------------------------------------------------------
-  // `manual` is a scan the user asked for, so it reports itself. A refresh that
-  // happens in the background (after a launch, a remove, a restore) stays quiet:
-  // it must not blank a grid the user is already looking at, and it must not
-  // throw away a good library because one background read failed.
+  // ---- actions ----------------------------------------------------------------
   async function scan(manual) {
     if (busy) return;
-    const hadData = state === "ready";
-    if (!hasBackend()) {
-      if (hadData) return;
-      state = "nobackend"; games = []; sessions = []; render();
-      if (manual) T("ATLAS needs the STRYV backend, which is not connected in this window.");
-      return;
-    }
+    if (!hasBackend()) { render(); return; }
     busy = true;
     const btn = E("atlasScan");
-    if (btn) { btn.disabled = true; if (manual) btn.textContent = "Rescanning…"; }
-    if (!hadData) { state = "loading"; render(); }
+    if (btn) { btn.disabled = true; if (manual) btn.textContent = "Scanning…"; }
     try {
-      games = await call("atlas_scan") || [];
-      if (!Array.isArray(games)) games = [];
-      state = "ready"; lastError = "";
-      render();
-      // Sessions are read separately and never block the library itself.
-      call("atlas_sessions").then((s) => { sessions = Array.isArray(s) ? s : []; renderSessions(); })
-        .catch((e) => { TG.add("atlas.sessions", e); if (!sessions.length) { sessions = []; renderSessions(); } });
-      if (manual) { T("Library rescanned"); A.log({ text: "ATLAS library rescan", detail: JSON.stringify({ found: games.length }) }); }
+      games = await call("atlas_scan");
+      A.log({ text: "ATLAS library rescan", status: "done", detail: JSON.stringify({ found: games.length }) });
+      if (manual) T("Library rescanned — " + games.length + (games.length === 1 ? " game" : " games"));
     } catch (e) {
       TG.add("atlas.scan", e);
-      const m = e && e.message ? e.message : String(e);
-      if (hadData) { T("Could not refresh the library: " + m, true); return; }
-      state = "failed"; lastError = m;
-      games = []; sessions = [];
-      render();
-      if (manual) T("Could not read the library: " + lastError, true);
+      if (manual) T("Could not read the library: " + e, true);
     } finally {
       busy = false;
       if (btn) { btn.disabled = false; btn.textContent = "Rescan"; }
+      render();
     }
   }
 
-  // Sends only the library id. The backend resolves the executable itself from
-  // its own store, so a path can never arrive from this window.
-  async function launch(g, btn) {
+  async function loadSessions() {
+    if (!hasBackend()) return;
+    try { sessions = await call("atlas_sessions"); renderSessions(); } catch { /* not critical */ }
+  }
+
+  // Sends only a library id. The executable is resolved by the backend.
+  async function launch(g) {
     if (!g || launching) return;
-    if (!canPlay(g)) { T(playWhy(g) || "That game cannot be launched.", true); return; }
+    if (g.available === false) { T("That game's executable is missing. Edit or remove the entry.", true); return; }
     launching = true;
-    if (btn) { btn.disabled = true; btn.textContent = "Starting…"; }
-    const aid = A.log({ text: "Launching from ATLAS: " + (g.name || "a game"), status: "running" });
+    const id = A.log({ text: "Launching from ATLAS: " + g.name, status: "running" });
     try {
       const msg = await call("atlas_launch_id", { id: g.id });
-      const m = String(msg == null ? "Launch requested." : msg);
-      A.update(aid, { status: "done", detail: m });
-      T(m);
-      call("atlas_sessions").then((s) => { sessions = Array.isArray(s) ? s : []; renderSessions(); }).catch(() => {});
-      scan(false);
+      A.update(id, { status: "done", detail: String(msg) });
+      T(String(msg));
+      setTimeout(() => { loadSessions(); scan(false); }, 2500);
     } catch (e) {
-      const m = e && e.message ? e.message : String(e);
-      A.update(aid, { status: "failed", detail: m });
+      A.update(id, { status: "failed", detail: String(e) });
       TG.add("atlas.launch", e);
-      T("Could not launch: " + m, true);
-    } finally {
-      launching = false;
-      if (btn) { btn.disabled = false; btn.textContent = "Play"; }
+      T("Could not launch: " + e, true);
+    } finally { launching = false; }
+  }
+
+  async function toggleFav(id) {
+    const g = byId(id);
+    if (!g) return;
+    const next = !g.favorite;
+    g.favorite = next;
+    render();
+    try { await call("atlas_set_favorite", { id, favorite: next }); }
+    catch (e) { g.favorite = !next; render(); TG.add("atlas.favorite", e); T("Could not save that: " + e, true); }
+  }
+
+  async function remove(id, forget) {
+    const g = byId(id);
+    if (!g) return;
+    const ok = await ASK({
+      title: "Remove from ATLAS",
+      body: "Remove \"" + g.name + "\" from your ATLAS library?\n\nThis only removes the ATLAS entry. It does not uninstall the game, delete the executable, or touch anything the launcher wrote.",
+      yes: "Remove from ATLAS",
+      danger: true,
+    });
+    if (!ok) return;
+    ST.set("atlas.removed", true);
+    try {
+      await call("atlas_remove", { id, forget: !!forget });
+      games = games.filter((x) => x.id !== id);
+      render();
+      T("Removed from ATLAS. The game itself is untouched.");
+    } catch (e) { TG.add("atlas.remove", e); T("Could not remove that: " + e, true); }
+  }
+
+  // ---- details ----------------------------------------------------------------
+  function openDetail(id) {
+    const g = byId(id);
+    const wrap = E("atlasDetailWrap");
+    const host = E("atlasDetail");
+    if (!g || !host || !wrap) return;
+    detailId = id;
+    host.innerHTML = `
+      ${art(g, "at-covw")}
+      <div class="at-dbody">
+        <div class="at-ch">
+          <h3>${escF(g.name)}</h3>
+          <span class="at-badge at-${/steam/i.test(g.launcher) ? "steam" : "manual"}">${escF(g.launcher)}</span>
+        </div>
+        ${g.available === false ? `<p class="at-why">Executable not found at ${escF(g.exe_path || g.install_dir || "its recorded location")}. It may have been moved, updated or uninstalled.</p>` : ""}
+        <dl class="at-meta">
+          <div><dt>Status</dt><dd>${g.available === false ? "Unavailable" : "Ready to launch"}</dd></div>
+          ${g.app_id ? `<div><dt>App id</dt><dd>${escF(g.app_id)}</dd></div>` : ""}
+          <div><dt>Executable</dt><dd>${escF(g.exe_path || "not recorded")}</dd></div>
+          <div><dt>Install folder</dt><dd>${escF(g.install_dir || "—")}</dd></div>
+          <div><dt>Install size</dt><dd>${escF(mb(g.size_bytes))}</dd></div>
+          <div><dt>Last played</dt><dd>${escF(day(g.last_played))}</dd></div>
+          <div><dt>Last launched</dt><dd>${escF(when(g.last_launch))}</dd></div>
+          <div><dt>Launches</dt><dd>${escF(String(g.plays || 0))}</dd></div>
+          <div><dt>Last session</dt><dd>${escF(dur(g.last_session_secs))}</dd></div>
+          <div><dt>Total measured</dt><dd>${escF(g.total_secs ? dur(g.total_secs) : "Not measured")}</dd></div>
+          ${g.art_path ? `<div><dt>Cover image</dt><dd>${escF(g.art_path)}</dd></div>` : ""}
+        </dl>
+        <div class="at-cbtns">
+          <button class="btn" data-play="${escF(g.id)}"${g.available === false ? " disabled" : ""}>Play</button>
+          <button class="btn ghost at-fav" data-fav="${escF(g.id)}" aria-pressed="${g.favorite ? "true" : "false"}" aria-label="Favourite">${g.favorite ? "★" : "☆"}</button>
+          <button class="btn ghost" data-edit="${escF(g.id)}">Edit</button>
+          <button class="btn ghost at-del" data-del="${escF(g.id)}">Remove</button>
+          <button class="btn ghost" data-close="1">Close</button>
+        </div>
+      </div>`;
+    show("atlasDetailWrap", true);
+    wireArt(host);
+    const pb = typeof host.querySelector === "function" ? host.querySelector("[data-play]") : null;
+    if (pb) pb.onclick = () => launch(g);
+    const fb = typeof host.querySelector === "function" ? host.querySelector("[data-fav]") : null;
+    if (fb) fb.onclick = () => { toggleFav(g.id); openDetail(g.id); };
+    const eb = typeof host.querySelector === "function" ? host.querySelector("[data-edit]") : null;
+    if (eb) eb.onclick = () => { closeDetail(); openEdit(g.id); };
+    const db = typeof host.querySelector === "function" ? host.querySelector("[data-del]") : null;
+    if (db) db.onclick = () => { closeDetail(); remove(g.id, false); };
+    const cb = typeof host.querySelector === "function" ? host.querySelector("[data-close]") : null;
+    if (cb) cb.onclick = () => closeDetail();
+    const first = typeof host.querySelector === "function" ? host.querySelector("button") : null;
+    if (first && first.focus) first.focus();
+  }
+
+  function closeDetail() {
+    show("atlasDetailWrap", false);
+    const host = E("atlasDetail");
+    if (host) host.innerHTML = "";
+    detailId = null;
+  }
+
+  // ---- add / edit -------------------------------------------------------------
+  function openAdd() {
+    ["atlasName", "atlasExe", "atlasArt"].forEach((id) => { const e = E(id); if (e) e.value = ""; });
+    const t = E("atlasAddTitle"); if (t) t.textContent = "Add a game";
+    show("atlasAddBox", true);
+    const f = E("atlasExe"); if (f && f.focus) f.focus();
+  }
+  function closeAdd() {
+    show("atlasAddBox", false);
+    ["atlasName", "atlasExe", "atlasArt"].forEach((id) => { const e = E(id); if (e) e.value = ""; });
+  }
+  function openEdit(id) {
+    const g = byId(id);
+    if (!g) return;
+    if (g.source !== "manual") {
+      T("Detected games are read from " + g.launcher + ". Remove it from the launcher to clear it from ATLAS.", true);
+      return;
+    }
+    editingId = id;
+    const n = E("atlasEditName"), x = E("atlasEditExe"), a = E("atlasEditArt"), ti = E("atlasEditTitle");
+    if (n) n.value = g.name;
+    if (x) x.value = g.exe_path;
+    if (a) a.value = g.art_path || "";
+    if (ti) ti.textContent = "Edit " + g.name;
+    show("atlasEditBox", true);
+    if (n && n.focus) n.focus();
+  }
+  function closeEdit() {
+    show("atlasEditBox", false);
+    editingId = null;
+    ["atlasEditName", "atlasEditExe", "atlasEditArt"].forEach((id) => { const e = E(id); if (e) e.value = ""; });
+  }
+
+  async function pickInto(targetId, filters) {
+    try {
+      const tauri = typeof window !== "undefined" ? window.__TAURI__ : null;
+      if (!tauri || !tauri.dialog || typeof tauri.dialog.open !== "function") {
+        T("The file picker needs the Tauri dialog plugin, which is not available here. Type the path instead.", true);
+        return;
+      }
+      const picked = await tauri.dialog.open({ multiple: false, directory: false, filters: filters || [{ name: "Executable", extensions: ["exe"] }] });
+      if (!picked || typeof picked !== "string") return;
+      const e = E(targetId);
+      if (e) e.value = picked;
+    } catch (e) {
+      TG.add("atlas.pick", e);
+      T("Could not open the file picker: " + e, true);
     }
   }
 
-  async function favorite(g, btn) {
-    const want = !g.favorite;
-    g.favorite = want;                                    // optimistic
-    if (btn) { btn.textContent = want ? "★" : "☆"; btn.setAttribute("aria-pressed", want ? "true" : "false"); btn.title = want ? "Remove from favourites" : "Add to favourites"; }
+  async function submitAdd() {
+    const exe = (E("atlasExe") && E("atlasExe").value || "").trim();
+    if (!exe) { T("Choose the game's .exe first.", true); return; }
+    const name = (E("atlasName") && E("atlasName").value || "").trim() || null;
+    const artPath = (E("atlasArt") && E("atlasArt").value || "").trim() || null;
     try {
-      await call("atlas_set_favorite", { id: g.id, favorite: want });
-    } catch (e) {
-      g.favorite = !want;                                  // put it back
-      if (btn) { btn.textContent = g.favorite ? "★" : "☆"; btn.setAttribute("aria-pressed", g.favorite ? "true" : "false"); }
-      TG.add("atlas.favorite", e);
-      T("Could not save the favourite: " + (e && e.message ? e.message : String(e)), true);
-    }
+      const g = await call("atlas_add_manual", { name, exe_path: exe, art_path: artPath });
+      closeAdd();
+      await scan(false);
+      T("Added " + g.name + " to your library.");
+    } catch (e) { TG.add("atlas.add", e); T(String(e.message || e), true); }
+  }
+
+  async function submitEdit() {
+    if (!editingId) return;
+    const name = (E("atlasEditName") && E("atlasEditName").value || "").trim() || null;
+    const exe = (E("atlasEditExe") && E("atlasEditExe").value || "").trim() || null;
+    try {
+      await call("atlas_update", { id: editingId, name, exe_path: exe });
+      const artPath = (E("atlasEditArt") && E("atlasEditArt").value || "").trim();
+      await call("atlas_set_art", { id: editingId, art_path: artPath || null });
+      closeEdit();
+      await scan(false);
+      T("Saved.");
+    } catch (e) { TG.add("atlas.edit", e); T(String(e.message || e), true); }
+  }
+
+  function resetAll() {
+    filters.favOnly = false; filters.missingOnly = false;
+    const qe = E("atlasQ"); if (qe) qe.value = "";
+    ST.set("atlas.q", "");
+    syncChips();
     render();
   }
 
-  async function remove(g) {
-    const name = g.name || "That game";
-    const body = g.launcher === "Manual"
-      ? name + " will be taken out of your ATLAS library. You can restore it with Restore removed games."
-      : name + " will be hidden from your ATLAS library. Nothing in the Steam install is deleted, and you can bring it back with Restore removed games.";
-    if (!(await ASK({ title: "Remove from ATLAS?", body, yes: "Remove", danger: true }))) return;
-    try {
-      // forget stays false: removal must be reversible while the entry is only
-      // hidden. atlas_restore clears the hidden list.
-      await call("atlas_remove", { id: g.id, forget: false });
-      ST.set("atlas.removed", true);
-      A.log({ text: "Removed from ATLAS: " + name });
-      T("Removed " + name);
-      await scan(false);
-    } catch (e) {
-      TG.add("atlas.remove", e);
-      T("Could not remove it: " + (e && e.message ? e.message : String(e)), true);
-    }
+  function syncChips() {
+    const f = E("atlasFavOnly"); if (f) f.setAttribute("aria-pressed", filters.favOnly ? "true" : "false");
+    const m = E("atlasMissingOnly"); if (m) m.setAttribute("aria-pressed", filters.missingOnly ? "true" : "false");
   }
 
-  async function restore() {
-    if (!(await ASK({ title: "Restore removed games?", body: "Every game hidden from ATLAS comes back into the library. Nothing is reinstalled or re-downloaded.", yes: "Restore" }))) return;
-    try {
-      await call("atlas_restore");
-      ST.set("atlas.removed", false);
-      A.log({ text: "Restored removed ATLAS games" });
-      T("Removed games restored");
-      await scan(false);
-    } catch (e) {
-      TG.add("atlas.restore", e);
-      T("Could not restore: " + (e && e.message ? e.message : String(e)), true);
-    }
+  // ---- wiring -----------------------------------------------------------------
+  // Clicks are assigned straight to onclick so a single handler replaces any previous
+  // one on re-render; everything else goes through addEventListener.
+  const on = (id, ev, fn) => {
+    const e = E(id);
+    if (!e) return;
+    if (ev === "click" && "onclick" in e) { e.onclick = fn; return; }
+    if (typeof e.addEventListener === "function") e.addEventListener(ev, fn);
+  };
+
+  on("atlasScan", "click", () => scan(true));
+  on("atlasAdd", "click", () => openAdd());
+  on("atlasAddNo", "click", () => closeAdd());
+  on("atlasAddNo2", "click", () => closeAdd());
+  on("atlasAddGo", "click", () => submitAdd());
+  on("atlasEditNo", "click", () => closeEdit());
+  on("atlasEditNo2", "click", () => closeEdit());
+  on("atlasEditSave", "click", () => submitEdit());
+  on("atlasPickExe", "click", () => pickInto("atlasExe"));
+  on("atlasPickArt", "click", () => pickInto("atlasArt", [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "bmp", "gif"] }]));
+  on("atlasPickExe2", "click", () => pickInto("atlasEditExe"));
+  on("atlasPickArt2", "click", () => pickInto("atlasEditArt", [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "bmp", "gif"] }]));
+  on("atlasClearArt", "click", async () => {
+    if (!editingId) return;
+    const e = E("atlasEditArt"); if (e) e.value = "";
+    try { await call("atlas_set_art", { id: editingId, art_path: null }); T("Cover image cleared."); } catch (err) { T(String(err.message || err), true); }
+  });
+
+  on("atlasQ", "input", () => { ST.set("atlas.q", E("atlasQ").value); renderGrid(); const a = filters.favOnly || filters.missingOnly || (E("atlasQ").value || "").trim(); show("atlasReset", !!a); });
+  on("atlasSort", "change", () => { ST.set("atlas.sort", E("atlasSort").value); renderGrid(); renderFeature(); });
+  on("atlasFavOnly", "click", () => { filters.favOnly = !filters.favOnly; syncChips(); render(); });
+  on("atlasMissingOnly", "click", () => { filters.missingOnly = !filters.missingOnly; syncChips(); render(); });
+  on("atlasReset", "click", () => resetAll());
+
+  on("atlasRestore", "click", async () => {
+    try { await call("atlas_restore"); ST.set("atlas.removed", false); await scan(false); T("Removed games restored."); }
+    catch (e) { T(String(e.message || e), true); }
+  });
+
+  on("atlasSessClr", "click", async () => {
+    if (!await ASK({ title: "Clear session history", body: "Delete every recorded launch? Games in your library are not affected.", yes: "Clear", danger: true })) return;
+    try { await call("atlas_clear_sessions"); sessions = []; renderSessions(); T("Session history cleared."); }
+    catch (e) { T(String(e.message || e), true); }
+  });
+
+  on("atlasExe", "keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); submitAdd(); } });
+  on("atlasName", "keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); submitAdd(); } });
+  on("atlasEditName", "keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); submitEdit(); } });
+  on("atlasEditExe", "keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); submitEdit(); } });
+  on("atlasDetailWrap", "click", (ev) => { if (ev.target === ev.currentTarget) closeDetail(); });
+  if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key !== "Escape") return;
+      if (detailId) { closeDetail(); return; }
+      if (E("atlasEditBox") && !E("atlasEditBox").hidden) { closeEdit(); return; }
+      if (E("atlasAddBox") && !E("atlasAddBox").hidden) closeAdd();
+    });
   }
 
-  async function clearSessions() {
-    if (!sessions.length) { T("There are no sessions to clear."); return; }
-    if (!(await ASK({ title: "Clear session history?", body: "The " + sessions.length + " recorded session" + (sessions.length === 1 ? "" : "s") + " are deleted. Games stay in your library; only the measured play time is lost.", yes: "Clear", danger: true }))) return;
-    try {
-      await call("atlas_clear_sessions");
-      sessions = [];
-      A.log({ text: "Cleared ATLAS session history" });
-      T("Sessions cleared");
-      render();
-    } catch (e) {
-      TG.add("atlas.clear_sessions", e);
-      T("Could not clear sessions: " + (e && e.message ? e.message : String(e)), true);
-    }
+  // Restore the persisted view preferences once the DOM is ready.
+  const boot = () => {
+    const qe = E("atlasQ"); if (qe) qe.value = ST.get("atlas.q", "");
+    const se = E("atlasSort"); if (se) se.value = ST.get("atlas.sort", "recent");
+  };
+  if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+    else boot();
   }
 
-  async function addManual() {
-    const exeEl = E("atlasExe"), nameEl = E("atlasName");
-    const exe = exeEl ? String(exeEl.value || "").trim() : "";
-    const name = nameEl ? String(nameEl.value || "").trim() : "";
-    if (!exe) { T("Choose the game's .exe file first.", true); if (exeEl) exeEl.focus(); return; }
-    const btn = E("atlasAddGo");
-    if (btn) btn.disabled = true;
-    const aid = A.log({ text: "Adding a game to ATLAS", status: "running" });
-    try {
-      // name may be null: the backend then falls back to the file's own name.
-      const g = await call("atlas_add_manual", { name: name || null, exe_path: exe });
-      A.update(aid, { status: "done", detail: (g && g.name) || exe });
-      T("Added " + ((g && g.name) || name || "game"));
-      if (exeEl) exeEl.value = "";
-      if (nameEl) nameEl.value = "";
-      closeAdd();
-      await scan(false);
-    } catch (e) {
-      const m = e && e.message ? e.message : String(e);
-      A.update(aid, { status: "failed", detail: m });
-      TG.add("atlas.add_manual", e);
-      T(m, true);
-    } finally {
-      if (btn) btn.disabled = false;
-    }
-  }
-
-  function openAdd() {
-    const box = E("atlasAddBox");
-    if (!box) return;
-    try { box.hidden = false; } catch { /* detached */ }
-    const exe = E("atlasExe");
-    if (exe && typeof exe.focus === "function") exe.focus();
-  }
-  function closeAdd() {
-    const box = E("atlasAddBox");
-    if (box) { try { box.hidden = true; } catch { /* detached */ } }
-  }
-
-  // --- wiring ---------------------------------------------------------------
-  const on = (id, ev, fn) => { const e = E(id); if (e) { try { e.addEventListener(ev, fn); } catch { e["on" + ev] = fn; } } };
-  const onClick = (id, fn) => { const e = E(id); if (e) e.onclick = fn; };
-
-  onClick("atlasScan", () => scan(true));
-  onClick("atlasRestore", restore);
-  onClick("atlasSessClr", clearSessions);
-  onClick("atlasAdd", openAdd);
-  onClick("atlasAddNo", closeAdd);
-  onClick("atlasAddGo", addManual);
-
-  on("atlasQ", "input", () => { ST.set("atlas.q", E("atlasQ") ? E("atlasQ").value : ""); render(); });
-  on("atlasSort", "change", () => { const s = E("atlasSort"); ST.set("atlas.sort", s ? s.value : "recent"); render(); });
-  // Enter submits from either field.
-  ["atlasExe", "atlasName"].forEach((id) => on(id, "keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addManual(); } }));
-
-  // Restore the persisted search and sort into the controls.
-  (function init() {
-    const qi = E("atlasQ");
-    if (qi) { const saved = String(ST.get("atlas.q", "") || ""); if (saved) qi.value = saved; }
-    const so = E("atlasSort");
-    if (so) { const k = sortKey(); try { so.value = k; } catch { /* detached */ } }
-    renderRestore();
-  })();
-
-  return { scan, launch };
+  return { scan, launch, render, openDetail, closeDetail, openAdd, openEdit, resetAll };
 })();

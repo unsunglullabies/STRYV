@@ -373,3 +373,305 @@ table tr:hover td{background:rgba(255,255,255,.02)}td.n{font-variant-numeric:tab
   .at-cbtns .at-fav,.at-cbtns .at-del,.at-srow,.at-foot .lnk,.at-sessh .lnk
     {transition:none}
 }
+
+/* ===== ATLAS: identity, featured game, integrated toolbar ====================
+   Second pass, appended. Nothing above this line is modified: the rules below
+   re-state the few properties they refine (same specificity, later in file) and
+   add everything the rewritten #atlas markup needs.
+
+   Contract note. src/index.html is the fixed markup. It ships:
+     .at-hero .at-heroart .at-heroin .at-id .at-tag .at-herostat .at-loading
+     .at-herobtns .at-feature .at-bar .at-search .at-sortl .at-filters .at-chip
+     .at-chip-clear .at-panel .at-panelh .at-field .at-pathrow .at-addhint
+     .at-panelb .at-detailwrap .at-detail
+   src/atlas.js emits at runtime:
+     .at-card .at-covw .at-cov .at-covf .at-cbody .at-ch .at-badge(.at-steam /
+     .at-manual) .at-meta .at-path .at-cbtns .at-fav .at-del .at-why
+     .at-srow .at-sx .st.done
+   #atlasFeature, .at-detail, #atlasHeroStat and #atlasEditBox are filled by no
+   script in src/ yet, so those regions are styled as containers plus generic
+   descendants: the art layer, the scrim, the scrim-safe type and the button
+   rows are matched structurally, so they hold whichever child markup arrives.
+   Everything is scoped to .at-* so no other page is affected. */
+
+/* --- hidden guards --------------------------------------------------------- */
+/* Author display values outrank the UA [hidden]{display:none} rule, so any
+   element given a display below has to put it back explicitly. */
+.at-panel[hidden],.at-detailwrap[hidden],.at-feature[hidden],.at-empty[hidden],
+#atlasReset[hidden]{display:none}
+
+/* --- page frame ------------------------------------------------------------ */
+/* ATLAS is the immersive page and is allowed a little more width than the
+   utility pages, so a large library reads as media rather than as a queue. */
+.at-page{max-width:1320px}
+
+/* --- identity header ------------------------------------------------------- */
+/* Compact by design: the header is an identity band, not a banner. All of the
+   atmosphere is CSS inside .at-heroart (which is aria-hidden), so no image
+   request is made for decoration. */
+.at-hero{position:relative;isolation:isolate;overflow:hidden;padding:18px 22px 0;
+  margin:0 0 20px;border:1px solid var(--line);
+  /* the faint amber edge: the same accent as the nav and h1, at 18% */
+  border-bottom-color:color-mix(in srgb,var(--v) 18%,var(--line));
+  border-radius:var(--r)}
+.at-heroart{position:absolute;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(88% 130% at 94% -34%,color-mix(in srgb,var(--v) 13%,transparent),transparent 62%),
+    repeating-linear-gradient(135deg,rgba(255,255,255,.016) 0 1px,transparent 1px 10px),
+    linear-gradient(180deg,var(--p1) 0%,var(--bg) 100%)}
+
+/* Deliberate asymmetry: identity left, actions top-right, figures on their own
+   ruled line beneath. Nothing here competes with the featured game below. */
+.at-heroin{position:relative;z-index:1;display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  grid-template-areas:"id btns" "stat stat";
+  align-items:end;column-gap:24px}
+
+.at-id{grid-area:id;min-width:0}
+.at-hero h1{padding-left:14px;font-size:32px;letter-spacing:-.025em}
+.at-tag{margin-top:5px;font-size:13px;color:var(--m)}
+/* One small amber mark, so ATLAS is tied to STRYV without gilding the page. */
+.at-tag::before{content:"";display:inline-block;width:5px;height:5px;
+  margin:0 9px 0 1px;border-radius:1px;background:var(--v);translate:0 -2px}
+
+.at-herobtns{grid-area:btns;display:flex;align-items:center;gap:8px;padding-bottom:2px}
+
+/* --- hero figures: a strip, not four dashboard cards ------------------------ */
+.at-herostat{grid-area:stat;display:flex;align-items:baseline;flex-wrap:wrap;
+  gap:6px 22px;margin-top:14px;padding:11px 0 12px;border-top:1px solid var(--line)}
+.at-loading{font-size:10.5px;font-weight:600;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--m)}
+/* atlas.js writes into #atlasN / #atlasSum / #atlasSize / #atlasPlays /
+   #atlasTime. Those ids are absent from the markup, so the cells below are
+   matched in case that wiring lands later. */
+.at-herostat>div{display:flex;align-items:baseline;gap:7px;min-width:0}
+.at-herostat b{font:650 17px/1.1 "Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;
+  letter-spacing:-.01em;color:var(--hi);font-variant-numeric:tabular-nums}
+.at-herostat>div>small{font-size:10px;font-weight:600;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--m)}
+/* One leader inside the strip, the way CPU leads the dashboard. */
+.at-herostat>div:first-child b{font-size:23px;letter-spacing:-.02em}
+
+/* --- featured game: the visual moment -------------------------------------- */
+/* Artwork bleeds under the padding to all four edges; a left-weighted scrim
+   carries the text; the favourite control takes the free corner top-right. */
+.at-feature{position:relative;isolation:isolate;overflow:hidden;
+  display:flex;flex-direction:column;justify-content:flex-end;
+  min-height:214px;padding:18px 20px 18px 22px;margin:0 0 18px;
+  background:var(--bg);border:1px solid var(--line);
+  border-left:3px solid var(--v);border-radius:var(--r)}
+/* An unhide before content arrives must not leave an empty plate on the page. */
+.at-feature:empty{display:none}
+.at-feature :is(img,.at-cov,.at-covw,.at-covf){position:absolute;inset:0;z-index:0;
+  width:100%;height:100%;margin:0;aspect-ratio:auto;border-radius:0;
+  transition:transform .15s ease-out}
+.at-feature img,.at-feature .at-cov{object-fit:cover}
+.at-feature:hover :is(img,.at-cov){transform:scale(1.03)}
+/* Scrim: dense at the left where the text sits, clearing to the right so the
+   artwork keeps its colour, plus a short foot wash to seat the buttons. */
+.at-feature::after{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:
+    linear-gradient(96deg,rgba(10,10,12,.94) 0%,rgba(10,10,12,.82) 32%,rgba(10,10,12,.3) 66%,rgba(10,10,12,.46) 100%),
+    linear-gradient(0deg,rgba(10,10,12,.72),transparent 48%)}
+/* Faint amber edge across the top of the featured block. */
+.at-feature::before{content:"";position:absolute;z-index:2;inset:0 0 auto 0;height:1px;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--v) 55%,transparent),transparent 58%)}
+/* Everything that is not artwork sits above the scrim, in normal flow, seated to
+   the bottom of the block. */
+.at-feature>:not(:is(img,.at-cov,.at-covw,.at-covf)){position:relative;z-index:2}
+/* Written out rather than :is() so this outranks the card's .at-ch h4, which a
+   featured block reusing that markup would otherwise inherit. */
+.at-feature h2,.at-feature h3,.at-feature .at-ch h4{font:650 25px/1.15 "Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;
+  letter-spacing:-.02em;color:var(--hi)}
+.at-feature .at-ch{gap:10px}
+.at-feature .at-tag{margin-top:4px;color:var(--t);opacity:.8}
+.at-feature .at-badge{padding:3px 7px;font-size:10px;
+  background:rgba(10,10,12,.6);border-color:rgba(255,255,255,.16)}
+/* The card definition list becomes an inline data strip over the artwork. */
+.at-feature .at-meta{flex-direction:row;flex-wrap:wrap;gap:5px 20px;margin:9px 0 0}
+.at-feature .at-meta>div{gap:6px}
+.at-feature .at-meta dt{opacity:.7}
+.at-feature .at-meta dd{font-size:12px;overflow:visible}
+.at-feature .at-path{margin-top:10px;padding-top:0;border-top:0;opacity:.75;max-width:64ch}
+.at-feature .at-why{margin-top:10px;padding:8px 10px;max-width:64ch;
+  border-left:2px solid var(--warn);border-radius:0 4px 4px 0;
+  background:rgba(10,10,12,.66);color:var(--t)}
+
+/* Prominent Play, with the favourite control sized to match it. */
+.at-feature :is(.at-cbtns,.at-panelb){display:flex;align-items:center;gap:10px;margin-top:14px}
+.at-feature .btn{align-self:center;padding:10px 22px;font-size:14px}
+.at-feature .at-fav{width:38px;min-width:38px;height:38px;font-size:17px}
+.at-feature .at-del{min-height:34px}
+/* If the star is a direct child it moves to the free corner instead of the row. */
+.at-feature>.at-fav{position:absolute;z-index:3;top:16px;right:16px;margin:0}
+
+/* --- toolbar: one integrated surface --------------------------------------- */
+/* Search, sort and filters read as a single control strip rather than a row of
+   cards; the rules between groups do the separating. */
+.at-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:7px;margin:0 0 18px;background:var(--p1);
+  border:1px solid var(--line);border-radius:var(--r)}
+.at-search{flex:1 1 220px;min-width:180px;border-radius:var(--r)}
+.at-search input{background:var(--bg)}
+.at-search:focus-within{outline:2px solid var(--c);outline-offset:2px;border-radius:var(--r)}
+
+.at-sortl{flex:none;margin-left:4px;padding-left:12px;border-left:1px solid var(--line);
+  font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--m);opacity:.85}
+.at-bar select{flex:none;border-radius:4px;padding:6px 8px;font-size:12.5px}
+
+.at-filters{display:flex;align-items:center;gap:6px;flex:none;
+  margin-left:auto;padding-left:12px;border-left:1px solid var(--line)}
+.at-chip{min-height:28px;padding:0 11px;background:none;
+  border:1px solid var(--line);border-radius:999px;color:var(--m);
+  font:inherit;font-size:12px;cursor:pointer;white-space:nowrap;
+  transition:color .12s,border-color .12s,background .12s}
+.at-chip:hover{color:var(--hi);border-color:#3a3a44;background:var(--p2)}
+/* Pressed: solid amber on ink. #F5A623 on #140E02 is a very high contrast pair,
+   so the pressed chip is never ambiguous against the dark surface. */
+.at-chip[aria-pressed="true"]{background:var(--v);border-color:var(--v);
+  color:var(--ink);font-weight:600}
+.at-chip[aria-pressed="true"]:hover{filter:brightness(1.08)}
+/* The reset chip is an escape, not a filter: dashed, never pressed-looking. */
+.at-chip-clear{border-style:dashed}
+.at-chip-clear:hover{color:var(--hi);border-color:#3a3a44}
+
+@media(max-width:1100px){
+  .at-filters{margin-left:0;padding-left:10px}
+}
+
+/* --- library grid: artwork-led --------------------------------------------- */
+.at-grid{gap:16px;grid-template-columns:repeat(auto-fill,minmax(252px,1fr))}
+
+.at-card{background:var(--p1);
+  transition:border-color .12s,background .12s,box-shadow .12s}
+.at-card:hover{border-color:#3a3a44;background:var(--p2);
+  box-shadow:0 8px 22px rgba(0,0,0,.34)}
+.at-card:hover .at-cov{transform:scale(1.03)}
+/* The favourite edge and the hover lift both apply, so neither swallows the
+   other: the earlier :has() rule outranks a plain :hover on its own. */
+.at-card:has(.at-fav[aria-pressed="true"]):hover{background:var(--p2);
+  border-color:#3a3a44;
+  box-shadow:inset 3px 0 0 var(--v),0 8px 22px rgba(0,0,0,.34)}
+
+.at-covw{position:relative;background:var(--bg);box-shadow:inset 0 -1px 0 rgba(255,255,255,.05)}
+.at-cov{transition:transform .15s ease-out}
+/* Short foot wash so the art reads as one bleed into the card body, not as a
+   rectangle parked above it. */
+.at-covw:has(.at-cov)::after{content:"";position:absolute;inset:auto 0 0 0;height:38%;
+  pointer-events:none;background:linear-gradient(180deg,transparent,rgba(10,10,12,.5))}
+/* Manual entries and failed covers: a faint hatch so the placeholder is a
+   designed slot rather than a hole. */
+.at-covf{background:var(--p2);
+  background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.022) 0 1px,transparent 1px 8px)}
+
+.at-ch{gap:9px}
+.at-ch h4{font-size:14.5px}
+.at-cbody{gap:11px;padding:12px 13px 13px}
+.at-meta{gap:6px}
+.at-meta dd{color:var(--t);opacity:.92}
+.at-path{padding-top:10px;opacity:.7}
+
+/* --- add / edit panels: deliberate forms ----------------------------------- */
+/* A single-column form with a ruled header and a right-aligned action row, plus
+   the amber left edge that the nav and h1 already use. */
+.at-panel{display:grid;gap:15px;padding:0 18px 18px;margin:20px 0 0;
+  background:var(--p1);border:1px solid var(--line);
+  border-left:3px solid var(--v);border-radius:var(--r)}
+.at-panelh{display:flex;align-items:center;justify-content:space-between;gap:16px;
+  margin:0 -18px;padding:14px 18px 13px;border-bottom:1px solid var(--line)}
+.at-panelh h3{font:650 15px/1.2 "Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;
+  letter-spacing:-.01em;color:var(--hi)}
+.at-panelh .lnk{min-height:28px;padding:0 8px;display:inline-flex;align-items:center;
+  border-radius:4px;transition:background .12s}
+.at-panelh .lnk:hover,.at-panelh .lnk:focus-visible{background:var(--p2)}
+
+.at-field{display:grid;gap:6px;max-width:620px}
+.at-field>label{display:flex;align-items:baseline;gap:7px;
+  font-size:10.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--m);transition:color .12s}
+.at-field>label small{font-size:10px;font-weight:400;letter-spacing:.06em;
+  text-transform:none;opacity:.75}
+.at-field input{width:100%;min-width:0;padding:9px 11px;font-size:13px;
+  background:var(--p2);color:var(--t);border:1px solid var(--line);
+  border-radius:var(--r);outline:0;
+  transition:border-color .12s,background .12s}
+.at-field input::placeholder{color:var(--m);opacity:.65}
+.at-field input:focus{border-color:color-mix(in srgb,var(--v) 55%,var(--line));background:var(--bg)}
+/* The input drops its own outline (see above), so the focus ring moves to the
+   field wrapper and the label picks up the accent. */
+.at-field:focus-within{outline:2px solid var(--c);outline-offset:2px;border-radius:var(--r)}
+.at-field:focus-within>label{color:var(--v)}
+
+/* One or two Browse/Clear buttons either side of a path input. */
+.at-pathrow{display:flex;align-items:stretch;gap:8px}
+.at-pathrow input{flex:1 1 auto;
+  font:12.5px "Cascadia Mono",Consolas,monospace}
+.at-pathrow .btn{flex:none;margin-top:0;padding:0 14px;font-size:12.5px}
+.at-pathrow:focus-within{outline:2px solid var(--c);outline-offset:2px;border-radius:var(--r)}
+
+.at-addhint{grid-column:1/-1;max-width:640px;color:var(--m);font-size:11.5px;line-height:1.55}
+.at-panelb{grid-column:1/-1;display:flex;justify-content:flex-end;gap:8px;
+  padding-top:14px;border-top:1px solid var(--line)}
+.at-panelb .btn{margin-top:0;padding:9px 18px;font-size:13px}
+
+@media(max-width:1024px){
+  .at-field,.at-addhint{max-width:none}
+}
+
+/* --- details overlay ------------------------------------------------------- */
+/* Sits above the shared .ov dialogs (z-index 20) and below toasts (30). The
+   scrim is a plain dim, not a blur: no filter cost, no glow. */
+.at-detailwrap{position:fixed;inset:0;z-index:25;display:flex;align-items:center;
+  justify-content:center;padding:6vh 24px;background:rgba(5,6,10,.66)}
+.at-detail{width:min(580px,100%);max-height:86vh;overflow:auto;
+  background:var(--p1);border:1px solid var(--line);
+  border-top:2px solid var(--v);border-radius:var(--r);
+  box-shadow:0 26px 70px rgba(0,0,0,.55)}
+/* Content is unknown until the panel is populated, so these are structural:
+   a cover strip, a title, then the shared card parts read as themselves. */
+.at-detail :is(img,.at-cov,.at-covw,.at-covf){display:block;width:100%;
+  aspect-ratio:16/9;object-fit:cover;max-height:260px}
+.at-detail h2{padding:16px 18px 0;font:650 19px/1.2 "Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;
+  letter-spacing:-.015em;color:var(--hi)}
+.at-detail h3{padding:15px 18px 0;font:650 14px/1.2 "Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;
+  color:var(--hi)}
+.at-detail :is(p,.note){max-width:none;padding:6px 18px 0;font-size:13px;
+  line-height:1.55;color:var(--m)}
+.at-detail .at-tag{margin:8px 0 0;padding:0 18px;color:var(--m)}
+.at-detail :is(.at-meta,.at-path,.at-why){margin:12px 18px 0}
+.at-detail :is(.at-cbtns,.at-panelb){display:flex;align-items:center;gap:8px;
+  margin:16px 18px 0;padding:14px 0 16px;border-top:1px solid var(--line)}
+.at-detail :is(.at-empty,.empty){margin:18px;border:0;padding:0;background:none}
+.at-detail .btn{margin-top:0}
+
+/* --- empty state ----------------------------------------------------------- */
+/* Same plate as the library's surfaces, with the amber edge, so an empty page
+   still looks authored rather than broken. */
+.at-empty{position:relative;max-width:700px;padding:20px 22px 20px 24px;
+  background:var(--p1);border:1px solid var(--line);
+  border-left:3px solid var(--v);border-radius:var(--r)}
+.at-empty b{font-size:14px;letter-spacing:-.01em}
+
+/* --- narrow layouts -------------------------------------------------------- */
+/* 1180px is the app's own breakpoint: below it main loses 32px of padding, so
+   the featured block and the hero lose height with it. */
+@media(max-width:1180px){
+  .at-hero{padding:16px 18px 0}
+  .at-hero h1{font-size:28px}
+  .at-feature{min-height:184px;padding:16px 18px 16px 20px}
+  .at-feature h2,.at-feature h3,.at-feature .at-ch h4{font-size:22px}
+  .at-grid{grid-template-columns:repeat(auto-fill,minmax(236px,1fr))}
+}
+@media(max-width:1024px){
+  .at-heroin{column-gap:16px}
+  .at-herostat{gap:6px 18px}
+  .at-feature{min-height:168px}
+  .at-feature .at-meta{gap:4px 16px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .at-feature :is(img,.at-cov,.at-covw),.at-cov,.at-chip,.at-chip-clear,
+  .at-field>label,.at-field input,.at-pathrow input
+    {transition:none}
+}
