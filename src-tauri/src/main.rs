@@ -8,6 +8,10 @@ use std::time::SystemTime;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::{Duration, Instant};
 mod aery;
+// The #[tauri::command] attribute expands into __cmd__<name> macros next to the
+// function. generate_handler! needs those in scope, and they live inside the
+// aery module, so the module's names are pulled in here.
+use aery::*;
 use sysinfo::{Components, Disks, Networks, ProcessesToUpdate, System};
 
 struct Monitor(Mutex<System>);
