@@ -515,3 +515,44 @@ ul.plain li::marker { color: var(--v); }
     transition: none !important;
   }
 }
+/* ---- Aery / vision / roadmap ---------------------------------------- */
+.cols{display:grid;gap:26px;margin-top:26px}
+@media (min-width:820px){.cols{grid-template-columns:1fr 1fr}.cols.three{grid-template-columns:repeat(2,1fr)}}
+@media (min-width:1100px){.cols.three{grid-template-columns:repeat(4,1fr)}}
+.cols h3{margin:0 0 8px;font-size:15px;letter-spacing:.01em}
+.cols p{margin:0 0 12px;color:var(--m);font-size:14.5px;line-height:1.66}
+.cols code{font-family:var(--mono);font-size:.92em;color:var(--v);background:rgba(245,166,35,.08);padding:1px 5px;border-radius:3px}
+.vcard{background:var(--p1);border:1px solid var(--line);border-radius:12px;padding:20px}
+.vcard h3{margin:12px 0 6px}
+.vcard p{margin:0;color:var(--m);font-size:13.5px;line-height:1.6}
+.chip.muted{border-color:var(--line);color:var(--m)}
+
+table.road{width:100%;border-collapse:collapse;margin-top:26px;font-size:14px}
+table.road th,table.road td{text-align:left;padding:13px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+table.road th{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--m);font-weight:600}
+table.road td:first-child{color:var(--t);font-weight:500}
+table.road td:nth-child(2){width:150px}
+table.road td:last-child{color:var(--m)}
+table.road tr:hover td{background:rgba(255,255,255,.015)}
+@media (max-width:640px){
+  table.road,table.road thead,table.road tbody,table.road tr,table.road th,table.road td{display:block}
+  table.road thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  table.road tr{border-bottom:1px solid var(--line);padding:6px 0}
+  table.road td{border:0;padding:4px 0}
+}.at-note{margin:0 0 20px;padding:10px 13px;border-left:2px solid var(--v);background:rgba(245,166,35,.05);color:var(--m);font-size:13px;line-height:1.6}
+/* ---- narrow-viewport containment -------------------------------------
+   Content was allowed to push the page wider than the screen on phones,
+   so long words and the spec table were clipped at the right edge. The
+   grid children are allowed to shrink, and anything genuinely wider than
+   the viewport scrolls inside its own box instead of moving the page. */
+html { overflow-x: hidden; }
+.shell, .wrap, main, .card, .panel { min-width: 0; }
+img, svg, table { max-width: 100%; }
+table.spec th { min-width: 0; }
+@media (max-width: 900px) {
+  table.spec, table.road { table-layout: fixed; width: 100%; }
+  table.spec td, table.road td { overflow-wrap: anywhere; }
+}
+@media (max-width: 560px) {
+  .at-cov, .cov { aspect-ratio: 16 / 10; }
+}
