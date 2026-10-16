@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>STRYV preview</title>
+<!-- Loads the REAL app CSS and the REAL ATLAS markup. -->
+<link rel="stylesheet" href="../src/style.css">
+<style>
+  /* Chrome around the frame so the preview is obviously not the app. */
+  body { overflow: auto; background: #060608; }
+  .pv-bar { position: sticky; top: 0; z-index: 99; display: flex; gap: 10px;
+            align-items: center; padding: 8px 14px; background: #111114;
+            border-bottom: 1px solid #26262C; font: 12px/1 system-ui; color: #8A8A94; }
+  .pv-bar b { color: #F5A623; letter-spacing: .12em; text-transform: uppercase; }
+  .pv-frame { margin: 18px auto; width: 1180px; border: 1px solid #26262C;
+              background: #0A0A0C; }
+  .pv-note { margin: 0 auto 24px; width: 1180px; font: 12px/1.5 system-ui; color: #8A8A94; }
+  .pv-note code { color: #38BDF8; }
+</style>
+</head>
+<body>
+<div class="pv-bar">
+  <b>STRYV preview</b>
+  <span>real CSS, real ATLAS markup, fake backend &mdash; edit src/atlas.js and reload</span>
+  <span id="pvState" style="margin-left:auto"></span>
+</div>
+
+<div class="pv-note">
+  Narrow the window to check the responsive breakpoints. The games below come from
+  <code>tests/fixtures/atlas-games.json</code>. <code>invoke()</code> is stubbed, so nothing
+  touches the real backend.
+</div>
+
+<!-- The ATLAS section is injected from the real index.html by ATLAS section below. -->
+<div class="pv-frame" id="pvHost"></div>
+
+<script>
+// Pull the real #atlas section out of index.html so this preview can never
+// drift from what the app actually ships.
+fetch("../src/index.html")
+  .then((r) => r.text())
+  .then((html) => {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const atlas = doc.querySelector("#atlas");
+    document.getElementById("pvHost").appendChild(atlas.cloneNode(true));
+    start();
+  })
+  .catch((e) => {
+    document.getElementById("pvHost").innerHTML =
+      '<p style="padding:24px;color:#EF4444">Could not load ../src/index.html (' + e + ').' +
+      ' This preview must be served over http, not opened from file://.</p>';
+  });
+
+function start() {
+  const FIXTURE = {
+    games: [
+      { id: "steam:359550", launcher: "Steam", app_id: "359550", name: "Tom Clancy's Rainbow Six Siege",
+        install_dir: "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Rainbow Six Siege",
+        exe_path: "", size_bytes: 52996818944, last_played: 1760611200, source: "detected",
+        favorite: true, hidden: false, plays: 0, last_launch: 0, last_session_secs: null, total_secs: 0 },
+      { id: "steam:4125930", launcher: "Steam", app_id: "4125930", name: "Punishing: Gray Raven",
+        install_dir: "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Punishing Gray Raven",
+        exe_path: "", size_bytes: 71653912576, last_played: 1759670400, source: "detected",
+        favorite: false, hidden: false, plays: 3, last_launch: 1760500000, last_session_secs: 4820, total_secs: 4820 },
+      { id: "manual:9f2c1a", launcher: "Manual", app_id: "", name: "Hades",
+        install_dir: "D:\\Games\\Hades", exe_path: "D:\\Games\\Hades\\Hades.exe",
+        size_bytes: 0, last_played: 0, source: "manual",
+        favorite: false, hidden: false, plays: 7, last_launch: 1760490000, last_session_secs: 3120, total_secs: 21840 },
+      { id: "steam:9999999", launcher: "Steam", app_id: "9999999", name: "<img src=x onerror=alert(1)> escaping probe",
+        install_dir: "C:\\weird\\\" onmouseover=\"alert(2)", exe_path: "", size_bytes: 0,
+        last_played: 0, source: "detected", favorite: false, hidden: false,
+        plays: 0, last_launch: 0, last_session_secs: null, total_secs: 0 }
+    ],
+    sessions: [
+      { id: "steam:4125930:1", game_id: "steam:4125930", name: "Punishing: Gray Raven", launcher: "Steam",
+        started: 1760500000, ended: 1760504820, duration_secs: 4820, cpu_pct: 34.2, mem_bytes: 3221225472, measured: true },
+      { id: "manual:9f2c1a:1", game_id: "manual:9f2c1a", name: "Hades", launcher: "Manual",
+        started: 1760490000, ended: 1760493120, duration_secs: 3120, cpu_pct: 51.8, mem_bytes: 2147483648, measured: true },
+      { id: "steam:359550:1", game_id: "steam:359550", name: "Tom Clancy's Rainbow Six Siege", launcher: "Steam",
+        started: 1760400000, ended: 1760400000, duration_secs: null, cpu_pct: null, mem_bytes: null, measured: false }
+    ]
+  };
+
+  const CALLS = [];
+  window.invoke = (cmd, args) => {
+    CALLS.push({ cmd, args });
+    const note = document.getElementById("pvState");
+    if (note) note.textContent = cmd + (args ? " " + JSON.stringify(args) : "");
+    switch (cmd) {
+      case "atlas_scan": return Promise.resolve(FIXTURE.games);
+      case "atlas_sessions": return Promise.resolve(FIXTURE.sessions);
+      case "atlas_launch_id": return Promise.resolve("Started " + ((args && args.id) || "?") + ".");
+      case "atlas_add_manual": return Promise.resolve(FIXTURE.games[2]);
+      default: return Promise.resolve(null);
+    }
+  };
+
+  // Minimal stubs for the shared helpers core.js normally provides.
+  window.store = {
+    _d: {},
+    get(k, d) { return Object.prototype.hasOwnProperty.call(this._d, k) ? this._d[k] : d; },
+    set(k, v) { this._d[k] = v; }
+  };
+  window.esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  window.toast = (m, bad) => {
+    const t = document.createElement("div");
+    t.className = "toast" + (bad ? " bad" : "");
+    t.style.cssText = "position:fixed;left:16px;bottom:16px;padding:10px 14px;border-radius:6px;z-index:200;background:#18181C;border:1px solid #26262C;color:" + (bad ? "#EF4444" : "#C9C9D1");
+    t.textContent = m;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 2200);
+  };
+  window.confirmBox = async () => true;
+  window.Tech = { add: (c, e) => console.warn("Tech.add", c, e) };
+  window.Act = { log: () => 1, update: () => {} };
+  window.Cfg = { v: {}, d: {} };
+
+  // core.js wires the entire UI at parse time, so only the globals ATLAS needs are
+  // provided and core.js itself is deliberately NOT loaded here.
+  const s = document.createElement("script");
+  s.src = "../src/atlas.js";
+  s.onload = () => { if (window.Atlas) window.Atlas.scan(false); };
+  document.head.appendChild(s);
+}
+</script>
+</body>
+</html>

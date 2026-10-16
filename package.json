@@ -7,7 +7,8 @@
                     "dev":  "tauri dev",
                     "build":  "tauri build",
                     "test":  "node tests/atlas.test.js \u0026\u0026 node tests/rust-structure-check.js src-tauri/src/main.rs",
-                    "check":  "node --check src/app.js \u0026\u0026 npm test"
+                    "check":  "node --check src/app.js \u0026\u0026 npm test",
+                    "build:fast":  "tauri build --no-bundle"
                 },
     "devDependencies":  {
                             "@tauri-apps/cli":  "^2"

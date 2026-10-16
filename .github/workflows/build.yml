@@ -61,19 +61,29 @@ jobs:
           }
           Write-Output "TAURI_SIGNING_PRIVATE_KEY is set."
 
-      - name: Build
+      # A push to main only has to prove the code still compiles. Packaging an
+      # installer, signing it and writing updater artifacts costs minutes and is
+      # only needed for an actual release, so all of that is skipped unless this
+      # run was triggered by a v* tag.
+      - name: Compile check (no installer)
+        if: github.ref_type != 'tag'
+        shell: pwsh
+        run: npm run build:fast
+
+      - name: Build release installer
+        if: github.ref_type == 'tag'
         shell: pwsh
         run: npm run build
 
       # Refuses to run if any installer lacks a signature, so an unsigned
       # artifact can never reach a release.
       - name: Generate updater manifest
-        if: github.event_name != 'pull_request'
+        if: github.ref_type == 'tag' && github.event_name != 'pull_request'
         shell: pwsh
         run: node scripts/make-latest-json.js
 
       - name: Upload build artifacts
-        if: always()
+        if: always() && github.ref_type == 'tag'
         uses: actions/upload-artifact@v4
         with:
           name: stryv-installer
