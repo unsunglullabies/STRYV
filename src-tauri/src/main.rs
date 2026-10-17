@@ -29,7 +29,7 @@ struct DnsResult { host: String, ms: Option<f64>, error: Option<String> }
 #[derive(Serialize)]
 struct TestReport { latency: Vec<LatencyResult>, dns: Vec<DnsResult> }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_network(n: tauri::State<Net>) -> Vec<Adapter> {
     let mut g = n.0.lock().unwrap();
     g.0.refresh();
@@ -106,7 +106,7 @@ struct SystemInfo {
     mem_total: u64,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_snapshot(m: tauri::State<Monitor>) -> Snapshot {
     let mut s = m.0.lock().unwrap();
     s.refresh_cpu_usage();
@@ -132,7 +132,7 @@ fn get_snapshot(m: tauri::State<Monitor>) -> Snapshot {
 #[derive(Serialize)]
 struct Proc { name: String, cpu: f32, mem: u64 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_processes(m: tauri::State<Monitor>) -> Vec<Proc> {
     let mut s = m.0.lock().unwrap();
     s.refresh_processes(ProcessesToUpdate::All, true);
@@ -145,7 +145,7 @@ fn get_processes(m: tauri::State<Monitor>) -> Vec<Proc> {
     v
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_system_info(m: tauri::State<Monitor>) -> SystemInfo {
     let s = m.0.lock().unwrap();
     SystemInfo {
@@ -1089,20 +1089,46 @@ async fn atlas_launch_id(app: tauri::AppHandle, id: String) -> Result<String, St
     Ok(format!("Started {}. ATLAS is watching it and will record the session when it closes.", game.name))
 }
 
+// ---------- Startup timeline ----------
+// Written to %TEMP%\stryv-startup.log on every launch so a slow start can be traced:
+// each line is milliseconds since main() began.
+static BOOT: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+fn boot_log(msg: &str) {
+    use std::io::Write;
+    let t = BOOT.get_or_init(Instant::now).elapsed().as_millis();
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(std::env::temp_dir().join("stryv-startup.log")) {
+        let _ = writeln!(f, "{:>6} ms  {}", t, msg);
+    }
+}
+
+#[tauri::command(async)]
+fn boot_mark(label: String) { boot_log(&label); }
+
 fn main() {
+    let _ = std::fs::write(std::env::temp_dir().join("stryv-startup.log"), "");
+    boot_log("main() entered");
     let mut sys = System::new();
     sys.refresh_cpu_usage();
+    boot_log("sysinfo ready, building app");
     tauri::Builder::default()
+        .on_page_load(|_w, payload| {
+            match payload.event() {
+                tauri::webview::PageLoadEvent::Started => boot_log("page load STARTED"),
+                tauri::webview::PageLoadEvent::Finished => boot_log("page load FINISHED"),
+            }
+        })
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            boot_log("setup() running");
             // Signed self-update. The public key lives in tauri.conf.json; Tauri
             // refuses any artifact whose signature does not match it.
             app.handle().plugin(tauri_plugin_updater::Builder::new().build());
             // Safety net ONLY. The frontend reveals the window on the first painted frame;
             if let Some(w) = app.get_webview_window("main") {
                 std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_secs(20));
+                    std::thread::sleep(std::time::Duration::from_millis(2500));
+                    boot_log("Rust fallback timer fired: showing window");
                     let _ = w.show();
                 });
             }
@@ -1110,7 +1136,7 @@ fn main() {
         })
         .manage(Monitor(Mutex::new(sys)))
         .manage(Net(Mutex::new((Networks::new_with_refreshed_list(), Instant::now()))))
-        .invoke_handler(tauri::generate_handler![get_snapshot, get_system_info, get_processes, get_network, run_network_tests, opt_catalog, opt_snapshots, opt_preview, opt_apply, opt_rollback, opt_startup, opt_startup_set, get_gpu, get_temps, get_link_speeds, atlas_scan, atlas_launch, atlas_launch_id, atlas_sessions, atlas_clear_sessions, atlas_add_manual, atlas_update, atlas_set_art, atlas_remove, atlas_restore, atlas_set_favorite, aery_list, aery_read, aery_save, aery_create, aery_rename, aery_delete, aery_restore, aery_set_pinned, aery_set_folder, aery_vault_path, aery_counts])
+        .invoke_handler(tauri::generate_handler![boot_mark, get_snapshot, get_system_info, get_processes, get_network, run_network_tests, opt_catalog, opt_snapshots, opt_preview, opt_apply, opt_rollback, opt_startup, opt_startup_set, get_gpu, get_temps, get_link_speeds, atlas_scan, atlas_launch, atlas_launch_id, atlas_sessions, atlas_clear_sessions, atlas_add_manual, atlas_update, atlas_set_art, atlas_remove, atlas_restore, atlas_set_favorite, aery_list, aery_read, aery_save, aery_create, aery_rename, aery_delete, aery_restore, aery_set_pinned, aery_set_folder, aery_vault_path, aery_counts])
         .run(tauri::generate_context!())
         .expect("error while running STRYV");
 }

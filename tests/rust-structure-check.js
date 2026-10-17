@@ -22,7 +22,11 @@ let failures = 0;
 const fail = (m) => { console.log("  FAIL  " + m); failures++; };
 const pass = (m) => console.log("  ok    " + m);
 
-const defs = [...src.matchAll(/#\[tauri::command\]\s*(?:pub\s+)?(?:async\s+)?fn\s+(\w+)/g)].map((m) => m[1]);
+// The attribute may carry arguments: `#[tauri::command(async)]` runs a
+// synchronous command on its own thread instead of the async runtime, which is
+// what the sysinfo-backed commands want. Both spellings are valid, so accept
+// both rather than forcing a revert of a correct change.
+const defs = [...src.matchAll(/#\[tauri::command(?:\([^)]*\))?\]\s*(?:pub\s+)?(?:async\s+)?fn\s+(\w+)/g)].map((m) => m[1]);
 const handlerMatch = src.match(/generate_handler!\[([^\]]+)\]/);
 const reg = handlerMatch ? handlerMatch[1].split(",").map((s) => s.trim()).filter(Boolean) : [];
 

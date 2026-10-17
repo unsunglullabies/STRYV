@@ -11,6 +11,15 @@ const Intro = (() => {
 
 let st = null;
 
+// Startup timeline: lines land in %TEMP%\stryv-startup.log (written by the Rust side).
+const mark = (label) => {
+  try {
+    const t = window.__TAURI__;
+    if (t && t.core && t.core.invoke) t.core.invoke("boot_mark", { label: "JS  " + label + " (page time " + Math.round(performance.now()) + " ms)" }).catch(() => {});
+  } catch (e) { /* diagnostics only */ }
+};
+mark("scripts running (intro.js loaded)");
+
 const q = (s) => document.querySelector(s);
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -59,6 +68,7 @@ function msg(text, btns = []) {
 
 function finish() {
   if (!st) return;
+  mark("launch screen finished");
   st.timers.forEach(clearTimeout);
   cancelAnimationFrame(st.raf);
   removeEventListener("keydown", st.onK);
@@ -73,17 +83,13 @@ function quick() {
 }
 
 // Walk the list one line at a time. Each line lands, then the next one starts.
-function sequence() {
+function sequence(onDone) {
   const list = st.root.querySelector(".ilist");
   const rule = st.root.querySelector(".irule i");
   let i = 0;
   const step = () => {
-    if (!st) return;
-    if (i >= STEPS.length) {
-      st.root.classList.add("ready");
-      st.timers.push(setTimeout(finish, TL.end));
-      return;
-    }
+    if (!st || st.stop) return;
+    if (i >= STEPS.length) { if (onDone) onDone(); return; }
     const [name, note] = STEPS[i];
     const row = document.createElement("div");
     row.className = "irow";
@@ -114,6 +120,19 @@ async function begin(readyFn) {
   const s = st;
   s.root.classList.remove("err");
   s.root.querySelector(".imsg").innerHTML = "";
+  s.stop = false;
+  s.root.querySelector(".ilist").innerHTML = "";
+  const rule0 = s.root.querySelector(".irule i");
+  if (rule0) rule0.style.width = "0%";
+
+  // Decide motion up front so the boot list can play WHILE the backend starts,
+  // instead of sitting blank until it answers.
+  const wantMotion = s.force
+    ? !matchMedia("(prefers-reduced-motion: reduce)").matches && !(Cfg && Cfg.v && Cfg.v.reduceMotion)
+    : !(Cfg && Cfg.v && (Cfg.v.reduceMotion || Cfg.v.intro === false)) &&
+      !matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const animate = wantMotion && !reduced();
+  const animDone = animate ? new Promise((r) => sequence(r)) : Promise.resolve();
 
   const slow = setTimeout(() => {
     if (st === s) msg("Still starting…", [["Open STRYV anyway", quick]]);
@@ -127,11 +146,16 @@ async function begin(readyFn) {
     res = { ok: false, reason: String(e) };
   }
   clearTimeout(slow);
+  mark("backend startup finished, ok=" + (res && res.ok));
+  // Timing, readable on the Activity page: shows whether a slow launch is the page
+  // starting late (scripts ran late) or the backend answering late.
+  try { if (typeof Act !== "undefined" && Act.log) Act.log({ text: `Launch timing: scripts started at ${s.jsAt} ms, backend ready at ${Math.round(performance.now())} ms` }); } catch (e) { /* logging only */ }
   if (st !== s) return;
 
   s.root.querySelector(".imsg").innerHTML = "";
 
   if (!res.ok) {
+    s.stop = true;
     Tech.add("startup", res.reason || "Startup failed");
     s.root.classList.add("err");
     // Say what broke. Don't dress a failure up as progress.
@@ -144,14 +168,11 @@ async function begin(readyFn) {
     return;
   }
 
-  // Motion off, or intro disabled: skip the walk, keep the reveal.
-  const wantMotion = s.force
-    ? !matchMedia("(prefers-reduced-motion: reduce)").matches && !(Cfg && Cfg.v && Cfg.v.reduceMotion)
-    : !(Cfg && Cfg.v && (Cfg.v.reduceMotion || Cfg.v.intro === false)) &&
-      !matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  if (!wantMotion || reduced()) return instant();
-  sequence();
+  if (!animate) return instant();
+  await animDone;
+  if (st !== s) return;
+  s.root.classList.add("ready");
+  s.timers.push(setTimeout(finish, TL.end));
 }
 
 // The window is created hidden so the launch screen is the first thing painted.
@@ -163,7 +184,7 @@ async function begin(readyFn) {
     try {
       const t = typeof window !== "undefined" ? window.__TAURI__ : null;
       const w = t && t.window && t.window.getCurrentWindow ? t.window.getCurrentWindow() : null;
-      if (w && typeof w.show === "function") { Promise.resolve(w.show()).catch(() => {}); return true; }
+      if (w && typeof w.show === "function") { mark("calling window.show()"); Promise.resolve(w.show()).then(() => mark("window.show() done"), () => mark("window.show() FAILED")); return true; }
     } catch (e) { /* not running under Tauri, or no window API */ }
     return false;
   }
@@ -171,17 +192,26 @@ async function begin(readyFn) {
   function run(backendFn, o = {}) {
     if (st) return;
     const root = q("#intro") || document.body.appendChild(Object.assign(document.createElement("div"), { id: "intro" }));
+    // Keep the static splash painted by index.html and fade it out over the animated one.
+    const pre = root.querySelector(".ipre");
     root.className = "";
     root.style.cssText = "";
     root.innerHTML = HTML;
     document.body.appendChild(root);
+    if (pre) {
+      root.appendChild(pre);
+      setTimeout(() => { pre.style.transition = "opacity .25s"; pre.style.opacity = "0"; setTimeout(() => pre.remove(), 300); }, 60);
+    }
 
-    st = { root, timers: [], raf: 0, force: !!o.force };
+    st = { root, timers: [], raf: 0, force: !!o.force, jsAt: Math.round(performance.now()) };
     const v = st.root.querySelector(".iv");
     if (v && typeof VERSION !== "undefined") v.textContent = "STRYV " + VERSION;
 
     // Reveal on the next frame, once the first paint is genuinely on screen.
-    requestAnimationFrame(() => { if (!reveal()) setTimeout(reveal, 60); });
+    // requestAnimationFrame can be paused while the window is still hidden, so the
+    // reveal must not wait on it. Show immediately; retry briefly if the window API
+    // is not attached yet.
+    if (!reveal()) { let n = 0; const t = setInterval(() => { if (reveal() || ++n > 40) clearInterval(t); }, 50); }
 
   // Esc always gets you in. Don't trap anyone in here.
   st.onK = (e) => {

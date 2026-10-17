@@ -2,8 +2,26 @@
 const q = (id) => document.getElementById(id);
 const PAGES = ["dashboard", "performance", "network", "aery", "atlas", "optimizations", "system", "syn", "activity", "settings", "whatsnew", "help"];
 const ACCENTS = { Amber: "#F5A623", Cyan: "#38BDF8", Violet: "#8B5CF6" };
-const VERSION = "0.2.4";
+const VERSION = "0.2.5";
 const CHANGELOG = [{
+    v: "0.2.5", date: "2026-10-16", tag: "faster launch",
+    groups: {
+      Changed: [
+        "STRYV now shows the logo on a plain splash the moment the window opens, then hands over to the boot sequence. Before this the window could stay blank while the backend was still answering, which read as a hang rather than a start.",
+        "The boot sequence now plays while STRYV is still starting instead of waiting for the backend first. The list is the thing you are waiting for, so it is the thing that moves.",
+        "The live readings - CPU, memory, processes, network - now run on their own thread instead of the async runtime. Sampling hardware cannot be awaited on the same loop that is drawing the interface, so it no longer competes with the UI.",
+        "The window reveal now retries for a couple of seconds instead of giving up on the first try, because the browser's window API is not always attached yet on a cold start."
+      ],
+      Diagnosis: [
+        "Every launch now writes a timeline to stryv-startup.log in your temp folder, timestamped from the moment the process started. It records when the page began loading, when the scripts ran, when the backend answered, and when the window was shown, so a slow start can be traced instead of guessed at.",
+        "The boot screen also logs the same milestones, and the timing appears in Activity. If a start is ever slow again, that log says whether the page loaded late or the backend answered late."
+      ],
+      Signature: [
+        "Signed, like every STRYV release. STRYV checks the published release feed, downloads the installer, and verifies its signature against the key built into the app before running it."
+      ]
+    }
+  },
+  {
     v: "0.2.4", date: "2026-10-16", tag: "launch fix",
     groups: {
       Fixed: [
