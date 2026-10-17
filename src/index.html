@@ -201,8 +201,62 @@
     <p class="note" id="measS"></p><table id="measT"></table></div>
   <div class="sec" style="margin-top:26px"><h3>Startup apps</h3><table id="startT"></table><p class="note">Controls apps in your user Run key. Changes take effect at next sign-in and are reversible here. System-wide startup items are not listed.</p></div></section>
 <section id="system" class="page"><h1>System</h1><p class="sub">Hardware and operating system.</p><div class="card"><table id="sysT"></table><button class="btn" id="copy">Copy diagnostics</button></div></section>
-<section id="syn" class="page"><h1>SYN Assistant</h1><p class="sub">System intelligence for STRYV.</p>
-  <div class="card sync"><img src="assets/syn-logo.png" alt="SYN"><div><b>In development</b><small>SYN will explain measurements and suggest diagnostics. It is not connected yet, so nothing here is simulated.</small></div></div></section>
+<section id="syn" class="page"><h1>SYN Assistant</h1><p class="sub">Analysis of this PC, from a live reading. No model is connected, so nothing here is generated.</p>
+
+  <div class="synhead">
+    <img src="assets/syn-logo.png" alt="SYN">
+    <div><b>Local analysis</b><small>Everything on this page is computed from a reading STRYV takes of your machine. It works offline, and it cannot invent a result.</small></div>
+    <span class="synbadge" id="synState">No provider connected</span>
+  </div>
+
+  <div class="syncols">
+    <div class="synmain">
+      <div class="set">
+        <div><b>Check this PC</b><small>Reads CPU, memory, disk, temperatures and uptime, then explains what it found. Each finding cites the number it came from.</small></div>
+        <button class="btn" id="synRun">Run check</button>
+      </div>
+      <div id="synOut" aria-live="polite"></div>
+    </div>
+
+    <div class="synside">
+      <div class="sec">
+        <h3>Ask about this PC</h3>
+        <div class="synaskrow">
+          <input id="synAskQ" type="text" placeholder="Why is my CPU high?" aria-label="Ask a question about this PC" autocomplete="off">
+          <button class="btn ghost" id="synAskGo">Ask</button>
+        </div>
+        <div id="synAsk" aria-live="polite"></div>
+        <p class="note">Answered by comparing your question against a live reading. It can measure; it cannot interpret. If it cannot answer it says so.</p>
+      </div>
+
+      <div class="sec">
+        <h3>Model provider</h3>
+        <div class="card sync">
+          <div><b>Not connected</b>
+          <small>No external model is configured, and nothing has ever been sent anywhere. Connecting one is a deliberate step, described below, and it is off by default.</small></div>
+        </div>
+        <p class="note">What a provider would receive, if you ever enabled one:</p>
+        <ul class="tips">
+          <li><b>Diagnostics.</b> The specific reading that triggered a finding, and the question you asked.</li>
+          <li><b>Aery.</b> Only the notes you tick below, and only when you tick them. Nothing is selected by default.</li>
+          <li><b>Never.</b> Your vault path, your Steam library, your ATLAS activity, or your settings.</li>
+        </ul>
+        <p class="note">Credentials would be stored on this PC only, and are not implemented yet.</p>
+      </div>
+
+      <div class="sec">
+        <h3>Aery scope</h3>
+        <div id="synAeryScope"></div>
+        <p class="note">Nothing is selected, so nothing could be shared. SYN has no network code at all in this build.</p>
+      </div>
+
+      <div class="sec">
+        <h3>What stays local</h3>
+        <p class="note">Every reading, every finding and every note stays on this PC. This build contains no networking in the SYN path, so there is nothing to opt out of.</p>
+      </div>
+    </div>
+  </div>
+</section>
 <section id="activity" class="page"><h1>Activity</h1><p class="sub">What STRYV has done, and technical errors if any.</p>
   <div class="tabs"><button data-tab="feed" class="on">Activity</button><button data-tab="tech">Technical log</button></div><div id="actList"></div></section>
 <section id="settings" class="page"><h1>Settings</h1><p class="sub">Saved on this PC. Changes apply immediately.</p>
@@ -238,4 +292,4 @@
 <div id="rv" class="ov mid" role="dialog" aria-modal="true"><div class="dbox rvb"><h2 id="rvT"></h2><div id="rvB"></div><div class="dact"><button class="btn ghost" id="rvNo">Cancel</button><button class="btn" id="rvYes">Apply</button></div></div></div>
 <div id="toasts"></div>
 <script src="core.js"></script><script src="smoke.js"></script><script src="intro.js"></script><script src="opt.js"></script><script src="meas.js"></script><script src="health.js"></script><script src="sensors.js"></script><script src="aery.js"></script>
-    <script src="atlas.js"></script><script src="updater.js"></script><script src="app.js"></script></body></html>
+    <script src="atlas.js"></script><script src="syn.js"></script><script src="updater.js"></script><script src="app.js"></script></body></html>
