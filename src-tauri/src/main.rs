@@ -1136,7 +1136,7 @@ fn main() {
         })
         .manage(Monitor(Mutex::new(sys)))
         .manage(Net(Mutex::new((Networks::new_with_refreshed_list(), Instant::now()))))
-        .invoke_handler(tauri::generate_handler![boot_mark, get_snapshot, get_system_info, get_processes, get_network, run_network_tests, opt_catalog, opt_snapshots, opt_preview, opt_apply, opt_rollback, opt_startup, opt_startup_set, get_gpu, get_temps, get_link_speeds, atlas_scan, atlas_launch, atlas_launch_id, atlas_sessions, atlas_clear_sessions, atlas_add_manual, atlas_update, atlas_set_art, atlas_remove, atlas_restore, atlas_set_favorite, aery_list, aery_read, aery_save, aery_create, aery_rename, aery_delete, aery_restore, aery_set_pinned, aery_set_folder, aery_vault_path, aery_counts])
+        .invoke_handler(tauri::generate_handler![boot_mark, get_snapshot, get_system_info, get_processes, get_network, run_network_tests, opt_catalog, opt_snapshots, opt_preview, opt_apply, opt_rollback, opt_startup, opt_startup_set, get_gpu, get_temps, get_link_speeds, atlas_scan, atlas_launch, atlas_launch_id, atlas_sessions, atlas_clear_sessions, atlas_add_manual, atlas_update, atlas_set_art, atlas_remove, atlas_restore, atlas_set_favorite, aery_list, aery_read, aery_save, aery_create, aery_rename, aery_delete, aery_restore, aery_set_pinned, aery_set_folder, aery_vault_path, aery_counts, aery_vaults, aery_vault_open, aery_vault_create, aery_vault_forget])
         .run(tauri::generate_context!())
         .expect("error while running STRYV");
 }

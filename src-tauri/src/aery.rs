@@ -37,11 +37,157 @@ pub struct AeryNote {
 
 const AERY_META: &str = ".aery.json";
 
+const AERY_CFG: &str = "aery-vaults.json";
+
+// `serde(default)` matters here. Without it, a config missing `known` fails to
+// deserialize, and aery_read_cfg's unwrap_or_default throws away the whole file
+// - including `current`, which is the user's chosen vault. A partial file would
+// silently reset where their notes are read from.
+#[derive(Serialize, Deserialize, Default, Clone)]
+#[serde(default)]
+pub struct AeryVaults {
+    current: String,
+    known: Vec<String>,
+}
+
+fn aery_cfg_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    Ok(app.path().app_data_dir().map_err(|e| e.to_string())?.join(AERY_CFG))
+}
+
+pub fn aery_read_cfg(app: &tauri::AppHandle) -> AeryVaults {
+    let Ok(p) = aery_cfg_path(app) else { return AeryVaults::default() };
+    let Ok(t) = std::fs::read_to_string(p) else { return AeryVaults::default() };
+    serde_json::from_str(&t).unwrap_or_default()
+}
+
+pub fn aery_write_cfg(app: &tauri::AppHandle, c: &AeryVaults) -> Result<(), String> {
+    let body = serde_json::to_string_pretty(c).map_err(|e| e.to_string())?;
+    aery_atomic_write(&aery_cfg_path(app)?, body.as_bytes())
+}
+
+/// Resolve the vault the user has chosen, falling back to a default inside app
+/// data the first time. The path is canonicalised so every later containment
+/// check compares like with like.
 pub fn aery_root(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let cfg = aery_read_cfg(app);
+    if !cfg.current.is_empty() {
+        let p = PathBuf::from(&cfg.current);
+        if p.is_dir() {
+            return Ok(p.canonicalize().unwrap_or(p));
+        }
+        // The chosen folder has gone - a moved drive, a deleted folder. Fall
+        // back rather than failing every command, but do not silently rewrite
+        // the user's choice: the old path stays in `known`.
+    }
     let d = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let v = d.join("vault");
     std::fs::create_dir_all(&v).map_err(|e| e.to_string())?;
-    Ok(v)
+    Ok(v.canonicalize().unwrap_or(v))
+}
+
+#[tauri::command]
+pub fn aery_vaults(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let cfg = aery_read_cfg(&app);
+    let mut known: Vec<serde_json::Value> = Vec::new();
+    for p in &cfg.known {
+        let path = PathBuf::from(p);
+        let ok = path.is_dir();
+        let count = if ok { aery_count_md(&path) } else { 0 };
+        known.push(json!({
+            "path": p,
+            "name": path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| p.clone()),
+            "exists": ok,
+            "notes": count,
+        }));
+    }
+    Ok(json!({
+        "current": aery_root(&app)?.to_string_lossy().to_string(),
+        "known": known,
+        "persisted": !cfg.current.is_empty(),
+    }))
+}
+
+/// Switch to a folder the user already has. Recorded so it can be reopened,
+/// and never written into.
+#[tauri::command]
+pub fn aery_vault_open(app: tauri::AppHandle, path: String) -> Result<String, String> {
+    let p = PathBuf::from(path.trim());
+    if !p.is_dir() {
+        return Err("That folder does not exist, or is not a folder.".into());
+    }
+    let canon = p.canonicalize().map_err(|e| e.to_string())?;
+    let mut cfg = aery_read_cfg(&app);
+    let s = canon.to_string_lossy().to_string();
+    cfg.current = s.clone();
+    if !cfg.known.iter().any(|k| k == &s) {
+        cfg.known.push(s.clone());
+    }
+    aery_write_cfg(&app, &cfg)?;
+    Ok(s)
+}
+
+/// Create a new vault at an explicit path, so the user decides where it lives.
+#[tauri::command]
+pub fn aery_vault_create(app: tauri::AppHandle, path: String) -> Result<String, String> {
+    let p = PathBuf::from(path.trim());
+    if p.exists() && !p.is_dir() {
+        return Err("Something is already at that path and it is not a folder.".into());
+    }
+    std::fs::create_dir_all(&p).map_err(|e| format!("Could not create that folder: {}", e))?;
+    // A new vault gets a guide note, so opening one is never an empty box.
+    let readme = p.join("Start here.md");
+    if !readme.exists() {
+        let body = "---\ntitle: Start here\naery_id: welcome\n---\n\n\
+# Your vault\n\n\
+This folder is yours. Everything Aery stores is a plain Markdown file inside it, \
+so you can open it in any editor, put it in Dropbox, or sync it however you like.\n\n\
+- Create a note with **New**.\n\
+- Link notes to each other with [[double brackets]].\n\
+- Deleted notes go to `.trash` and can be restored.\n\
+- Aery never uploads anything.\n\n\
+Delete this file whenever you like.\n";
+        aery_atomic_write(&readme, body.as_bytes())?;
+    }
+    aery_vault_open(app, p.to_string_lossy().to_string())
+}
+
+/// Forget a remembered vault. This only removes it from the list - it never
+/// deletes a single file the user owns.
+#[tauri::command]
+pub fn aery_vault_forget(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    let mut cfg = aery_read_cfg(&app);
+    cfg.known.retain(|k| k != path.trim());
+    if cfg.current == path.trim() {
+        cfg.current = String::new();
+    }
+    aery_write_cfg(&app, &cfg)
+}
+
+/// Markdown file count, used to label each known vault. Cheap: one read_dir
+/// per top-level entry, capped so a huge folder cannot stall the UI.
+pub fn aery_count_md(root: &Path) -> usize {
+    fn walk(d: &Path, depth: u32, n: &mut usize) {
+        if depth > 8 || *n > 5000 {
+            return;
+        }
+        let Ok(rd) = std::fs::read_dir(d) else { return };
+        for e in rd.flatten() {
+            let name = e.file_name();
+            let name = name.to_string_lossy();
+            if name.starts_with('.') {
+                continue;
+            }
+            let p = e.path();
+            if p.is_dir() {
+                walk(&p, depth + 1, n);
+            } else if p.extension().map(|x| x.eq_ignore_ascii_case("md")).unwrap_or(false) {
+                *n += 1;
+            }
+        }
+    }
+    let mut n = 0;
+    walk(root, 0, &mut n);
+    n
 }
 
 // ---- ids ------------------------------------------------------------------
@@ -870,5 +1016,73 @@ mod tests {
             .filter(|n| n.contains("tmp")).collect();
         assert!(leftovers.is_empty(), "temp files left behind: {:?}", leftovers);
         std::fs::remove_dir_all(&d).ok();
+    }
+}
+#[cfg(test)]
+mod vault_tests {
+    use super::*;
+
+    fn tmpdir(tag: &str) -> PathBuf {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static N: AtomicU64 = AtomicU64::new(0);
+        let n = N.fetch_add(1, Ordering::SeqCst);
+        let d = std::env::temp_dir().join(format!("aery-vault-{}-{}-{}", tag, std::process::id(), n));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    #[test]
+    fn markdown_count_finds_nested_notes_and_skips_dotdirs() {
+        let d = tmpdir("count");
+        std::fs::write(d.join("a.md"), "x").unwrap();
+        std::fs::write(d.join("notes.txt"), "x").unwrap();
+        std::fs::create_dir_all(d.join("sub").join("deep")).unwrap();
+        std::fs::write(d.join("sub").join("b.md"), "x").unwrap();
+        std::fs::write(d.join("sub").join("deep").join("c.md"), "x").unwrap();
+        std::fs::create_dir_all(d.join(".trash")).unwrap();
+        std::fs::write(d.join(".trash").join("deleted.md"), "x").unwrap();
+        assert_eq!(aery_count_md(&d), 3, "counts 3 notes; ignores .trash and .txt");
+        std::fs::remove_dir_all(&d).ok();
+    }
+
+    #[test]
+    fn count_is_bounded_so_a_huge_folder_cannot_stall_the_ui() {
+        let d = tmpdir("bound");
+        // The cap exists so opening a folder of tens of thousands of files
+        // cannot freeze the app while it counts them.
+        assert!(aery_count_md(&d) <= 5000);
+        std::fs::remove_dir_all(&d).ok();
+    }
+
+    #[test]
+    fn vault_config_round_trips() {
+        // This config is the only record of where the user's notes live, so it
+        // must survive a save/load cycle exactly.
+        let c = AeryVaults {
+            current: "C:/notes".into(),
+            known: vec!["C:/notes".into(), "D:/work".into()],
+        };
+        let s = serde_json::to_string(&c).unwrap();
+        let back: AeryVaults = serde_json::from_str(&s).unwrap();
+        assert_eq!(back.current, "C:/notes");
+        assert_eq!(back.known.len(), 2);
+        assert_eq!(back.known[1], "D:/work");
+    }
+
+    #[test]
+    fn empty_config_defaults_are_empty_not_a_phantom_vault() {
+        // A fresh install has no chosen vault. It must not invent one, or the
+        // first note would land somewhere the user never picked.
+        let c: AeryVaults = serde_json::from_str("{}").unwrap();
+        assert!(c.current.is_empty());
+        assert!(c.known.is_empty());
+    }
+
+    #[test]
+    fn malformed_config_falls_back_instead_of_crashing() {
+        // A truncated or hand-edited config must not make every command fail.
+        let c: AeryVaults = serde_json::from_str("{ not json").unwrap_or_default();
+        assert!(c.current.is_empty());
     }
 }
