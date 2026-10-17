@@ -556,3 +556,208 @@ table.spec th { min-width: 0; }
 @media (max-width: 560px) {
   .at-cov, .cov { aspect-ratio: 16 / 10; }
 }
+/* ============================================================================
+   SURFACE PASS
+   The site was flat: opaque panels, no blur, one shadow, four transitions.
+   This adds the depth the brand promises without turning it into frosted glass
+   wallpaper. The rules, in order of how much they change:
+
+     --glass   a translucent panel that blurs what is behind it
+     --lift    a card that rises on hover
+     --ease    one easing curve used everywhere, so motion feels like one thing
+
+   Everything here is additive. Nothing above this line was edited.
+   ============================================================================ */
+
+:root {
+  /* One curve. Mixed easings are what makes an interface feel unfinished. */
+  --ease: cubic-bezier(.22, .68, .3, 1);
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --fast: 140ms;
+  --med: 260ms;
+  --slow: 460ms;
+
+  /* glass */
+  --glass: rgba(24, 24, 28, .58);
+  --glass-hi: rgba(32, 32, 38, .62);
+  --glass-line: rgba(255, 255, 255, .07);
+  --glass-line-hi: rgba(255, 255, 255, .12);
+  --blur: 22px;
+
+  /* a light source, so surfaces have a direction rather than a flat fill */
+  --sheen: linear-gradient(180deg, rgba(255, 255, 255, .055) 0%, rgba(255, 255, 255, 0) 42%);
+  --amber-glow: radial-gradient(120% 80% at 50% -10%, rgba(245, 166, 35, .11) 0%, rgba(245, 166, 35, 0) 60%);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+  --shadow-md: 0 8px 24px -8px rgba(0, 0, 0, .6), 0 2px 6px -2px rgba(0, 0, 0, .4);
+  --shadow-lg: 0 24px 60px -20px rgba(0, 0, 0, .75), 0 8px 20px -12px rgba(0, 0, 0, .5);
+}
+
+/* The page gets an actual light source. Without one, blur has nothing to
+   sample and glass reads as grey. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    var(--amber-glow),
+    radial-gradient(80% 55% at 78% 4%, rgba(56, 189, 248, .05) 0%, rgba(56, 189, 248, 0) 62%),
+    radial-gradient(70% 50% at 8% 22%, rgba(245, 166, 35, .045) 0%, rgba(245, 166, 35, 0) 60%);
+}
+
+/* ---- the glass recipe ---------------------------------------------------- */
+.side,
+.nav,
+.card,
+.panel,
+.vcard,
+.at-card,
+.mcell,
+thead th,
+table.spec th,
+table.road th {
+  -webkit-backdrop-filter: blur(var(--blur)) saturate(150%);
+  backdrop-filter: blur(var(--blur)) saturate(150%);
+  border-color: var(--glass-line);
+  box-shadow: var(--shadow-sm);
+}
+
+/* the sticky chrome sits above content, so it blurs harder and carries more */
+.side,
+.nav {
+  background: var(--glass) !important;
+  border-color: var(--glass-line-hi);
+  box-shadow: var(--shadow-md);
+}
+
+/* opaque panels become glass */
+.card,
+.panel,
+.vcard,
+.at-card,
+.mcell {
+  background: var(--glass);
+  position: relative;
+  overflow: hidden;
+}
+
+/* a single top-edge highlight. This is what reads as "glass" more than the
+   blur does: light catching a bevel. */
+.card::before,
+.panel::before,
+.vcard::before,
+.at-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .16) 22%, rgba(255, 255, 255, .16) 78%, transparent);
+  pointer-events: none;
+}
+
+/* ---- lift ---------------------------------------------------------------- */
+.card,
+.panel,
+.vcard,
+.at-card {
+  transition:
+    transform var(--med) var(--ease-out),
+    border-color var(--med) var(--ease),
+    box-shadow var(--med) var(--ease),
+    background-color var(--med) var(--ease);
+  will-change: transform;
+}
+
+.card:hover,
+.vcard:hover,
+.at-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--glass-line-hi);
+  box-shadow: var(--shadow-lg);
+}
+
+.at-card:hover { transform: translateY(-3px); }
+.at-card:hover .at-covf { filter: brightness(1.06); }
+
+/* hover only where a pointer exists - sticky hover on touch is a bug */
+@media (hover: none) {
+  .card:hover, .vcard:hover, .at-card:hover { transform: none; }
+}
+
+/* ---- amber breathes ------------------------------------------------------ */
+.btn {
+  transition: transform var(--fast) var(--ease-out), box-shadow var(--med) var(--ease),
+              filter var(--fast) var(--ease);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .18) inset, 0 6px 18px -8px rgba(245, 166, 35, .7);
+}
+.btn:hover { transform: translateY(-1px); filter: brightness(1.06); }
+.btn:active { transform: translateY(0) scale(.985); }
+
+.btn.ghost {
+  background: var(--glass-hi);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-sm), 0 1px 0 rgba(255, 255, 255, .07) inset;
+}
+.btn.ghost:hover { border-color: var(--glass-line-hi); box-shadow: var(--shadow-md); }
+
+/* ---- interactive feel ---------------------------------------------------- */
+a { transition: color var(--fast) var(--ease), opacity var(--fast) var(--ease); }
+
+.btn, a, button, input, select, .chip, tr { -webkit-tap-highlight-color: transparent; }
+
+:focus-visible {
+  outline: 2px solid var(--v);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+::selection { background: rgba(245, 166, 35, .26); color: var(--hi); }
+
+/* scrollbars, so a dark page does not sprout a bright one */
+* { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .16) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, .13);
+  border-radius: 99px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, .24); background-clip: content-box; }
+
+/* ---- entrance ------------------------------------------------------------
+   Motion is only ever an entrance and a lift. Nothing loops, nothing moves
+   unless the reader moved it. */
+@media (prefers-reduced-motion: no-preference) {
+  .pwrap > section,
+  section { animation: rise var(--slow) var(--ease-out) both; }
+  section:nth-of-type(2) { animation-delay: 60ms; }
+  section:nth-of-type(3) { animation-delay: 110ms; }
+  section:nth-of-type(4) { animation-delay: 160ms; }
+  section:nth-of-type(5) { animation-delay: 210ms; }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: none; }
+  }
+}
+
+html { scroll-behavior: smooth; }
+
+/* ---- reduced motion is a requirement, not a courtesy --------------------- */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .card:hover, .vcard:hover, .at-card:hover, .btn:hover { transform: none; }
+}
+
+/* ---- high contrast gets borders instead of blur ------------------------- */
+@media (prefers-contrast: more) {
+  .card, .panel, .vcard, .at-card { border-color: var(--glass-line-hi); background: var(--p1); }
+}

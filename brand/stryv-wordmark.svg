@@ -1,9 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-60 -14 460 150" width="920" height="300">
-<g fill="none" stroke="#E5E7EB" stroke-width="16" stroke-linejoin="miter" stroke-miterlimit="4">
-<path d="M60 8H18Q8 8 8 18V32Q8 42 18 50H46Q56 50 56 60V82Q56 92 46 92H4"/>
-<path d="M78 8H140M109 8V100"/>
-<path d="M164 100V8H196Q212 8 212 26Q212 46 196 46H164M192 46L214 100"/>
-<path d="M322 8L353 100L384 8"/></g>
-<g fill="none" stroke="#8B5CF6" stroke-width="16" stroke-linejoin="miter"><path d="M236 8L267 54M298 8L267 54M267 54V100" stroke-linecap="butt"/></g>
-<polygon points="259,92 275,100 192,120" fill="#8B5CF6"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-60 -14 460 150" width="920" height="300" role="img" aria-label="STRYV">
+<!--
+  STRYV wordmark.
+
+  The letterforms are unchanged. The accent is corrected: the Y was violet
+  (#8B5CF6) while every surface in the product is amber (#F5A623), so the mark
+  read as belonging to a different product. Amber is the app's --v token.
+-->
+<g fill="none" stroke="#E8EAF0" stroke-width="16" stroke-linejoin="miter" stroke-miterlimit="4">
+  <path d="M60 8H18Q8 8 8 18V32Q8 42 18 50H46Q56 50 56 60V82Q56 92 46 92H4"/>
+  <path d="M78 8H140M109 8V100"/>
+  <path d="M164 100V8H196Q212 8 212 26Q212 46 196 46H164M192 46L214 100"/>
+  <path d="M322 8L353 100L384 8"/>
+</g>
+
+<g fill="none" stroke="#F5A623" stroke-width="16" stroke-linejoin="miter">
+  <path d="M236 8L267 54M298 8L267 54M267 54V100"/>
+</g>
+
+<!-- the underline sweep, in the same amber, sitting flush under the stem -->
+<path d="M191 118H275L267 96Z" fill="#F5A623" opacity=".9"/>
 </svg>
