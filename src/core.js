@@ -2,8 +2,22 @@
 const q = (id) => document.getElementById(id);
 const PAGES = ["dashboard", "performance", "network", "aery", "atlas", "optimizations", "system", "syn", "activity", "settings", "whatsnew", "help"];
 const ACCENTS = { Amber: "#F5A623", Cyan: "#38BDF8", Violet: "#8B5CF6" };
-const VERSION = "0.2.5";
+const VERSION = "0.2.6";
 const CHANGELOG = [{
+    v: "0.2.6", date: "2026-10-17", tag: "the rocket is back",
+    groups: {
+      Fixed: [
+        "The rocket launch screen is back. It was removed in 0.2.3 because the launch screen had been redesigned to look like a terminal, and I took the honest-readings rule further than it was meant to go: a launch screen has to show what is actually happening, not pretend to be a data readout. That was my mistake and it is undone.",
+        "The smoke was fixed rather than replaced. It was being drawn all along, across a few hundred thousand pixels, but it was so dark against the launch pad that it read as an empty box. The particles now carry the light of the flame that made them, so there is a visible plume instead of a faint smudge.",
+        "Skip is now a real button you can click, as well as Esc. Enter and Space work too. A 2.8 second animation you cannot get past with a mouse is a launch screen that hangs the app, which is the opposite of what a launch screen is for."
+      ],
+      Signature: [
+        "Signed, like every STRYV release. STRYV checks the published release feed, downloads the installer, and verifies its signature against the key built into the app before running it."
+      ]
+    }
+  },
+  {
+    v: "0.2.5", date: "2026-10-16", tag: "faster launch",
     v: "0.2.5", date: "2026-10-16", tag: "faster launch",
     groups: {
       Changed: [
