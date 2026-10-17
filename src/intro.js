@@ -65,12 +65,41 @@ mark("scripts running (intro.js loaded)");
     btns.forEach(([t, f], i) => { const b = document.createElement("button"); b.className = "btn" + (i ? " ghost" : ""); b.textContent = t; b.onclick = f; m.querySelector(".ibtn").appendChild(b); });
     const b0 = m.querySelector("button"); if (b0) b0.focus();
   }
+  // Screenshots cannot answer this: WebView2 windows do not composite into
+  // PrintWindow, and a screen grab records whatever happens to be in front. The
+  // app reporting its own DOM is the only trustworthy evidence that nothing is
+  // left painting over the interface.
+  function audit() {
+    setTimeout(() => {
+      const cv = document.getElementById("icv");
+      const intro = document.getElementById("intro");
+      let lit = "n/a";
+      if (cv) {
+        try {
+          const d = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
+          let n = 0;
+          for (let k = 3; k < d.length; k += 4) if (d[k] > 4) n++;
+          lit = n + "px";
+        } catch (e) { lit = "unreadable"; }
+      }
+      mark("audit+3s: intro=" + (intro ? "PRESENT" : "gone") +
+           " canvas=" + (cv ? "PRESENT " + cv.width + "x" + cv.height + " lit=" + lit : "gone") +
+           " st=" + (st ? "live" : "null"));
+    }, 3000);
+  }
   function finish() {
     if (!st) return;
+    mark("finish(): field=" + (st.field ? st.field.fw + "x" + st.field.fh : "none") + " wisps=" + (st.wisp ? st.wisp.length : "?") + " sparks=" + (st.spark ? st.spark.length : "?"));
     st.timers.forEach(clearTimeout); cancelAnimationFrame(st.raf); removeEventListener("resize", st.onR);
+    // Free the field buffers now rather than waiting for GC. The launch screen
+    // allocates a Float32Array and a canvas every run; an earlier attempt to
+    // add this silently failed to apply and the leak shipped.
+    if (st.field) { st.field.dispose(); st.field = null; }
+    st.wisp = null; st.spark = null; st.ctx = null;
     st.root.remove(); st = null;
+    audit();
   }
-  function quick() { if (!st) return; st.root.classList.add("nopt", "fade"); st.timers.push(setTimeout(finish, 220)); }
+  function quick() { if (!st) return; st.root.classList.add("nopt", "fade"); st.timers.push(setTimeout(() => { finish(); }, 220)); }
 
   async function begin(readyFn) {
     const s = st;
@@ -196,8 +225,13 @@ mark("scripts running (intro.js loaded)");
     // The reveal is carried by the smoke itself rather than a flat vignette:
     // the cloud expands past the viewport and thins as it goes, so the app is
     // uncovered from the centre outward.
+    // The smoke IS the reveal, so it has to start fading the moment the reveal
+    // starts. It used to hold full opacity until expand>0.55 (2082ms) while
+    // .clr went transparent at 1750ms, which put a full-strength smoke layer
+    // over the fully visible app for a third of a second and then over a
+    // fading app for another second. That is what it looked like.
     const expand = c01((T - TL.cover0) / (TL.clr1 - TL.cover0));
-    const alpha = 1 - sm(0.55, 1, expand);
+    const alpha = 1 - sm(0, 1, expand);
 
     st.spread = ph.spread;
     // geom() cannot carry nozY: it changes every frame as the rocket lifts, and
@@ -246,10 +280,12 @@ mark("scripts running (intro.js loaded)");
     }
     ctx.restore();
 
-    if (T >= TL.cover1 && !st.clr) { st.clr = 1; root.classList.add("clr"); }
+    // Tie the backdrop clear to the smoke alpha instead of a fixed time, so the
+    // two can never drift apart again.
+    if (alpha < 0.45 && !st.clr) { st.clr = 1; root.classList.add("clr"); }
     if (T >= TL.clr0 && !st.pe) { st.pe = 1; root.classList.add("nopt"); }
     if (T >= TL.clr1 && !st.sw) { st.sw = 1; root.classList.add("sw"); }
-    if (T >= TL.end) return finish();
+    if (T >= TL.end) { finish(); return; }
 
     st.raf = requestAnimationFrame(frame);
   }
