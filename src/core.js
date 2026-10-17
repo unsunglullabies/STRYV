@@ -18,7 +18,6 @@ const CHANGELOG = [{
   },
   {
     v: "0.2.5", date: "2026-10-16", tag: "faster launch",
-    v: "0.2.5", date: "2026-10-16", tag: "faster launch",
     groups: {
       Changed: [
         "STRYV now shows the logo on a plain splash the moment the window opens, then hands over to the boot sequence. Before this the window could stay blank while the backend was still answering, which read as a hang rather than a start.",
