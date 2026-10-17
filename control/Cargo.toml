@@ -1,0 +1,16 @@
+[package]
+name = "stryv-control"
+version = "0.1.0"
+edition = "2021"
+description = "Control app: identical Tauri + WebView2 + window config, trivial frontend. Exists to measure the WebView2 baseline."
+license = ""
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+
+# Deliberately the bare minimum: no plugins, no updater, no dialog, no process.
+# Any memory difference between this and STRYV is therefore attributable to
+# STRYV's own code, its plugins, or its frontend - not to the WebView2 baseline.

@@ -103,7 +103,6 @@ class SmokeField {
     // smooth form of the field: reading them off the full field made grad
     // dominated by high-frequency speckle, which lit the smoke as torn streaks.
     this.lumb = new Float32Array(fw * fh);
-    this.rgba = new Float32Array(fw * fh * 3);
     this.img = new ImageData(fw, fh);
     this.buf.width = fw; this.buf.height = fh;
     return true;
@@ -115,7 +114,7 @@ class SmokeField {
    * @param {object} p   phases { plume, ground, spread, fill }
    */
   render(T, g, p) {
-    const { fw, fh, dens, lumb, rgba, img } = this;
+    const { fw, fh, dens, lumb, img } = this;
     const data = img.data;
     const drift = T * 0.00007;
     const swirl = T * 0.00013;
@@ -148,7 +147,9 @@ class SmokeField {
         const ground = clamp01(1 - gd) * p.ground;
 
         let env = column * 0.92 + ground;
-        if (env <= 0.004) { dens[i] = 0; continue; }
+        // lumb must be cleared too: leaving last frame's value here made the
+        // gradient lighting at the plume boundary read stale density.
+        if (env <= 0.004) { dens[i] = 0; lumb[i] = 0; continue; }
         env = clamp01(env);
 
         // --- domain warp ----------------------------------------------------
@@ -189,15 +190,18 @@ class SmokeField {
         const d = dens[i];
         const o = i * 3;
         if (d < 0.006) {
-          rgba[o] = rgba[o + 1] = rgba[o + 2] = 0;
-          data[i * 4 + 3] = 0;
+            data[i * 4 + 3] = 0;
           continue;
         }
         // Stride 2 smooths the normal further; stride 1 on an already noisy
         // field is what produced the fibrous, torn-streak lighting.
         const s2 = 2;
-        const xm = x > 0 ? i - s2 : i, xp = x < fw - 1 ? i + s2 : i;
-        const ym = y > 0 ? i - s2 * fw : i, yp = y < fh - 1 ? i + s2 * fw : i;
+        // Guards must test the STRIDE, not 1: at s2=2 a guard of x>0 let x=1 sample
+        // index -1 (previous row) and x=fw-2 sample the next row's column 0.
+        // Out-of-range typed-array reads are undefined, not 0, so this became NaN
+        // and silently rendered two rows as transparent black.
+        const xm = x >= s2 ? i - s2 : i, xp = x < fw - s2 ? i + s2 : i;
+        const ym = y >= s2 ? i - s2 * fw : i, yp = y < fh - s2 ? i + s2 * fw : i;
         const gx = lumb[xp] - lumb[xm];
         const gy = lumb[yp] - lumb[ym];
         const grad = Math.hypot(gx, gy);
@@ -229,7 +233,6 @@ class SmokeField {
         gg = lerp(gg, SMOKE_HEAT[1], hot);
         b = lerp(b, SMOKE_HEAT[2], hot);
 
-        rgba[o] = r; rgba[o + 1] = gg; rgba[o + 2] = b;
 
         // Alpha carries density, steeply. Dense cores read solid; the fringes
         // fall off fast, which is what gives smoke a defined edge.
@@ -271,6 +274,9 @@ class SmokeField {
   }
 
   dispose() {
+    // Clear the size too: leaving fw/fh set makes a later resize() early-exit
+    // and a later render() dereference null arrays.
+    this.fw = 0; this.fh = 0;
     this.dens = null;
     this.lumb = null;
     this.rgba = null;

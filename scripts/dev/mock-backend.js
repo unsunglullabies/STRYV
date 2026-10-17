@@ -38,21 +38,18 @@
     base + Math.sin(t / period) * amp + Math.sin(t / (period * 0.37)) * amp * 0.6;
   const tick = () => { t += 120; };
 
+  // Field names must match src-tauri/src/main.rs exactly. When they did not,
+  // app.js read s.cpu_usage as undefined, tick() returned false, and the whole
+  // dev server reported "Could not read live system data" - so anything judged
+  // through npm run dev:web was judging a fiction.
+  const GB = 1073741824;
   const SNAP = () => ({
-    cpu: wob(34, 14, 900),
-    cpu_freq: wob(3.4, 0.5, 1600),
-    mem_used: wob(9.2, 1.1, 2200),
-    mem_total: 32,
-    mem_pct: wob(29, 6, 2200),
-    uptime: 86400 * 3 + 4120,
-    gpu_name: "MOCK GPU (synthetic)",
-    gpu_pct: wob(21, 10, 1400),
-    gpu_temp: wob(58, 5, 3000),
-    gpu_mem_used: 2147483648,
-    gpu_mem_total: 10737418240,
-    disks: [{ name: "C: STRYV (mock)", total: 1000000000000, free: 388000000000 }],
-    host: "DEV-MOCK-HOST",
-    os: "Windows (mock)",
+    cpu_usage: Math.max(0, Math.min(100, wob(34, 14, 900))),
+    mem_used: Math.round(wob(9.2, 1.1, 2200) * GB),
+    mem_total: 32 * GB,
+    uptime_secs: 86400 * 3 + 4120,
+    process_count: 5,
+    disks: [{ name: "C: STRYV (mock)", total: 1000 * GB, available: 388 * GB }],
   });
 
   const PROCS = () => ([
@@ -64,7 +61,7 @@
   ]);
 
   const NET = () => ([
-    { name: "Mock Adapter", down: wob(18400000, 7000000, 700), up: wob(2300000, 900000, 1100), speed: 1000000000, up_speed: 1000000000 },
+    { name: "Mock Adapter", mac: "00:11:22:33:44:55", rx_bps: wob(18400000, 7000000, 700), tx_bps: wob(2300000, 900000, 1100), link_bps: 1000000000 },
   ]);
 
   const GAMES = [
@@ -108,12 +105,28 @@
 
     // --- Aery -------------------------------------------------------------
     aery_list: () => Object.entries(NOTES).map(([path, n]) => ({
-      path, name: n.body.match(/title: (.+)/) ? n.body.match(/title: (.+)/)[1] : path,
-      tags: n.tags, updated: n.updated, created: n.created, pinned: n.pinned,
+      id: "mock:" + btoa(path).replace(/=+$/, ""),
+      title: (n.body.match(/title: (.+)/) || [null, path])[1],
+      path, folder: path.includes("/") ? path.split("/")[0] : "",
+      pinned: !!n.pinned, created: n.created, modified: n.updated, size: n.body.length,
+      excerpt: n.body.slice(0, 280), tags: n.tags, links: [], backlinks: [],
     })),
-    aery_read: (a) => NOTES[a.path] || null,
+    aery_read: (a) => {
+      for (const [path, n] of Object.entries(NOTES)) {
+        if (path === a.id || btoa(path).replace(/=+$/, "") === a.id) {
+          const title = (n.body.match(/title: (.+)/) || [null, path])[1];
+          return {
+            id: a.id, title, path, folder: path.includes("/") ? path.split("/")[0] : "",
+            content: n.body, tags: n.tags, pinned: !!n.pinned,
+            modified: n.updated, created: n.created, size: n.body.length,
+            links: [], backlinks: [], word_count: n.body.split(/\s+/).length,
+          };
+        }
+      }
+      throw new Error("That note is not in the vault.");
+    },
     aery_vault_path: () => "C:\\mock\\vault (does not exist)",
-    aery_counts: () => ({ total: Object.keys(NOTES).length, pinned: 1, trashed: 0 }),
+    aery_counts: () => ({ notes: Object.keys(NOTES).length, tags: ["mock"], folders: [] }),
     aery_save: () => null, aery_create: () => null, aery_rename: () => null,
     aery_delete: () => null, aery_restore: () => null,
     aery_set_pinned: () => null, aery_set_folder: () => null,
@@ -129,6 +142,60 @@
     opt_startup: () => [],
     opt_startup_set: () => { throw new Error("Not available in DEV MOCK - the Run key is never touched."); },
   };
+
+  // If a real Tauri runtime is already here, stand down. `withGlobalTauri`
+  // installs window.__TAURI__ before page scripts run, so when `npm run dev:app`
+  // loads the page from the dev server this is the real object and must not be
+  // overwritten - otherwise the dev test app silently stops exercising real IPC
+  // and reports mock data as if it were hardware.
+  if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === "function") {
+    window.__STRYV_MOCK_STOOD_DOWN__ = true;
+    window.addEventListener("DOMContentLoaded", () => {
+      const b = document.createElement("div");
+      b.textContent = "REAL TAURI - not mocked";
+      b.style.cssText = "position:fixed;left:50%;top:0;transform:translateX(-50%);z-index:99999;" +
+        "background:#166534;color:#fff;font:600 11px/1 ui-monospace,monospace;letter-spacing:.14em;" +
+        "padding:6px 14px;border-radius:0 0 6px 6px;pointer-events:none";
+      document.body.appendChild(b);
+    });
+    return;
+  }
+
+  // If a real Tauri runtime is already here, stand down. `withGlobalTauri`
+  // installs window.__TAURI__ before page scripts run, so when `npm run dev:app`
+  // loads the page from the dev server this is the real object and must not be
+  // overwritten - otherwise the dev test app silently stops exercising real IPC
+  // and reports mock data as if it were hardware.
+  if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === "function") {
+    window.__STRYV_MOCK_STOOD_DOWN__ = true;
+    window.addEventListener("DOMContentLoaded", () => {
+      const b = document.createElement("div");
+      b.textContent = "REAL TAURI - not mocked";
+      b.style.cssText = "position:fixed;left:50%;top:0;transform:translateX(-50%);z-index:99999;" +
+        "background:#166534;color:#fff;font:600 11px/1 ui-monospace,monospace;letter-spacing:.14em;" +
+        "padding:6px 14px;border-radius:0 0 6px 6px;pointer-events:none";
+      document.body.appendChild(b);
+    });
+    return;
+  }
+
+  // If a real Tauri runtime is already here, stand down. `withGlobalTauri`
+  // installs window.__TAURI__ before page scripts run, so when `npm run dev:app`
+  // loads the page from the dev server this is the real object and must not be
+  // overwritten - otherwise the dev test app silently stops exercising real IPC
+  // and reports mock data as if it were hardware.
+  if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === "function") {
+    window.__STRYV_MOCK_STOOD_DOWN__ = true;
+    window.addEventListener("DOMContentLoaded", () => {
+      const b = document.createElement("div");
+      b.textContent = "REAL TAURI - not mocked";
+      b.style.cssText = "position:fixed;left:50%;top:0;transform:translateX(-50%);z-index:99999;" +
+        "background:#166534;color:#fff;font:600 11px/1 ui-monospace,monospace;letter-spacing:.14em;" +
+        "padding:6px 14px;border-radius:0 0 6px 6px;pointer-events:none";
+      document.body.appendChild(b);
+    });
+    return;
+  }
 
   window.__TAURI__ = {
     core: {

@@ -186,7 +186,15 @@ function inject(html) {
 // ---------------------------------------------------------------------------
 const server = http.createServer((req, res) => {
   const parsed = url.parse(req.url);
-  let pathname = decodeURIComponent(parsed.pathname || "/");
+  // A malformed percent-encoding throws URIError synchronously inside the
+  // request listener, which is uncaught and kills the server - one bad request
+  // and every open tab silently loses live reload.
+  let pathname;
+  try { pathname = decodeURIComponent(parsed.pathname || "/"); }
+  catch { res.writeHead(400); res.end("Bad request path"); return; }
+  // A NUL byte reaches fs.readFile, which validates the path synchronously and
+  // throws before the error callback can run.
+  if (pathname.indexOf("\0") !== -1) { res.writeHead(400); res.end("Bad request path"); return; }
 
   // --- dev-only endpoints ---
   if (pathname === "/__dev/reload") {
@@ -203,7 +211,9 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (pathname === "/__dev/mock.js") {
-    const body = fs.readFileSync(MOCK);
+    let body;
+    try { body = fs.readFileSync(MOCK); }
+    catch (e) { res.writeHead(500); res.end("mock missing: " + e.message); return; }
     res.writeHead(200, { "Content-Type": MIME[".js"], "Cache-Control": "no-store" });
     res.end(body);
     return;

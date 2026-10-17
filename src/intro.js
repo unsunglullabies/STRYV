@@ -87,6 +87,21 @@ mark("scripts running (intro.js loaded)");
            " st=" + (st ? "live" : "null"));
     }, 3000);
   }
+  // Skip must be reachable by pointer and keyboard. A launch screen you cannot
+  // get past with a mouse is a launch screen that hangs the app.
+  function bindSkip(root) {
+    const go = (e) => { if (e) e.preventDefault(); quick(); };
+    const b = root.querySelector(".iskip");
+    if (b) {
+      b.addEventListener("click", go);
+      // Focus it so Enter and Space work without a click, and so the button is
+      // reachable by keyboard on first paint.
+      try { setTimeout(() => b.focus(), 0); } catch (e) { /* not focusable yet */ }
+    }
+    root.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" || e.key === "Enter" || e.key === " ") go(e);
+    });
+  }
   function finish() {
     if (!st) return;
     mark("finish(): field=" + (st.field ? st.field.fw + "x" + st.field.fh : "none") + " wisps=" + (st.wisp ? st.wisp.length : "?") + " sparks=" + (st.spark ? st.spark.length : "?"));
@@ -135,6 +150,12 @@ mark("scripts running (intro.js loaded)");
       if (typeof Act !== "undefined" && Act.log)
         Act.log({ text: "Launch timing: backend ready at " + Math.round(performance.now()) + " ms" });
     } catch (e) { /* logging only */ }
+    // app.js hands us a second stage here. It was passed as { ready } and then
+    // never read, so the updater check silently never ran - the precise bug the
+    // comment in app.js claims was fixed.
+    if (typeof s.ready === "function") {
+      try { await s.ready(res); } catch (e) { Tech.add("post-startup", e); }
+    }
     maybeFinish();
   }
 
@@ -149,7 +170,10 @@ mark("scripts running (intro.js loaded)");
   function launch() {
     const s = st;
     s.root.classList.add("fire");
-    s.field = new SmokeField(0.34);
+    // Retry re-enters launch(); without this the previous field is never disposed and the
+    // previous rAF handle is overwritten, so one loop becomes uncancellable.
+    if (s.field) s.field.dispose();
+    if (s.raf) cancelAnimationFrame(s.raf);
     s.field.resize(g0().vw, g0().vh);
     s.ctx = s.cv.getContext("2d"); s.wisp = []; s.spark = [];
     s.rk = s.root.querySelector(".irk"); s.fl = s.root.querySelector("#ifl");
@@ -306,10 +330,11 @@ mark("scripts running (intro.js loaded)");
     }
     st = {
       root, cv: root.querySelector("#icv"), timers: [], raf: 0, force: !!o.force,
-      jsAt: Math.round(performance.now()), backend: null, animDone: false,
+      jsAt: Math.round(performance.now()), backend: null, animDone: false, ready: o.ready,
       ac: rgb(getComputedStyle(document.documentElement).getPropertyValue("--v").trim() || "#F5A623")
     };
     st.onR = setVars; addEventListener("resize", st.onR); setVars();
+    bindSkip(root);
     root.classList.add("in");
 
     // requestAnimationFrame can stay paused while the window is hidden, so the
@@ -332,7 +357,9 @@ mark("scripts running (intro.js loaded)");
       if (!reveal()) { let n = 0; const iv = setInterval(() => { if (reveal() || ++n > 40) clearInterval(iv); }, 50); }
     }
 
-    st.timers.push(setTimeout(() => { if (st && !st.sprites) st.sprites = makeSprites(st.ac); }, 60));
+    // The old sprite precompute is gone: SmokeField builds its own buffers on first
+    // render. Calling makeSprites() here threw an uncaught ReferenceError on
+    // every single launch once the field renderer replaced it.
     begin(readyFn);
   }
   return { run, active: () => !!st };
