@@ -534,11 +534,11 @@ impl Source for StandaloneSource {
 
 /// Launchers ATLAS is planned for but does not read yet. Listed so the interface
 /// can say so, rather than leaving the user to guess why Epic is empty.
-pub const NOT_SUPPORTED_YET: [&str; 8] = [
-    "Epic Games",
-    "GOG Galaxy",
-    "Xbox / Microsoft Store",
-    "EA App",
+// Launchers ATLAS has not built a reader for. Listed so the interface says so
+// rather than leaving the user to work out why Epic or GOG came back empty -
+// and kept honest as adapters land: each one that ships is removed from here in
+// the same commit that adds it.
+pub const NOT_SUPPORTED_YET: [&str; 4] = [
     "Ubisoft Connect",
     "Battle.net",
     "Riot Client",
@@ -548,7 +548,14 @@ pub const NOT_SUPPORTED_YET: [&str; 8] = [
 // ---------- coordinator ----------
 
 pub fn registry(manual: Vec<SourceEntry>) -> Vec<Box<dyn Source>> {
-    vec![Box::new(SteamSource), Box::new(StandaloneSource { entries: manual })]
+      vec![
+        Box::new(SteamSource),
+        Box::new(crate::launchers::EpicSource),
+        Box::new(crate::launchers::GogSource),
+        Box::new(crate::launchers::EaSource),
+        Box::new(crate::launchers::XboxSource),
+        Box::new(StandaloneSource { entries: manual }),
+    ]
 }
 
 /// Runs every source and reports on each one independently.
@@ -1678,9 +1685,23 @@ mod tests {
     }
 
     #[test]
-    fn the_unimplemented_launchers_are_declared_not_hidden() {
-        assert!(NOT_SUPPORTED_YET.contains(&"Epic Games"));
-        assert!(NOT_SUPPORTED_YET.contains(&"Battle.net"));
+    fn a_launcher_is_never_both_read_and_listed_as_missing() {
+        // A launcher with an adapter must not also sit in the not-supported list,
+        // or ATLAS would tell the user it cannot read Epic while reading it.
+        for done in ["Epic Games", "GOG Galaxy", "Xbox / Microsoft Store", "EA App"] {
+            assert!(
+                !NOT_SUPPORTED_YET.contains(&done),
+                "{} has an adapter and must not be listed as unimplemented",
+                done
+            );
+        }
+        for todo in ["Battle.net", "Ubisoft Connect", "Riot Client", "Amazon Games"] {
+            assert!(
+                NOT_SUPPORTED_YET.contains(&todo),
+                "{} has no adapter and must be declared rather than silently absent",
+                todo
+            );
+        }
     }
 
     #[test]

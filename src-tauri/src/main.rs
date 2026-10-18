@@ -407,6 +407,8 @@ async fn get_link_speeds() -> Result<Vec<Link>, String> {
 // ATLAS lives in its own module. It reads launcher files read-only and writes
 // only to its own store beside the app data.
 mod atlas;
+// Launcher adapters beyond Steam, each reading one launcher's own files.
+mod launchers;
 
 
 // ---------- Startup timeline ----------

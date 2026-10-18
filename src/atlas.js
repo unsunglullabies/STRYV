@@ -189,14 +189,14 @@ const hasBackend = () => typeof invoke === "function";
     host.innerHTML = `
       ${art(g, "at-covw")}
       <div class="at-fbody">
-        <span class="at-badge at-${/steam/i.test(g.launcher) ? "steam" : "manual"}">${escF(g.launcher)}</span>
+        <span class="at-badge at-${escF(badgeCls(g))}">${escF(g.launcher)}</span>
         <h2>${escF(g.name)}</h2>
         <div class="at-facts at-facts-lg">
           <span class="at-fact" title="Last played">${escF(day(g.last_played))}</span>
           <span class="at-fact" title="Launches from ATLAS">${escF(launchesWord(g.plays))}</span>
           <span class="at-fact" title="Install size">${escF(mb(g.size_bytes))}</span>
         </div>
-        ${g.available === false ? `<p class="at-why">Executable not found at ${escF(g.exe_path || g.install_dir || "its recorded location")}.</p>` : ""}
+        ${heroWhy(g)}
         <div class="at-cbtns">
           <button class="btn" data-fplay="${escF(g.id)}"${g.available === false ? " disabled" : ""}>Play</button>
           <button class="btn ghost at-fav" data-fav="${escF(g.id)}" aria-pressed="${g.favorite ? "true" : "false"}" title="${g.favorite ? "Remove from favourites" : "Add to favourites"}" aria-label="Favourite">${g.favorite ? "★" : "☆"}</button>
@@ -212,6 +212,20 @@ const hasBackend = () => typeof invoke === "function";
   }
 
 const byId = (id) => games.find((g) => g.id === id);
+
+  // Which source owns the headline install. This used to be a test for
+  // /steam/i, which painted Epic, GOG, EA and Store in the hand-added colour
+  // because none of them are Steam.
+  const srcOf = (g) => {
+    if (g && Array.isArray(g.sources) && g.sources.length) return g.sources[0];
+    if (g && g.source === "manual") return "standalone";
+    if (g && /manual|standalone|hand/i.test(String(g.launcher || ""))) return "standalone";
+    return "steam";
+  };
+
+  // The badge class, kept separate from the id so hand-added entries keep the
+  // class the stylesheet and the rest of the UI already use.
+  const badgeCls = (g) => (srcOf(g) === "standalone" ? "manual" : srcOf(g));
 
   // Launchability is worked out here, from the data already on the game, rather
   // than trusting a flag the backend computed. The backend does compute one, but
@@ -231,9 +245,29 @@ function cannotLaunch(g) {
       if (!g.app_id || !/^\d+$/.test(String(g.app_id))) return "Steam has no app id for this entry.";
       return null;
     }
+    // Detected from a launcher, but not hand-added, and not Steam. ATLAS reads
+    // the launcher but does not start through it yet, and says so rather than
+    // offering a button that may launch the wrong thing.
+    if (g.source !== "manual" && srcOf(g) !== "standalone") {
+      return "ATLAS can see this on " + (g.launcher || "its launcher") + " but cannot start games through it yet. Open the launcher to play.";
+    }
     if (!g.exe_path) return "No executable is recorded for this entry.";
     return null;
   }
+
+  // One wording for why a game cannot be started, so the card, the hero and the
+  // detail panel cannot drift into saying three different things about the same
+  // entry. A missing file and an unlaunchable launcher are not the same problem.
+  const heroWhy = (g) => {
+    const why = cannotLaunch(g);
+    return why ? `<p class="at-why">${escF(why)}</p>` : "";
+  };
+
+  const detailWhy = (g) => {
+    const why = cannotLaunch(g);
+    if (!why) return "";
+    return `<p class="at-why">${escF(why)}</p>`;
+  };
 
   // "0 launches" is accurate but reads like a database. ATLAS says what it means,
   // and is explicit that the number only covers games launched from here.
@@ -251,7 +285,7 @@ function cannotLaunch(g) {
       <div class="at-cbody">
         <div class="at-ch">
           <h4>${escF(g.name)}</h4>
-          <span class="at-badge at-${/steam/i.test(g.launcher) ? "steam" : "manual"}">${escF(g.launcher)}</span>
+          <span class="at-badge at-${escF(badgeCls(g))}">${escF(g.launcher)}</span>
           ${g.kind && g.kind !== "game" ? `<span class="at-kind" title="Not a game">${escF(g.kind)}</span>` : ""}
         </div>
         <div class="at-facts">
@@ -538,9 +572,9 @@ if (!ok) return;
       <div class="at-dbody">
         <div class="at-ch">
           <h3>${escF(g.name)}</h3>
-          <span class="at-badge at-${/steam/i.test(g.launcher) ? "steam" : "manual"}">${escF(g.launcher)}</span>
+          <span class="at-badge at-${escF(badgeCls(g))}">${escF(g.launcher)}</span>
         </div>
-        ${g.available === false ? `<p class="at-why">Executable not found at ${escF(g.exe_path || g.install_dir || "its recorded location")}. It may have been moved, updated or uninstalled.</p>` : ""}
+        ${detailWhy(g)}
         <dl class="at-meta">
           <div><dt>Status</dt><dd>${g.available === false ? "Unavailable" : "Ready to launch"}</dd></div>
           <div><dt>Kind</dt><dd>${escF(g.kind || "game")}</dd></div>

@@ -266,6 +266,15 @@ table tr:hover td{background:rgba(255,255,255,.02)}td.n{font-variant-numeric:tab
    land here too. Amber reads as "not a Steam entry". */
 .at-steam{color:var(--c);border-color:color-mix(in srgb,var(--c) 32%,transparent)}
 .at-manual{color:var(--v);border-color:color-mix(in srgb,var(--v) 32%,transparent)}
+/* ---- ATLAS: one badge colour per source ----
+   The badge used to be "steam if it mentions Steam, otherwise manual", which
+   painted Epic, GOG, EA and Store in the hand-added colour. Each source gets its
+   own, so two launchers never look like the same thing at a glance. */
+.at-epic{color:#B0A0FF;border-color:rgba(176,160,255,.32)}
+.at-gog{color:#5FD3F3;border-color:rgba(95,211,243,.32)}
+.at-ea{color:#F0705A;border-color:rgba(240,112,90,.32)}
+.at-xbox{color:#7BD88F;border-color:rgba(123,216,143,.32)}
+.at-standalone{color:var(--v);border-color:color-mix(in srgb,var(--v) 32%,transparent)}
 
 .at-meta{display:flex;flex-direction:column;gap:5px;margin:0}
 .at-meta>div{display:flex;align-items:baseline;justify-content:space-between;gap:10px}

@@ -106,6 +106,27 @@
       kind: 'game', available: true, legacy_id: 'steam:367520',
     }]);
   }
+  // One game per launcher that is not Steam, so the preview shows the facet bar,
+  // the per-source badges and the honest "cannot start through it yet" state.
+  for (const [launcher, source, name, dir] of [
+    ['Epic Games', 'epic', 'Fortnite', 'C:\\Program Files\\Epic Games\\Fortnite'],
+    ["GOG", "gog", "Baldur's Gate 3", "C:\\GOG Games\\Baldur's Gate 3"],
+    ['EA App', 'ea', 'The Sims 4', 'C:\\Program Files\\EA Games\\The Sims 4'],
+    ['Xbox / Store', 'xbox', 'Minecraft', 'C:\\XboxGames\\Minecraft'],
+  ]) {
+    shaped.push({
+      id: source + ':demo', launcher, app_id: '', name,
+      install_dir: dir, exe_path: "", size_bytes: 0, last_played: 0,
+      source: "detected", favorite: false, hidden: false, available: true,
+      plays: 0, last_launch: 0, last_session_secs: null, total_secs: 0,
+      kind: 'game', sources: [source], multi_install: false,
+      installs: [{
+        source_id: source, source_name: launcher, app_id: '',
+        install_dir: dir, exe_path: '', size_bytes: 0, last_played: 0,
+        kind: 'game', available: true, legacy_id: source + ':demo',
+      }],
+    });
+  }
   const GAMES_SHAPED = shaped;
 
   const NOTES = {
@@ -140,7 +161,7 @@
         { id: "steam", name: "Steam", group: "launcher", enabled: true, status: "ok", found: GAMES.filter((g) => g.launcher === "Steam").length, ms: 41, detail: "" },
         { id: "standalone", name: "Manual", group: "standalone", enabled: true, status: "ok", found: GAMES.filter((g) => g.launcher !== "Steam").length, ms: 1, detail: "" },
       ],
-      not_supported: ["Epic Games", "GOG Galaxy", "Xbox / Microsoft Store", "EA App", "Ubisoft Connect", "Battle.net", "Riot Client", "Amazon Games"],
+        not_supported: ["Ubisoft Connect", "Battle.net", "Riot Client", "Amazon Games"],
     }),
     atlas_source_list: () => [],
     atlas_set_source: () => null,
