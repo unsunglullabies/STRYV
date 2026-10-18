@@ -2,8 +2,20 @@
 const q = (id) => document.getElementById(id);
 const PAGES = ["dashboard", "performance", "network", "aery", "atlas", "optimizations", "system", "syn", "activity", "settings", "whatsnew", "help"];
 const ACCENTS = { Amber: "#F5A623", Cyan: "#38BDF8", Violet: "#8B5CF6" };
-const VERSION = "0.2.7";
+const VERSION = "0.2.8";
 const CHANGELOG = [
+  {
+    v: "0.2.8", date: "2026-10-17", tag: "the ask box stops shouting",
+    groups: {
+      Fixed: [
+        "The \"Ask about this PC\" box on the SYN page was a white rectangle in the middle of a dark window. Nothing had failed - the stylesheet had a rule for select elements and none for text inputs, and that one box was the only input in STRYV not covered by a rule of its own. Text inputs now share one appearance, and a field added later will look right without anyone having to remember to style it.",
+        "The input and the Ask button also disagreed on height by several pixels, which read as a misalignment rather than as a text box and the button that submits it. Both are the same height now, and the focus ring moved up to the row so focusing the field is actually visible."
+      ],
+      Signature: [
+        "Signed, like every STRYV release. STRYV checks the published release feed, downloads the installer, and verifies its signature against the key built into the app before running it."
+      ]
+    }
+  },
   {
     v: "0.2.7", date: "2026-10-17", tag: "ATLAS learns to look around",
     groups: {

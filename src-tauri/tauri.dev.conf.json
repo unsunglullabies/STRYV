@@ -3,7 +3,7 @@
   "productName": "STRYV Test (live)",
   "mainBinaryName": "stryv-test",
   "identifier": "app.stryv.desktop.test",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "build": {
     "beforeDevCommand": "node scripts/dev-server.js --port 5173",
     "devUrl": "http://localhost:5173/",

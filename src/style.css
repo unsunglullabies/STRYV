@@ -56,6 +56,16 @@ td.n{text-align:right;font-variant-numeric:tabular-nums;width:120px;padding-left
 .set{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:13px 0;border-bottom:1px solid var(--line)}.set b{display:block;font-weight:500}.set small,.note{color:var(--m);font-size:12px}
 .note{padding:12px 0;max-width:640px;font-size:13px;line-height:1.55}
 select{background:var(--p2);color:var(--t);border:1px solid var(--line);border-radius:6px;padding:7px 10px;font:inherit}
+/* Text-like inputs share one appearance. See the note above: without this a
+   field with no scoped rule renders white, which on this theme reads as a bug
+   even though nothing failed. */
+input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]){
+  background:var(--p2);color:var(--t);border:1px solid var(--line);
+  border-radius:var(--r);padding:8px 10px;font:inherit;
+  transition:border-color .12s,background .12s}
+input:not([type=checkbox]):not([type=radio])::placeholder{color:var(--m);opacity:.65}
+input:not([type=checkbox]):not([type=radio]):focus{
+  border-color:color-mix(in srgb,var(--c) 55%,var(--line));background:var(--bg)}
 .sws{display:flex;gap:10px}.sw{width:22px;height:22px;border-radius:50%;background:var(--c);border:0;cursor:pointer;outline-offset:3px;transition:transform .15s}.sw:hover{transform:scale(1.1)}.sw[aria-pressed=true]{outline:2px solid var(--t)}
 .keys{margin-top:4px}kbd{font:12px "Cascadia Mono",Consolas,monospace;background:var(--p2);border:1px solid var(--line);border-radius:4px;padding:2px 6px;color:var(--t)}.keys td:last-child{text-align:right}
 .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:6px}.tabs button{background:none;border:0;color:var(--m);padding:8px 12px;font:inherit;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}.tabs button.on{color:#fff;border-color:var(--v)}
@@ -810,8 +820,16 @@ table tr:hover td{background:rgba(255,255,255,.02)}td.n{font-variant-numeric:tab
 .synfind b{display:block;font-weight:600;color:var(--hi);font-size:13.5px}
 .synfind span{display:block;color:var(--t);font-size:13px;margin-top:4px;line-height:1.55}
 .synfind small{display:block;color:var(--m);font-size:11.5px;margin-top:6px;line-height:1.55;border-top:1px solid var(--line);padding-top:6px}
-.synaskrow{display:flex;gap:8px;margin-bottom:10px}
-.synaskrow input{flex:1;min-width:0}
+.synaskrow{display:flex;gap:8px;margin-bottom:10px;align-items:center}
+/* Both controls get the same height outright. Left to size themselves they
+   disagreed by several pixels, and the row read as a misalignment rather than
+   as a text box and the button that submits it. */
+.synaskrow input{flex:1 1 auto;min-width:0;height:34px;padding:0 11px;
+  font-size:13px;line-height:34px;outline:0}
+.synaskrow .btn{height:34px;padding:0 16px;align-self:auto;border-radius:var(--r);white-space:nowrap}
+/* The input drops its own outline (see above), so the focus ring moves up to
+   the row. Without this, focusing the box shows nothing at all. */
+.synaskrow:focus-within{outline:2px solid var(--c);outline-offset:2px;border-radius:var(--r)}
 #synOut:empty,#synAsk:empty{display:none}
 #synOut{margin-top:4px}
 #syn .sync{align-items:flex-start;gap:12px;margin-bottom:10px}

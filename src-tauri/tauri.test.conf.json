@@ -3,7 +3,7 @@
   "productName": "STRYV Test",
   "mainBinaryName": "stryv-test",
   "identifier": "app.stryv.desktop.test",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "build": {
     "frontendDist": "../src"
   },
