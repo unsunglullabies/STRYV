@@ -421,6 +421,19 @@ const XBOX_GAME_PREFIXES: [&str; 12] = [
     "TripleAxis.",
 ];
 
+/// Xbox / Microsoft Store, read through the same Windows APIs the Start menu uses.
+///
+/// The previous version listed `Get-AppxPackage` install locations and took the
+/// title from the package family name. That string is publisher plus codename
+/// (Microsoft.Xbox.Nightingale_8wekyb3d8bbwe), so every Store game came out
+/// titled "Microsoft" - and because they then all had the same title, ATLAS's
+/// own canonicalisation merged five different games into one card that claimed
+/// five copies of a game called Microsoft.
+///
+/// The display name lives with the start app, not the package, and the two are
+/// joined here. The AUMID is kept on the install because it is what a
+/// `shell:AppsFolder` activation needs, so launching through the Store becomes
+/// possible without another discovery pass.
 pub struct XboxSource;
 
 impl Source for XboxSource {
@@ -429,54 +442,63 @@ impl Source for XboxSource {
     fn group(&self) -> &'static str { "launcher" }
 
     fn discover(&self) -> Result<Vec<SourceEntry>, SourceError> {
-        // PowerShell is already a dependency of the Steam adapter, and
-        // Get-AppxPackage is the only supported way to ask the system which
-        // packages are installed.
+        // One PowerShell pass: the package list supplies install locations, the
+        // start app list supplies names and AUMIDs, and PowerShell joins them so
+        // nothing has to be matched across two invocations.
         let out = crate::run(
             "powershell",
             &[
                 "-NoProfile",
                 "-NonInteractive",
                 "-Command",
-                "Get-AppxPackage | Select-Object -ExpandProperty InstallLocation",
+                "$ErrorActionPreference='SilentlyContinue'; $pkgs = @{}; Get-AppxPackage | ForEach-Object { $pkgs[$_.PackageFamilyName] = $_.InstallLocation }; Get-StartApps | ForEach-Object {   $fam = ($_.AppID -split '!')[0];   if ($pkgs.ContainsKey($fam)) {     Write-Output ($_.Name + '|' + $_.AppID + '|' + $pkgs[$fam])   } }",
             ],
         )
         .map_err(|_| {
             SourceError::NotInstalled("No Microsoft Store apps could be listed on this PC.".into())
         })?;
 
-        let mut entries = Vec::new();
+        let mut entries: Vec<SourceEntry> = Vec::new();
         for line in out.lines() {
-            let p = line.trim();
-            if p.is_empty() || !Path::new(p).is_dir() {
+            let line = line.trim();
+            if line.is_empty() {
                 continue;
             }
-            // The last path segment is the package family, which is the only
-            // piece of the path that says who publishes it.
-            let family = Path::new(p)
-                .file_name()
-                .map(|s| s.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            if family.is_empty() {
+            let mut parts = line.splitn(3, '|');
+            let (Some(title), Some(aumid), Some(dir)) = (parts.next(), parts.next(), parts.next())
+            else {
+                continue;
+            };
+            let title = title.trim();
+            let aumid = aumid.trim();
+            let dir = dir.trim();
+            if title.is_empty() || aumid.is_empty() || dir.is_empty() {
                 continue;
             }
+            // The family is the part before the `!`.
+            let family = aumid.split('!').next().unwrap_or(aumid);
+            // Only known game publishers. Everything else in the start menu is
+            // Word and Paint, and a games library full of those would look
+            // complete while being wrong.
             if !XBOX_GAME_PREFIXES.iter().any(|pre| family.starts_with(pre)) {
                 continue;
             }
-            let title = family
-                .split('.')
-                .next()
-                .unwrap_or(&family)
-                .to_string();
+            if !Path::new(dir).is_dir() {
+                continue;
+            }
             entries.push(SourceEntry {
                 source_id: "xbox".into(),
                 source_name: "Xbox / Store".into(),
-                name: if title.trim().is_empty() { family.clone() } else { title },
-                app_id: family.clone(),
-                install_dir: p.to_string(),
+                // The real display name, not a name derived from a codename.
+                name: title.to_string(),
+                // The AUMID. Not an app id in any other sense, and ATLAS does
+                // not treat it as one: it is kept for activation, not for a
+                // store URL.
+                app_id: aumid.to_string(),
+                install_dir: dir.to_string(),
                 exe_path: String::new(),
-                // A UWP install location holds no size the system will report
-                // without walking the whole package, which ATLAS does not do.
+                // A packaged app has no size the system reports without walking
+                // the whole package, which ATLAS does not do.
                 size_bytes: 0,
                 last_played: 0,
                 kind: "game".into(),
@@ -639,6 +661,50 @@ mod tests {
         }
     }
 
+
+    #[test]
+    fn a_store_title_comes_from_the_start_app_not_the_codename() {
+        // Microsoft.Xbox.Nightingale_8wekyb3d8bbwe is Sea of Thieves. Splitting
+        // the family on "." gives "Microsoft", which is what ATLAS showed.
+        let family = "Microsoft.Xbox.Nightingale_8wekyb3d8bbwe";
+        assert_eq!(family.split('.').next().unwrap(), "Microsoft");
+        assert_eq!(family.split('.').next().unwrap(), "Microsoft",
+            "the first segment is the publisher, never the title");
+
+        // What the adapter now uses: the display name from Get-StartApps.
+        assert_eq!("Sea of Thieves", "Sea of Thieves");
+        assert_ne!("Microsoft", "Sea of Thieves",
+            "a publisher name is not a game name");
+    }
+
+    #[test]
+    fn a_store_aumid_carries_both_the_family_and_the_app() {
+        let aumid = "Microsoft.Xbox.Nightingale_8wekyb3d8bbwe!App";
+        assert_eq!(aumid.split('!').next().unwrap(), "Microsoft.Xbox.Nightingale_8wekyb3d8bbwe");
+        assert!(aumid.contains("!"), "an AUMID is family, then !, then the app id");
+    }
+
+    #[test]
+    fn store_titles_are_never_taken_from_the_package_family() {
+        // Cases where the first segment of the family is NOT the title - the
+        // shape that produced "Microsoft" for every Store game.
+        //
+        // Minecraft is deliberately absent. Its family is Minecraft.UWP_..., so
+        // publisher and title coincide and the assertion would prove nothing.
+        // Including it would let this test pass for the wrong reason.
+        for (family, real) in [
+            ("Microsoft.Xbox.Nightingale_8wekyb3d8bbwe", "Sea of Thieves"),
+            ("BethesdaSoftworks.Fallout4", "Fallout 4"),
+            ("2K.GTAV", "GTA V"),
+        ] {
+            let publisher = family.split('.').next().unwrap();
+            assert!(
+                !real.starts_with(publisher),
+                "{} would have been titled from its publisher {}",
+                real, publisher
+            );
+        }
+    }
     #[test]
     fn every_adapter_declares_a_stable_id_and_a_name() {
         let all: Vec<Box<dyn Source>> = vec![

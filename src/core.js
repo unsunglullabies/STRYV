@@ -2,8 +2,21 @@
 const q = (id) => document.getElementById(id);
 const PAGES = ["dashboard", "performance", "network", "aery", "atlas", "optimizations", "system", "syn", "activity", "settings", "whatsnew", "help"];
 const ACCENTS = { Amber: "#F5A623", Cyan: "#38BDF8", Violet: "#8B5CF6" };
-const VERSION = "0.2.8";
+const VERSION = "0.2.9";
 const CHANGELOG = [
+  {
+    v: "0.2.9", date: "2026-10-17", tag: "Reading the Right Name",
+    groups: {
+      Fixed: [
+        "Every Microsoft Store game was titled Microsoft. A package family name is publisher plus codename - Microsoft.Xbox.Nightingale_8wekyb3d8bbwe is Sea of Thieves - and splitting it on the dot returned the publisher. ATLAS then showed five different games as one card called Microsoft, claiming five copies of a game that does not exist.",
+        "The real title lives with the start app rather than the package, so the two are joined now and the display name is read from there. The AUMID is kept on the install as well, which is what a Store activation needs, so launching through the Store no longer needs a second discovery pass.",
+        "Three tests now pin the rule: that a Store title never comes from the package family, that an AUMID carries both the family and the app, and that the first segment of a family is a publisher rather than a title. Nothing covered the name before, which is how this shipped.",
+      ],
+      Signature: [
+        "Signed, like every STRYV release. STRYV checks the published release feed, downloads the installer, and verifies its signature against the key built into the app before running it.",
+      ]
+    }
+  },
   {
     v: "0.2.8", patch: 4, date: "2026-10-17", tag: "Adding Sources",
     groups: {
