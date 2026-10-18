@@ -69,7 +69,7 @@ const hasBackend = () => typeof invoke === "function";
   let sourceReport = null;
   // Single source of truth for the toolbar, so the page and the code cannot drift.
   const SORTS = ["recent", "lastLaunch", "name", "plays", "size"];
-  const filters = { favOnly: false, missingOnly: false };
+  const filters = { favOnly: false, missingOnly: false, kind: "", source: "" };
   // One store-API lookup per app id, for the life of the session. A grid of forty
   // games must not make forty requests, and a miss must never be retried.
   const artCache = new Map();
@@ -149,6 +149,8 @@ const hasBackend = () => typeof invoke === "function";
     return games.filter((g) => {
       if (filters.favOnly && !g.favorite) return false;
       if (filters.missingOnly && g.available !== false) return false;
+      if (filters.kind && String(g.kind || "game") !== filters.kind) return false;
+      if (filters.source && !(Array.isArray(g.sources) && g.sources.includes(filters.source))) return false;
       if (!qtext) return true;
       return [g.name, g.launcher, g.install_dir, g.exe_path].some((v) => String(v || "").toLowerCase().includes(qtext));
     });
@@ -189,11 +191,11 @@ const hasBackend = () => typeof invoke === "function";
       <div class="at-fbody">
         <span class="at-badge at-${/steam/i.test(g.launcher) ? "steam" : "manual"}">${escF(g.launcher)}</span>
         <h2>${escF(g.name)}</h2>
-        <dl class="at-meta">
-          <div><dt>Last played</dt><dd>${escF(day(g.last_played))}</dd></div>
-          <div><dt>Launches</dt><dd>${escF(launchesWord(g.plays))}</dd></div>
-          <div><dt>Last session</dt><dd>${escF(dur(g.last_session_secs))}</dd></div>
-        </dl>
+        <div class="at-facts at-facts-lg">
+          <span class="at-fact" title="Last played">${escF(day(g.last_played))}</span>
+          <span class="at-fact" title="Launches from ATLAS">${escF(launchesWord(g.plays))}</span>
+          <span class="at-fact" title="Install size">${escF(mb(g.size_bytes))}</span>
+        </div>
         ${g.available === false ? `<p class="at-why">Executable not found at ${escF(g.exe_path || g.install_dir || "its recorded location")}.</p>` : ""}
         <div class="at-cbtns">
           <button class="btn" data-fplay="${escF(g.id)}"${g.available === false ? " disabled" : ""}>Play</button>
@@ -250,13 +252,13 @@ function cannotLaunch(g) {
         <div class="at-ch">
           <h4>${escF(g.name)}</h4>
           <span class="at-badge at-${/steam/i.test(g.launcher) ? "steam" : "manual"}">${escF(g.launcher)}</span>
+          ${g.kind && g.kind !== "game" ? `<span class="at-kind" title="Not a game">${escF(g.kind)}</span>` : ""}
         </div>
-        <dl class="at-meta">
-          <div><dt>Size</dt><dd>${escF(mb(g.size_bytes))}</dd></div>
-          <div><dt>Played</dt><dd>${escF(day(g.last_played))}</dd></div>
-          <div><dt>Launches</dt><dd>${escF(launchesWord(g.plays))}</dd></div>
-          <div><dt>Session</dt><dd>${escF(dur(g.last_session_secs))}</dd></div>
-        </dl>
+        <div class="at-facts">
+          <span class="at-fact" title="Install size">${escF(mb(g.size_bytes))}</span>
+          <span class="at-fact" title="Last played">${escF(day(g.last_played))}</span>
+          ${g.multi_install ? `<span class="at-fact at-fact-x" title="This game is installed more than once">${g.installs.length} copies</span>` : ""}
+        </div>
         ${g.install_dir ? `<small class="at-path" title="${escF(g.install_dir)}">${escF(g.install_dir)}</small>` : ""}
         ${why}
         <div class="at-cbtns">
@@ -392,9 +394,10 @@ const launchers = [...new Set(games.map((g) => g.launcher))].filter(Boolean);
     renderGrid();
     renderSessions();
     renderSources();
+    renderFacets();
     const restored = ST.get("atlas.removed", false);
     show("atlasRestore", !!restored);
-    const active = filters.favOnly || filters.missingOnly || ((E("atlasQ") && E("atlasQ").value || "").trim());
+    const active = filters.favOnly || filters.missingOnly || filters.kind || filters.source || ((E("atlasQ") && E("atlasQ").value || "").trim());
     show("atlasReset", !!active);
   }
 
@@ -504,6 +507,25 @@ if (!ok) return;
     }
   }
 
+  // Every copy of one game, listed separately. A card can merge the same title
+  // from more than one launcher, and showing a single install folder for it
+  // would be describing only the first - so each copy is named here with the
+  // source that reported it and whether it is still on disk.
+  function installList(g) {
+    const list = Array.isArray(g.installs) ? g.installs : [];
+    if (!list.length) return "";
+    const rows = list.map((i) => `
+      <li class="at-inst${i.available === false ? " at-inst-off" : ""}">
+        <b>${escF(i.source_name)}</b>
+        <span class="at-inst-p" title="${escF(i.install_dir || i.exe_path || "")}">${escF(i.install_dir || i.exe_path || "no path recorded")}</span>
+        <span class="at-inst-s">${i.available === false ? "missing" : escF(mb(i.size_bytes))}</span>
+      </li>`).join("");
+    const many = list.length > 1
+      ? `<p class="at-inst-n">${list.length} copies of this game, counted separately on disk. ATLAS launches whichever one is still present.</p>`
+      : "";
+    return `<div class="at-insts"><h4>${many ? "Installs" : "Install"}</h4>${many}<ul>${rows}</ul></div>`;
+  }
+
   // ---- details ----------------------------------------------------------------
   function openDetail(id) {
     const g = byId(id);
@@ -521,9 +543,7 @@ if (!ok) return;
         ${g.available === false ? `<p class="at-why">Executable not found at ${escF(g.exe_path || g.install_dir || "its recorded location")}. It may have been moved, updated or uninstalled.</p>` : ""}
         <dl class="at-meta">
           <div><dt>Status</dt><dd>${g.available === false ? "Unavailable" : "Ready to launch"}</dd></div>
-          ${g.app_id ? `<div><dt>App id</dt><dd>${escF(g.app_id)}</dd></div>` : ""}
-          <div><dt>Executable</dt><dd>${escF(g.exe_path || "not recorded")}</dd></div>
-          <div><dt>Install folder</dt><dd>${escF(g.install_dir || "—")}</dd></div>
+          <div><dt>Kind</dt><dd>${escF(g.kind || "game")}</dd></div>
           <div><dt>Install size</dt><dd>${escF(mb(g.size_bytes))}</dd></div>
           <div><dt>Last played</dt><dd>${escF(day(g.last_played))}</dd></div>
           <div><dt>Last launched</dt><dd>${escF(when(g.last_launch))}</dd></div>
@@ -532,6 +552,7 @@ if (!ok) return;
           <div><dt>Total measured</dt><dd>${escF(g.total_secs ? dur(g.total_secs) : "Not measured")}</dd></div>
           ${g.art_path ? `<div><dt>Cover image</dt><dd>${escF(g.art_path)}</dd></div>` : ""}
         </dl>
+        ${installList(g)}
         <div class="at-cbtns">
           <button class="btn" data-play="${escF(g.id)}"${cannotLaunch(g) ? " disabled" : ""}>Play</button>
           <button class="btn ghost at-fav" data-fav="${escF(g.id)}" aria-pressed="${g.favorite ? "true" : "false"}" title="${g.favorite ? "Remove from favourites" : "Add to favourites"}" aria-label="Favourite">${g.favorite ? "★" : "☆"}</button>
@@ -649,11 +670,39 @@ async function submitAdd() {
   }
 
   function resetAll() {
-    filters.favOnly = false; filters.missingOnly = false;
+    filters.favOnly = false; filters.missingOnly = false; filters.kind = ""; filters.source = "";
     const qe = E("atlasQ"); if (qe) qe.value = "";
     ST.set("atlas.q", "");
     syncChips();
     render();
+  }
+
+  // Chips are built from the data rather than hardcoded, so they cannot offer
+  // to filter by a source that is not installed, and cannot drift from the
+  // launchers the backend actually reports.
+  function renderFacets() {
+    const host = E("atlasFacets");
+    if (!host) return;
+    const kinds = [...new Set(games.map((g) => String(g.kind || "game")))];
+    const srcs = [...new Set(games.flatMap((g) => (Array.isArray(g.sources) ? g.sources : [])))];
+    const chip = (dim, val, label, on) =>
+      `<button class="at-chip" data-facet="${escF(dim)}" data-val="${escF(val)}" aria-pressed="${on ? "true" : "false"}">${escF(label)}</button>`;
+    let h = "";
+    if (srcs.length > 1) {
+      h += `<div class="at-facetset"><span class="at-facetl">Source</span>`;
+      for (const s of srcs) {
+        const name = (games.find((g) => (g.sources || []).includes(s)) || {}).launcher || s;
+        h += chip("source", s, name, filters.source === s);
+      }
+      h += `</div>`;
+    }
+    if (kinds.length > 1) {
+      h += `<div class="at-facetset"><span class="at-facetl">Kind</span>`;
+      for (const k of kinds) h += chip("kind", k, k, filters.kind === k);
+      h += `</div>`;
+    }
+    host.innerHTML = h;
+    show("atlasFacets", !!h);
   }
 
   function syncChips() {
@@ -694,12 +743,24 @@ async function submitAdd() {
       // The headline count and the featured game both depend on what is showing.
       // Rerendering only the grid left them quoting the whole library while you
       // were looking at one result.
-      renderHero(); renderFeature(); renderGrid();
+      renderHero(); renderFeature(); renderGrid(); renderFacets();
       const a = filters.favOnly || filters.missingOnly || (E("atlasQ").value || "").trim();
       show("atlasReset", !!a);
     });
   on("atlasSort", "change", () => { ST.set("atlas.sort", E("atlasSort").value); renderGrid(); renderFeature(); });
   on("atlasFavOnly", "click", () => { filters.favOnly = !filters.favOnly; syncChips(); render(); });
+
+  // Facet chips are rebuilt on every render, so the click is delegated to the
+  // container rather than bound per chip.
+  on("atlasFacets", "click", (ev) => {
+    const b = ev && ev.target && ev.target.closest ? ev.target.closest("[data-facet]") : null;
+    if (!b) return;
+    const dim = b.dataset.facet, val = b.dataset.val;
+    if (dim !== "kind" && dim !== "source") return;
+    filters[dim] = filters[dim] === val ? "" : val;
+    syncChips();
+    render();
+  });
   on("atlasMissingOnly", "click", () => { filters.missingOnly = !filters.missingOnly; syncChips(); render(); });
   on("atlasReset", "click", () => resetAll());
 

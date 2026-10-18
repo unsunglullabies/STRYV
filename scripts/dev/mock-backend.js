@@ -69,6 +69,44 @@
     { id: "mock:2", launcher: "Steam", app_id: "620", name: "Mock Title Two", exe_path: "", install_dir: "", size_bytes: 91000000000, last_played: 1750000000, source: "detected", available: true, art_path: "", favorite: false, plays: 3, total_secs: 9000, last_session_secs: 1800 },
     { id: "mock:3", launcher: "Manual", app_id: "", name: "Mock Manual Title", exe_path: "C:\\mock\\game.exe", install_dir: "C:\\mock", size_bytes: 0, last_played: 0, source: "manual", available: false, art_path: "", favorite: false, plays: 0, total_secs: 0, last_session_secs: null },
   ];
+  // Mirrors what the backend returns after the canonical/install split. A mock
+  // that omits these cannot exercise the facet bar, the kind badge or the
+  // install list, so the browser preview would quietly stop matching the app.
+  const SRC_NAMES = { Steam: 'Steam', Manual: 'Manual' };
+  const shaped = GAMES.map((g) => {
+    const source = /steam/i.test(g.launcher) ? 'steam' : 'standalone';
+    const kind = g.app_id === '431960' ? 'application' : g.app_id === '228980' ? 'tool' : 'game';
+    return Object.assign({}, g, {
+      kind,
+      sources: [source],
+      multi_install: false,
+      installs: [{
+        source_id: source,
+        source_name: SRC_NAMES[g.launcher] || g.launcher,
+        app_id: g.app_id || '',
+        install_dir: g.install_dir || '',
+        exe_path: g.exe_path || '',
+        size_bytes: g.size_bytes || 0,
+        last_played: g.last_played || 0,
+        kind,
+        available: g.available !== false,
+        legacy_id: g.id,
+      }],
+    });
+  });
+  // One game really is installed twice, so the install list and the multi-install
+  // badge are visible in the preview rather than only in the tests.
+  const dupe = shaped.find((g) => g.sources[0] === 'standalone');
+  if (dupe) {
+    dupe.multi_install = true;
+    dupe.installs = dupe.installs.concat([{
+      source_id: 'steam', source_name: 'Steam', app_id: '367520',
+      install_dir: 'C:\\Steam\\steamapps\\common\\' + dupe.name,
+      exe_path: '', size_bytes: dupe.size_bytes, last_played: dupe.last_played,
+      kind: 'game', available: true, legacy_id: 'steam:367520',
+    }]);
+  }
+  const GAMES_SHAPED = shaped;
 
   const NOTES = {
     "welcome.md": { body: "---\ntitle: Welcome\n---\n# Welcome\n\nA mocked note so the Aery workspace has something to show.\n\nLink to [[Ideas]].", tags: ["mock"], created: 1758000000, updated: 1758100000, pinned: true },
@@ -97,7 +135,7 @@
     atlas_scan: () => ({
       started: 1758100000,
       ms: 47,
-      games: GAMES,
+      games: GAMES_SHAPED,
       sources: [
         { id: "steam", name: "Steam", group: "launcher", enabled: true, status: "ok", found: GAMES.filter((g) => g.launcher === "Steam").length, ms: 41, detail: "" },
         { id: "standalone", name: "Manual", group: "standalone", enabled: true, status: "ok", found: GAMES.filter((g) => g.launcher !== "Steam").length, ms: 1, detail: "" },

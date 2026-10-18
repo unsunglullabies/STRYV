@@ -33,7 +33,26 @@
       "plays": 0,
       "last_launch": 0,
       "last_session_secs": null,
-      "total_secs": 0
+      "total_secs": 0,
+      "kind": "tool",
+      "sources": [
+        "steam"
+      ],
+      "multi_install": false,
+      "installs": [
+        {
+          "source_id": "steam",
+          "source_name": "Steam",
+          "app_id": "228980",
+          "install_dir": "C:\\Steam\\steamapps\\common\\Steamworks Shared",
+          "exe_path": "",
+          "size_bytes": 224575958,
+          "last_played": 0,
+          "kind": "tool",
+          "available": true,
+          "legacy_id": "steam:228980"
+        }
+      ]
     },
     {
       "id": "manual:9f2c1a7b",
@@ -50,7 +69,38 @@
       "plays": 1,
       "last_launch": 1790000000,
       "last_session_secs": 610,
-      "total_secs": 610
+      "total_secs": 610,
+      "kind": "game",
+      "sources": [
+        "standalone"
+      ],
+      "multi_install": true,
+      "installs": [
+        {
+          "source_id": "steam",
+          "source_name": "Steam",
+          "app_id": "367520",
+          "install_dir": "C:\\Steam\\steamapps\\common\\Hollow Knight",
+          "exe_path": "",
+          "size_bytes": 4294967296,
+          "last_played": 1758000000,
+          "kind": "game",
+          "available": true,
+          "legacy_id": "steam:367520"
+        },
+        {
+          "source_id": "standalone",
+          "source_name": "Manual",
+          "app_id": "",
+          "install_dir": "C:\\Games\\Hollow Knight",
+          "exe_path": "C:\\Games\\Hollow Knight\\hollow_knight.exe",
+          "size_bytes": 4294967296,
+          "last_played": 1758000000,
+          "kind": "game",
+          "available": false,
+          "legacy_id": "manual:9f2c1a7b"
+        }
+      ]
     },
     {
       "id": "steam:620",
@@ -118,7 +168,64 @@
       "plays": 0,
       "last_launch": 0,
       "last_session_secs": null,
-      "total_secs": 0
+      "total_secs": 0,
+      "kind": "game",
+      "sources": [
+        "standalone"
+      ],
+      "multi_install": false,
+      "installs": [
+        {
+          "source_id": "standalone",
+          "source_name": "Manual",
+          "app_id": "",
+          "install_dir": "C:\\Games\\Orphan",
+          "exe_path": "",
+          "size_bytes": 0,
+          "last_played": 0,
+          "kind": "game",
+          "available": false,
+          "legacy_id": "manual:0badf00d"
+        }
+      ]
+    },
+    {
+      "id": "steam:431960",
+      "launcher": "Steam",
+      "app_id": "431960",
+      "name": "Wallpaper Engine",
+      "install_dir": "C:\\Steam\\steamapps\\common\\Wallpaper Engine",
+      "exe_path": "",
+      "size_bytes": 825753728,
+      "last_played": 1758100000,
+      "source": "detected",
+      "favorite": false,
+      "hidden": false,
+      "art_path": "",
+      "available": true,
+      "plays": 2,
+      "last_launch": 0,
+      "last_session_secs": 1800,
+      "total_secs": 3600,
+      "kind": "application",
+      "sources": [
+        "steam"
+      ],
+      "multi_install": false,
+      "installs": [
+        {
+          "source_id": "steam",
+          "source_name": "Steam",
+          "app_id": "431960",
+          "install_dir": "C:\\Steam\\steamapps\\common\\Wallpaper Engine",
+          "exe_path": "",
+          "size_bytes": 825753728,
+          "last_played": 1758100000,
+          "kind": "application",
+          "available": true,
+          "legacy_id": "steam:431960"
+        }
+      ]
     }
   ]
 }

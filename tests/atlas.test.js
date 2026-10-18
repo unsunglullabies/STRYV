@@ -47,6 +47,14 @@ const FIXTURE = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures", "atl
 const NOTE = (/<small id="atlasNote">([\s\S]*?)<\/small>/.exec(HTML) || [, ""])[1];
 
 let pass = 0, fail = 0;
+// Formats seconds the same way atlas.js does, so a summed total can be asserted
+// against the fixture instead of against a literal that drifts when it grows.
+const hms = (s) => {
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + "m";
+  return Math.floor(m / 60) + "h " + String(m % 60).padStart(2, "0") + "m";
+};
+
 function check(name, cond) {
   if (cond) { pass++; console.log("  PASS  " + name); }
   else { fail++; console.log("  FAIL  " + name); }
@@ -60,7 +68,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 // Every id the ATLAS page declares in src/index.html. A missing one here means
 // the test is checking less than the real page has.
 const IDS = [
-  "atlasHeroStat", "atlasAdd", "atlasScan", "atlasFeature", "atlasQ", "atlasSort", "atlasFavOnly", "atlasMissingOnly", "atlasReset", "atlasGrid", "atlasEmpty", "atlasNote", "atlasRestore", "atlasSessClr", "atlasSess", "atlasAddBox", "atlasAddTitle", "atlasAddNo", "atlasName", "atlasExe", "atlasPickExe", "atlasArt", "atlasPickArt", "atlasAddNo2", "atlasAddGo", "atlasEditBox", "atlasEditTitle", "atlasEditNo", "atlasEditName", "atlasEditExe", "atlasPickExe2", "atlasEditArt", "atlasPickArt2", "atlasClearArt", "atlasEditNo2", "atlasEditSave", "atlasDetailWrap", "atlasDetail"];
+  "atlasHeroStat", "atlasAdd", "atlasScan", "atlasFeature", "atlasQ", "atlasSort", "atlasFavOnly", "atlasMissingOnly", "atlasReset", "atlasGrid", "atlasEmpty", "atlasNote", "atlasRestore", "atlasSessClr", "atlasSess", "atlasAddBox", "atlasAddTitle", "atlasAddNo", "atlasName", "atlasExe", "atlasPickExe", "atlasArt", "atlasPickArt", "atlasAddNo2", "atlasAddGo", "atlasEditBox", "atlasEditTitle", "atlasEditNo", "atlasEditName", "atlasEditExe", "atlasPickExe2", "atlasEditArt", "atlasPickArt2", "atlasClearArt", "atlasEditNo2", "atlasEditSave", "atlasDetailWrap", "atlasDetail", "atlasFacets"];
 
 function makeEl(dataset) {
   const el = {
@@ -72,6 +80,13 @@ function makeEl(dataset) {
   el.getAttribute = (k) => (k in el._attrs ? el._attrs[k] : null);
   el.addEventListener = (ev, fn) => { (el._listeners[ev] = el._listeners[ev] || []).push(fn); };
   el.focus = () => { el.focused = true; };
+    // Real elements have closest(). Delegated handlers call it on the event
+    // target, so a target that lacks it silently disables the whole path.
+    el.closest = (sel) => {
+      const m = /^\[data-([a-z-]+)\]$/.exec(sel);
+      if (!m) return null;
+      return el.dataset && el.dataset[m[1]] !== undefined ? el : null;
+    };
   return el;
 }
 // Fire a listener the way a user event would.
@@ -111,10 +126,34 @@ function gridEl() {
   return el;
 }
 
+  // The facet bar addresses chips by two attributes at once, which the grid's
+  // single-attribute parser cannot do. A real click arrives at the delegated
+  // handler with a target, so the node it reads has to carry both.
+  function facetsEl() {
+    const el = makeEl();
+    el._html = "";
+    el._cache = {};
+    Object.defineProperty(el, "innerHTML", {
+      get() { return this._html; },
+      set(v) { this._html = String(v); this._cache = {}; },
+      enumerable: true,
+    });
+    el.querySelector = (sel) => {
+      const m = /^\[data-facet="([^"]+)"\]\[data-val="([^"]+)"\]$/.exec(sel);
+      if (!m) return null;
+      const re = new RegExp('<button[^>]*data-facet="' + m[1] + '"[^>]*data-val="' + m[2] + '"');
+      if (!re.test(el._html)) return null;
+      const key = m[1] + "|" + m[2];
+      if (!el._cache[key]) el._cache[key] = makeEl({ facet: m[1], val: m[2] });
+      return el._cache[key];
+    };
+    return el;
+  }
+
 function makeEnv(games, invokeImpl, opts) {
   const o = opts || {};
   const els = {};
-  for (const id of IDS) els[id] = id === "atlasGrid" ? gridEl() : makeEl();
+  for (const id of IDS) els[id] = id === "atlasGrid" ? gridEl() : id === "atlasFacets" ? facetsEl() : makeEl();
   els.atlasNote.textContent = NOTE;
   // Anything the page ships with the hidden attribute starts hidden, so the fake
   // DOM never starts more open than the real one.
@@ -245,12 +284,12 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
 
     check("total size matches the sum", heroB(els.atlasHeroStat.innerHTML, 1) === gbid(FIXTURE.games.reduce((a, g) => a + g.size_bytes, 0)));
     check("large sizes use GB", /GB$/.test(heroB(els.atlasHeroStat.innerHTML, 1)));
-    check("a small install reads in MB", /<dd>214 MB<\/dd>/.test(cardFor(grid, "Steamworks Common Redistributables")));
-    check("a large install reads in GB", /<dd>49\.4 GB<\/dd>/.test(cardFor(grid, "Tom Clancy's Rainbow Six Siege")));
+    check("a small install reads in MB", /at-fact[^>]*>214 MB</.test(cardFor(grid, "Steamworks Common Redistributables")));
+    check("a large install reads in GB", /at-fact[^>]*>49\.4 GB</.test(cardFor(grid, "Tom Clancy's Rainbow Six Siege")));
     check("total launches are summed", heroB(els.atlasHeroStat.innerHTML, 2) === String(FIXTURE.games.reduce((a, g) => a + g.plays, 0)));
-    check("total play time is summed", heroB(els.atlasHeroStat.innerHTML, 3) === "1h 27m");
+    check("total play time is summed", heroB(els.atlasHeroStat.innerHTML, 3) === hms(FIXTURE.games.reduce((a, g) => a + (g.total_secs || 0), 0)));
 
-    check("a never-played entry says Never", /<dd>Never<\/dd>/.test(cardFor(grid, "Steamworks Common Redistributables")));
+    check("a never-played entry says Never", /at-fact[^>]*>Never</.test(cardFor(grid, "Steamworks Common Redistributables")));
     check("Steam entries are badged as Steam", /at-badge at-steam/.test(grid));
     check("hand-added entries are badged as manual", /at-badge at-manual/.test(grid));
     check("the install path is shown", /steamapps\\common/.test(grid));
@@ -278,7 +317,8 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
       tags(grid).every((t) => "article div h4 span dl dt dd small button img p i b".split(" ").includes(tagName(t))));
     check("no tag carries an event handler attribute", tags(grid).every((t) => !/\son\w+\s*=/.test(t)));
 
-    check("only a Steam entry with a decimal app id gets a cover", srcs(grid).length === 3);
+    check("only a Steam entry with a decimal app id gets a cover",
+    srcs(grid).length === FIXTURE.games.filter((g) => /steam/i.test(g.launcher) && /^\d{1,12}$/.test(String(g.app_id))).length);
     check("every cover src is a plain Steam CDN url",
       srcs(grid).every((s) => /^https:\/\/cdn\.cloudflare\.steamstatic\.com\/steam\/apps\/\d{1,12}\/header\.jpg$/.test(s)));
     check("no cover src carries a quote or angle bracket", !srcs(grid).some((s) => /[<>"']/.test(s)));
@@ -297,7 +337,8 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
     await Atlas.scan(false);
     await flush();
     const covers = els.atlasGrid.querySelectorAll("[data-cover]");
-    check("three Steam entries get a cover", covers.length === 3);
+    check("every Steam entry with a decimal app id gets a cover",
+    covers.length === FIXTURE.games.filter((g) => /steam/i.test(g.launcher) && /^\d{1,12}$/.test(String(g.app_id))).length);
     check("every cover has an error handler", covers.every((i) => typeof i.onerror === "function"));
     check("a hand-added entry says it has no cover art", /No cover art/.test(cardFor(els.atlasGrid.innerHTML, "Hollow Knight")));
     check("a cover is lazy and sends no referrer", /loading="lazy"/.test(els.atlasGrid.innerHTML) && /referrerpolicy="no-referrer"/.test(els.atlasGrid.innerHTML));
@@ -419,19 +460,23 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
     const grid = els.atlasGrid.innerHTML;
     const never = cardFor(grid, "Steamworks Common Redistributables");
 
-    check("a reported size reads in MB", /<dt>Size<\/dt><dd>214 MB<\/dd>/.test(never));
-    check("an unreported size renders a dash", /<dt>Size<\/dt><dd>—<\/dd>/.test(cardFor(grid, "Hollow Knight")));
+    check("a reported size reads in MB", /at-fact[^>]*>214 MB</.test(never));
+    check("an unreported size renders a dash", /at-fact[^>]*>\u2014</.test(cardFor(grid, "Hollow Knight")));
     check("an unreported size never reads as a number", !/<dt>Size<\/dt><dd>0/.test(grid));
     check("an unreported size never reads 0 MB", !/<dd>0 MB<\/dd>/.test(grid));
     check("an unreported size never reads 0 GB", !/<dd>0 GB<\/dd>/.test(grid));
-    check("a null session length reads not measured", /<dt>Session<\/dt><dd>Not measured<\/dd>/.test(never));
+    // Session and launch counts left the card in 0.2.8: the grid shows the two
+// facts that differ card to card, and the detail panel holds the rest. The
+// rules are unchanged - a null duration still reads "Not measured" - so the
+// assertion follows the value to the panel that now shows it.
+    check("a null session length reads not measured", (() => { Atlas.openDetail("steam:228980"); return /<dt>Last session<\/dt><dd>Not measured<\/dd>/.test(els.atlasDetail.innerHTML); })());
     check("a null session length never prints a number", !/<dt>Last session<\/dt><dd>\d/.test(never));
-    check("zero launches is stated as none, not as zero", /<dd>None from ATLAS<\/dd>/.test(never));
-    check("one launch is singular", /<dd>1 launch<\/dd>/.test(grid));
-    check("several launches are plural", /<dd>3 launches<\/dd>/.test(grid));
-    check("a real session reads in minutes", /<dd>10m<\/dd>/.test(cardFor(grid, "Hollow Knight")));
-    check("a long session reads in hours and minutes", /<dd>1h 15m<\/dd>/.test(cardFor(grid, "Tom Clancy's Rainbow Six Siege")));
-    check("a short session is not rounded to zero", /<dd>1m<\/dd>/.test(cardFor(grid, esc(EVIL_NAME.name))));
+    check("zero launches is stated as none, not as zero", (() => { Atlas.openDetail("steam:228980"); return /<dd>None from ATLAS<\/dd>/.test(els.atlasDetail.innerHTML); })());
+    check("one launch is singular", (() => { Atlas.openDetail("manual:9f2c1a7b"); return /<dd>1 launch<\/dd>/.test(els.atlasDetail.innerHTML); })());
+    check("several launches are plural", (() => { Atlas.openDetail("steam:620"); return /<dd>2 launches<\/dd>/.test(els.atlasDetail.innerHTML); })());
+    check("a real session reads in minutes", (() => { Atlas.openDetail("manual:9f2c1a7b"); return /<dd>10m<\/dd>/.test(els.atlasDetail.innerHTML); })());
+    check("a long session reads in hours and minutes", (() => { Atlas.openDetail("steam:359550"); return /<dd>1h 15m<\/dd>/.test(els.atlasDetail.innerHTML); })());
+    check("a short session is not rounded to zero", (() => { Atlas.openDetail("steam:620"); return /<dd>1m<\/dd>/.test(els.atlasDetail.innerHTML); })());
   }
   {
     // One game that has never been launched, on its own, so nothing else in the
@@ -444,10 +489,10 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
     await flush();
     check("a game with no plays contributes no play time", heroB(els.atlasHeroStat.innerHTML, 3) === "Not measured");
     check("a game with no plays shows zero launches", heroB(els.atlasHeroStat.innerHTML, 2) === "0");
-    check("and says it was never launched from ATLAS", /<dd>None from ATLAS<\/dd>/.test(els.atlasGrid.innerHTML));
-    check("and has no measured session", /<dd>Not measured<\/dd>/.test(els.atlasGrid.innerHTML));
-    check("and was never played", /<dd>Never<\/dd>/.test(els.atlasGrid.innerHTML));
-    check("but its reported size is still shown", /<dd>1\.0 GB<\/dd>/.test(els.atlasGrid.innerHTML));
+check("and says it was never launched from ATLAS", (() => { Atlas.openDetail("steam:1"); return /<dd>None from ATLAS<\/dd>/.test(els.atlasDetail.innerHTML); })());
+check("and has no measured session", (() => { Atlas.openDetail("steam:1"); return /<dd>Not measured<\/dd>/.test(els.atlasDetail.innerHTML); })());
+    check("and was never played", /at-fact[^>]*>Never</.test(els.atlasGrid.innerHTML));
+    check("but its reported size is still shown", /at-fact[^>]*>1\.0 GB</.test(els.atlasGrid.innerHTML));
   }
 
   // ================= empty states =================
@@ -514,7 +559,13 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
 await type("manual");
     check("filters by launcher", now().length === 2 && now().sort().join() === "Hand-added entry with no executable,Hollow Knight");
     await type("steamapps");
-    check("filters by install path", now().length === 4 && now().every((n) => /Siege|Redistributables|quoted|no app id/.test(n)));
+    check("filters by install path", (() => {
+        // Counted against the fixture rather than a literal. Equality cannot be
+        // used on the names: one fixture entry carries markup and comes back
+        // escaped out of the DOM, which is why the original test matched loosely.
+        const want = FIXTURE.games.filter((g) => /steamapps/i.test(g.install_dir || "")).length;
+        return now().length === want;
+      })());
     await type("  SIEGE  ");
     check("the search is trimmed and case-insensitive", now().length === 1);
     check("a single result is counted in the singular", heroB(els.atlasHeroStat.innerHTML, 0) === "1");
@@ -933,6 +984,72 @@ check("a failed scan never prints a size total of zero", !/<b>0(\.0)? (B|KB|MB|G
     check("group names are plain text", groups.flat().every(([g]) => !/[<>]/.test(g)));
     console.log("        entries: " + log.map((e) => e.v).join(", "));
     console.log("        newest groups: " + groups[0].map(([g, i]) => g + "(" + i.length + ")").join(", "));
+  }
+
+  // ---- 0.2.8: cards, facets and installs --------------------------------------
+  // The fixture carries kind, sources and installs so these run against real
+  // shaped data rather than an object literal written for one assertion.
+  {
+    const { Atlas, els } = makeEnv(FIXTURE, backend({ atlas_scan: () => JSON.parse(JSON.stringify(FIXTURE)) }));
+    await Atlas.scan(false);
+    await flush();
+    const grid = els.atlasGrid.innerHTML;
+
+    check("a card no longer prints four stacked label rows", !/<dt>Size<\/dt>/.test(grid) && !/<dt>Session<\/dt>/.test(grid));
+    check("a card prints its facts inline instead", /at-fact[^>]*>/.test(grid));
+    check("the size is still on the card", /at-fact[^>]*>49\.4 GB</.test(grid));
+
+    // Wallpaper Engine is a Steam application. It has to say so rather than
+    // presenting itself as something to play.
+    check("an application is labelled as one", /at-kind[^>]*>application</.test(cardFor(grid, "Wallpaper Engine")));
+    check("a tool is labelled as one", /at-kind[^>]*>tool</.test(cardFor(grid, "Steamworks Common Redistributables")));
+    check("an ordinary game is not labelled", !/at-kind/.test(cardFor(grid, "Hollow Knight")));
+
+    // A game bought twice is one card that says so.
+    check("a card with two installs says so", /at-fact-x[^>]*>2 copies</.test(cardFor(grid, "Hollow Knight")));
+    check("a single install does not", !/copies</.test(cardFor(grid, "Wallpaper Engine")));
+
+    // Facets are built from what the scan found, so they cannot offer a source
+    // that is not installed on this PC.
+    const facets = els.atlasFacets.innerHTML;
+    check("the facet bar is shown", els.atlasFacets.hidden === false);
+    check("it offers the sources that were actually found", /data-facet="source"/.test(facets) && /data-val="steam"/.test(facets) && /data-val="standalone"/.test(facets));
+    check("it offers the kinds present in the library", /data-facet="kind"/.test(facets) && /data-val="game"/.test(facets) && /data-val="application"/.test(facets) && /data-val="tool"/.test(facets));
+    check("it offers no source that was not found", (facets.match(/data-facet=\"source\"/g) || []).length === 2);
+
+    const before = (grid.match(/at-card/g) || []).length;
+    const kindChip = els.atlasFacets.querySelector('[data-facet="kind"][data-val="application"]');
+    check("a kind chip exists to click", !!kindChip);
+    els.atlasFacets.onclick({ preventDefault() {}, stopPropagation() {}, target: kindChip });
+    await flush();
+    const afterKind = els.atlasGrid.innerHTML;
+    check("clicking a kind chip narrows the grid", (afterKind.match(/at-card/g) || []).length < before);
+    check("and leaves only that kind", /Wallpaper Engine/.test(afterKind) && !/Hollow Knight/.test(afterKind));
+
+    const again = els.atlasFacets.querySelector('[data-facet="kind"][data-val="application"]');
+    els.atlasFacets.onclick({ preventDefault() {}, stopPropagation() {}, target: again });
+    await flush();
+    check("clicking it again clears the filter", (els.atlasGrid.innerHTML.match(/at-card/g) || []).length === before);
+
+    const srcChip = els.atlasFacets.querySelector('[data-facet="source"][data-val="standalone"]');
+    els.atlasFacets.onclick({ preventDefault() {}, stopPropagation() {}, target: srcChip });
+    await flush();
+    check("a source chip narrows to that source", (els.atlasGrid.innerHTML.match(/at-card/g) || []).length === 2);
+    els.atlasFacets.onclick({ preventDefault() {}, stopPropagation() {}, target: srcChip });
+    await flush();
+
+    // The detail panel lists every copy rather than describing one.
+    Atlas.openDetail("manual:9f2c1a7b");
+    const d = els.atlasDetail.innerHTML;
+    check("the detail panel lists each install", /at-inst/.test(d) && (d.match(/at-inst[ \"-]/g) || []).length >= 2);
+    check("each install names its source", /Steam/.test(d) && /Manual/.test(d));
+    check("a multi-install card says how ATLAS picks one", /2 copies of this game/.test(d));
+    check("it says it launches whichever is present", /whichever one is still present/.test(d));
+    check("a missing install is marked rather than hidden", /at-inst-off|missing/.test(d));
+
+    Atlas.openDetail("steam:431960");
+    check("the kind is stated in the detail panel too", /<dt>Kind<\/dt><dd>application<\/dd>/.test(els.atlasDetail.innerHTML));
+    check("a single install is headed Install, not Installs", /<h4>Install<\/h4>/.test(els.atlasDetail.innerHTML) && !/<h4>Installs<\/h4>/.test(els.atlasDetail.innerHTML));
   }
 
   console.log("\n" + pass + " passed, " + fail + " failed");

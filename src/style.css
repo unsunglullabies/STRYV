@@ -245,7 +245,7 @@ table tr:hover td{background:rgba(255,255,255,.02)}td.n{font-variant-numeric:tab
 
 /* Cover art bleeds to the card edges so a library reads as media, not as a
    stack of equal stat cards. */
-.at-covw{display:block;aspect-ratio:16/9;overflow:hidden;background:var(--p2)}
+.at-covw{display:block;aspect-ratio:16/10;overflow:hidden;background:var(--p2)}
 .at-cov{display:block;width:100%;height:100%;object-fit:cover}
 /* Placeholder for manually added games and for a Steam header that 404s. */
 .at-covf{display:flex;align-items:center;justify-content:center;height:100%;
@@ -783,6 +783,52 @@ table tr:hover td{background:rgba(255,255,255,.02)}td.n{font-variant-numeric:tab
 @media (prefers-reduced-motion:reduce){
   .aery-shell,.anote,.alink{transition:none}
 }
+/* ---- ATLAS: inline facts ----
+   The grid used to print four stacked label/value rows per card - Size, Played,
+   Launches, Session - when two of those numbers are already on the hero and the
+   rest live in the detail panel. Cards now carry the two facts that differ card
+   to card, inline, and everything else is one click away. The honesty rules are
+   unchanged: an unreported size is still a dash, an unplayed entry still says
+   Never. */
+.at-facts{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;min-width:0}
+.at-facts-lg{gap:6px 18px;margin-top:2px}
+.at-fact{font-size:12.5px;color:var(--t);opacity:.9;white-space:nowrap}
+.at-fact-x{padding:2px 7px;border:1px solid var(--line);border-radius:99px;
+  font-size:10.5px;letter-spacing:.04em;opacity:.8}
+
+/* Applications and tools are not games. The backend knows which is which, so
+   the card says so instead of presenting a wallpaper tool as something to play. */
+.at-kind{padding:2px 7px;border-radius:99px;font-size:9.5px;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;
+  background:rgba(56,189,248,.14);color:var(--c)}
+
+/* ---- ATLAS: filter facets ----
+   Built from the last scan, so a launcher that is not installed on this PC
+   never offers a chip. Hardcoded chips would promise sources that do not exist. */
+.at-facets{display:flex;flex-wrap:wrap;gap:8px 18px;margin:0 0 12px}
+.at-facets:empty{display:none}
+.at-facetset{display:flex;align-items:center;gap:6px}
+.at-facetl{font:600 10px/1 "Segoe UI",system-ui,sans-serif;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--dim)}
+
+/* ---- ATLAS: per-install detail ----
+   A card can merge one title from several launchers, so the detail panel lists
+   each copy rather than describing whichever happened to be first. */
+.at-insts{margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}
+.at-insts h4{margin:0 0 8px;font:600 10px/1 "Segoe UI",system-ui,sans-serif;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.at-insts ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.at-inst{display:flex;align-items:baseline;gap:10px;padding:7px 10px;
+  border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.02);
+  font-size:12.5px}
+.at-inst b{flex:none;min-width:82px;font-weight:600;color:var(--hi)}
+.at-inst-p{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;color:var(--m);direction:rtl;text-align:left}
+.at-inst-s{flex:none;color:var(--t);opacity:.85}
+.at-inst-off{opacity:.6}
+.at-inst-off .at-inst-s{color:var(--bad);opacity:1}
+.at-inst-n{margin:0 0 8px;font-size:12px;line-height:1.5;color:var(--m)}
+
 /* ---- ATLAS: what ATLAS could actually read ----
    Each launcher is its own line with its own state, because "not installed",
    "turned off" and "could not read" are different problems with different
@@ -798,6 +844,38 @@ table tr:hover td{background:rgba(255,255,255,.02)}td.n{font-variant-numeric:tab
 .at-src-unreadable .at-srcw,.at-src-failed .at-srcw{background:rgba(239,68,68,.16);color:#F87171}
 .at-srcnotinstalled,.at-src .at-srcw{}
 .at-src-note,.at-srcnote{margin:10px 0 0;font:400 11px/1.5 "Segoe UI",system-ui,sans-serif;color:var(--dim)}
+/* ---- ATLAS hero: a banner, not a wall ----
+   The featured game used to be a full-bleed block at least 214px tall with a
+   25px title and a stacked list of figures under it. On a 760px window that
+   pushed the first row of cards and the toolbar's context off the bottom, and
+   the artwork behind it changed nothing a reader could act on.
+
+   It is a banner now: fixed thumbnail, name, the two facts worth seeing, then
+   the buttons, all on one line. The cover still fills the block behind a single
+   scrim, so it stays atmosphere rather than becoming a second hero. */
+.at-feature{flex-direction:row;align-items:center;min-height:0;
+  padding:12px 16px;gap:14px}
+.at-feature>:is(img,.at-cov,.at-covw,.at-covf){
+  position:relative;inset:auto;z-index:1;flex:none;
+  width:132px;height:62px;aspect-ratio:auto;border-radius:8px;overflow:hidden}
+.at-feature img,.at-feature .at-cov{transform:none}
+.at-feature:hover img,.at-feature:hover .at-cov{transform:scale(1.04)}
+.at-feature .at-fbody{flex:1;min-width:0;display:flex;align-items:center;
+  flex-wrap:wrap;gap:8px 14px}
+.at-feature .at-fbody>h2{margin:0;font-size:17px;line-height:1.2;flex:0 1 auto}
+.at-feature>.at-fbody>.at-badge{align-self:center}
+.at-feature .at-facts{margin-top:0}
+.at-feature :is(.at-cbtns,.at-panelb){margin-top:0;margin-left:auto}
+.at-feature .at-why{margin-top:0;max-width:42ch}
+.at-feature .btn{padding:7px 16px;font-size:13px}
+.at-feature>.at-fav{position:static;margin:0}
+
+/* Below this width a row no longer fits, so it stacks rather than squashing. */
+@media (max-width:900px){
+  .at-feature{flex-wrap:wrap}
+  .at-feature :is(.at-cbtns,.at-panelb){margin-left:0}
+}
+
 /* ---- SYN ----
    Recovered from the committed stylesheet. These rules were dropped when the
    SYN page itself was, which left the page unstyled: an unsized logo and no
