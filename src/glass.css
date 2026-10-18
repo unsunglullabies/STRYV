@@ -1,0 +1,324 @@
+/* ==========================================================================
+   STRYV glass theme
+   Loaded after style.css. It only overrides looks, so deleting this file (and
+   its <link> in index.html) restores the previous design exactly.
+   ========================================================================== */
+
+/* ---- tokens: every surface in the app reads these, so they turn to glass ---- */
+:root{
+  --p1:rgba(255,255,255,.045);
+  --p2:rgba(255,255,255,.085);
+  --line:rgba(255,255,255,.10);
+  --t:#D2D3DC; --m:#9496A3; --hi:#F7F7FA;
+  --r:16px;
+  --glass:linear-gradient(180deg,rgba(255,255,255,.115),rgba(255,255,255,.05));
+  --glass-edge:inset 0 1px 0 rgba(255,255,255,.09);
+  --shadow:0 12px 32px rgba(0,0,0,.34);
+  --viol:#A78BFA;
+  --grain:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .6 0'/></filter><rect width='160' height='160' filter='url(%23n)' opacity='.13'/></svg>");
+}
+
+/* ---- ambient backdrop the glass refracts ----
+   The three colours are registered properties, so the light in the room eases to the
+   active tab's colour. It is one fixed layer, so it costs almost nothing. */
+@property --o1{syntax:"<color>";inherits:true;initial-value:rgba(139,92,246,.30)}
+@property --o2{syntax:"<color>";inherits:true;initial-value:rgba(245,166,35,.20)}
+@property --o3{syntax:"<color>";inherits:true;initial-value:rgba(56,189,248,.34)}
+@property --o4{syntax:"<color>";inherits:true;initial-value:rgba(99,102,241,.20)}
+body{background:#08080C}
+.app{
+  position:relative;isolation:isolate;background:transparent;
+  --o1:rgba(139,92,246,.46);--o2:rgba(245,166,35,.32);--o3:rgba(56,189,248,.34);--o4:rgba(99,102,241,.20);
+  transition:--o1 .8s ease,--o2 .8s ease,--o3 .8s ease,--o4 .8s ease;
+}
+.app:has(#aery.on){--o1:rgba(167,139,250,.58);--o2:rgba(139,92,246,.34);--o3:rgba(56,189,248,.22);--o4:rgba(192,132,252,.22)}
+.app:has(#atlas.on){--o1:rgba(245,166,35,.42);--o2:rgba(244,114,60,.34);--o3:rgba(139,92,246,.30);--o4:rgba(251,146,60,.20)}
+.app:has(#syn.on){--o1:rgba(56,189,248,.50);--o2:rgba(99,102,241,.36);--o3:rgba(34,211,238,.32);--o4:rgba(56,189,248,.20)}
+.app::before{
+  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(1100px 760px at 6% -8%,var(--o1),transparent 64%),
+    radial-gradient(980px 700px at 104% 4%,var(--o2),transparent 64%),
+    radial-gradient(1200px 820px at 66% 116%,var(--o3),transparent 64%),
+    radial-gradient(760px 560px at 42% 46%,var(--o4),transparent 72%),
+    linear-gradient(180deg,#0B0B11,#07070B);
+}
+
+/* ---- per-tab accent: Aery violet, Atlas amber, SYN cyan ---- */
+:root[style*="#F5A623" i] #aery{--v:var(--viol);--ink:#0E0820}
+:root[style*="#F5A623" i] #syn{--v:#38BDF8;--ink:#04121C}
+
+/* ---- sidebar ----
+   The frosted panel lives on ::before (not on .side itself) so .side does not become an
+   isolated stacking context; that keeps the wordmark's mix-blend-mode able to melt its
+   black PNG background into the glass. */
+.side{
+  position:relative;padding:18px 12px 14px;gap:14px;
+  background:none;border-right:0;
+}
+.side::before{
+  content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background:var(--grain),linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.025));
+  background-size:160px 160px,auto;
+  -webkit-backdrop-filter:blur(26px) saturate(150%);backdrop-filter:blur(26px) saturate(150%);
+  border-right:1px solid rgba(255,255,255,.08);
+  box-shadow:inset -1px 0 0 rgba(0,0,0,.3);
+}
+.brand{padding:0 8px}
+#nav{min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;padding-bottom:4px}
+#nav::-webkit-scrollbar{display:none}
+.grp{padding:14px 12px 6px;font-size:10px;letter-spacing:.18em;opacity:.7}
+.grp:first-child{padding-top:2px}
+
+nav button{height:38px;border-radius:12px;gap:12px;transition:background .18s,color .18s,box-shadow .18s,transform .12s}
+nav button:hover{background:rgba(255,255,255,.07);color:var(--hi)}
+nav button.on{
+  background:linear-gradient(180deg,color-mix(in srgb,var(--v) 20%,transparent),color-mix(in srgb,var(--v) 8%,transparent));
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--v) 30%,transparent),0 6px 18px color-mix(in srgb,var(--v) 12%,transparent);
+  color:var(--hi);
+}
+nav button.on::before{display:none}
+nav button.on svg{color:var(--v)}
+nav button:active{transform:scale(.985)}
+
+/* the three main tabs */
+nav button.pri{
+  --ac:var(--v);height:56px;padding:0 12px 0 10px;border-radius:16px;
+  background:var(--glass);box-shadow:var(--glass-edge),0 0 0 1px rgba(255,255,255,.06);
+  color:var(--t);
+}
+nav button.pri[data-p=aery]{--ac:var(--viol)}
+nav button.pri[data-p=atlas]{--ac:#F5A623}
+nav button.pri[data-p=syn]{--ac:#38BDF8}
+nav button.pri .pt{
+  width:36px;height:36px;flex:none;display:grid;place-items:center;border-radius:11px;
+  background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);
+  transition:background .18s,box-shadow .18s;
+}
+nav button.pri svg{width:19px;height:19px;color:var(--ac)}
+nav button.pri img{width:22px;height:22px;border-radius:6px}
+nav button.pri span{display:flex;flex-direction:column;align-items:flex-start;line-height:1.15;font-weight:600;font-size:14px}
+nav button.pri small{font-size:11px;font-weight:500;color:var(--m);margin-top:2px}
+nav button.pri:hover{background:linear-gradient(180deg,rgba(255,255,255,.11),rgba(255,255,255,.05))}
+nav button.pri.on{
+  background:linear-gradient(180deg,color-mix(in srgb,var(--ac) 26%,transparent),color-mix(in srgb,var(--ac) 9%,transparent));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 0 0 1px color-mix(in srgb,var(--ac) 45%,transparent),0 10px 26px color-mix(in srgb,var(--ac) 18%,transparent);
+}
+nav button.pri.on .pt{background:color-mix(in srgb,var(--ac) 28%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ac) 55%,transparent),0 0 16px color-mix(in srgb,var(--ac) 35%,transparent)}
+nav button.pri.on small{color:color-mix(in srgb,var(--ac) 55%,#fff)}
+.compact nav button.pri{height:48px;padding:0;justify-content:center;border-radius:14px}
+.compact nav button.pri .pt{width:34px;height:34px}
+
+nav.foot button{height:34px;font-size:13px}
+.ver{padding:4px 10px 0;opacity:.7}
+
+/* ---- main area ---- */
+main{padding:34px 44px 40px}
+.page{animation:gl-in .28s cubic-bezier(.2,.7,.2,1) both}
+@keyframes gl-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+h1{padding-left:0;font-size:30px;letter-spacing:-.03em;color:var(--hi)}
+h1::before{display:none}
+.sub{margin:8px 0 26px;color:var(--m)}
+
+/* ---- glass cards ---- */
+.card{
+  background:var(--glass);border:1px solid rgba(255,255,255,.09);border-radius:var(--r);
+  box-shadow:var(--glass-edge),var(--shadow);
+  -webkit-backdrop-filter:blur(22px) saturate(175%);backdrop-filter:blur(22px) saturate(175%);
+  padding:18px;transition:border-color .2s,box-shadow .2s;
+}
+.card:hover{border-color:rgba(255,255,255,.16)}
+.card label{color:var(--m);letter-spacing:.14em}
+.card b{color:var(--hi)}
+
+.bar{height:6px;border-radius:999px;background:rgba(255,255,255,.08);box-shadow:inset 0 1px 2px rgba(0,0,0,.4)}
+.bar i{border-radius:999px;background:linear-gradient(90deg,color-mix(in srgb,var(--v) 70%,#fff),var(--v));box-shadow:0 0 12px color-mix(in srgb,var(--v) 60%,transparent)}
+
+/* ---- controls ---- */
+.btn{
+  border-radius:12px;padding:9px 18px;font-weight:600;color:var(--ink);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--v) 78%,#fff),var(--v));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 8px 20px color-mix(in srgb,var(--v) 28%,transparent);
+  transition:filter .15s,transform .1s,box-shadow .15s;
+}
+.btn:hover{filter:brightness(1.07)}
+.btn.ghost{
+  background:rgba(255,255,255,.05);color:var(--t);box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.12);
+}
+.btn.ghost:hover{background:rgba(255,255,255,.1);filter:none}
+.btn.danger{background:linear-gradient(180deg,#F05252,#DC2626);color:#fff;box-shadow:0 8px 20px rgba(220,38,38,.28)}
+.tog{background:rgba(255,255,255,.12);box-shadow:inset 0 1px 2px rgba(0,0,0,.4)}
+.tog[aria-pressed=true]{background:linear-gradient(180deg,color-mix(in srgb,var(--v) 78%,#fff),var(--v));box-shadow:0 0 14px color-mix(in srgb,var(--v) 45%,transparent)}
+select{border-radius:10px;background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.12)}
+select option{background:#15151D;color:var(--t)}
+kbd{border-radius:6px;background:rgba(255,255,255,.07)}
+table tr:hover td{background:rgba(255,255,255,.03)}
+td{border-bottom-color:rgba(255,255,255,.06)}
+
+/* ---- dialogs, command palette, toasts ---- */
+.ov{background:rgba(5,6,12,.5);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.pbox,.dbox{
+  background:linear-gradient(180deg,rgba(34,34,48,.82),rgba(20,20,30,.82));
+  -webkit-backdrop-filter:blur(30px) saturate(160%);backdrop-filter:blur(30px) saturate(160%);
+  border:1px solid rgba(255,255,255,.13);border-radius:20px;
+  box-shadow:0 34px 90px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.1);
+}
+.pit{border-radius:10px}
+.toast{
+  background:rgba(28,28,40,.82);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+  border:1px solid rgba(255,255,255,.12);border-left:3px solid var(--v);border-radius:14px;
+  box-shadow:0 16px 40px rgba(0,0,0,.5);
+}
+.at-detailwrap{-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+
+/* ---- Aery + Atlas inner surfaces (they set their own solid colours) ---- */
+.aery-shell{border-radius:20px;box-shadow:var(--glass-edge),var(--shadow);-webkit-backdrop-filter:blur(22px) saturate(175%);backdrop-filter:blur(22px) saturate(175%)}
+.aery-rail{background:rgba(255,255,255,.03)}
+.aery-bar{background:rgba(255,255,255,.025)}
+.at-hero,.at-feature,.at-card{border-radius:18px;box-shadow:var(--glass-edge),var(--shadow)}
+.at-hero{-webkit-backdrop-filter:blur(16px) saturate(150%);backdrop-filter:blur(16px) saturate(150%)}
+.at-search{background:rgba(255,255,255,.06);border-radius:999px}
+.at-chip{border-radius:999px;background:rgba(255,255,255,.04)}
+
+/* ---- scrollbars ---- */
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:999px;border:2px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.26);background-clip:padding-box;border:2px solid transparent}
+
+/* ==========================================================================
+   Glass v2: edges that catch light, frosted grain, depth and motion
+   ========================================================================== */
+.card,.pbox,.dbox,.aery-shell,.at-hero,.at-card,.toast{position:relative}
+.card::before,.pbox::before,.dbox::before,.aery-shell::before,.at-hero::before,.at-card::before,.toast::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;pointer-events:none;z-index:3;
+  background:linear-gradient(150deg,rgba(255,255,255,.40),rgba(255,255,255,.07) 30%,rgba(255,255,255,.025) 62%,rgba(255,255,255,.22));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;
+  transition:filter .25s;
+}
+.card:hover::before,.at-card:hover::before{filter:brightness(1.5)}
+.card{
+  background-color:transparent;
+  background-image:var(--grain),radial-gradient(120% 90% at 0% 0%,rgba(255,255,255,.085),transparent 55%),var(--glass);
+  background-size:160px 160px,auto,auto;
+  border-color:transparent;
+}
+.card:hover{box-shadow:var(--glass-edge),0 20px 48px rgba(0,0,0,.44)}
+.pbox,.dbox{background-image:var(--grain),linear-gradient(180deg,rgba(34,34,48,.82),rgba(20,20,30,.82));background-size:160px 160px,auto;border-color:transparent}
+.aery-shell,.at-hero{background-image:var(--grain);background-size:160px 160px}
+.aery-shell{border-color:transparent}
+.at-card{transition:transform .28s cubic-bezier(.2,.7,.2,1),box-shadow .28s}
+.at-card:hover{transform:translateY(-3px);box-shadow:var(--glass-edge),0 18px 44px rgba(0,0,0,.45)}
+
+/* a soft bloom behind the wordmark */
+.brand{position:relative}
+.brand::before{content:"";position:absolute;inset:-14px -6px;z-index:-1;pointer-events:none;
+  background:radial-gradient(60% 80% at 50% 50%,color-mix(in srgb,var(--viol) 34%,transparent),transparent 72%);filter:blur(10px)}
+.compact .brand::before{inset:-8px -2px}
+
+/* cards rise in one after another */
+@keyframes gl-up{from{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:none}}
+.page.on .card{animation:gl-up .5s cubic-bezier(.2,.7,.2,1) both}
+.page.on .card:nth-child(2){animation-delay:.05s}.page.on .card:nth-child(3){animation-delay:.1s}
+.page.on .card:nth-child(4){animation-delay:.15s}.page.on .card:nth-child(5){animation-delay:.2s}
+.page.on .card:nth-child(n+6){animation-delay:.25s}
+
+/* numbers and labels */
+.card b{letter-spacing:-.02em;font-feature-settings:"tnum"}
+.card label{opacity:.85}
+
+/* SYN placeholder: a calmer, more premium hero */
+.card.sync{align-items:center;flex-direction:row;gap:22px;padding:26px 30px}
+.card.sync img{width:68px;height:68px;border-radius:18px;flex:none;
+  box-shadow:0 0 0 1px rgba(255,255,255,.14),0 12px 44px rgba(56,189,248,.38)}
+.card.sync b{font-size:26px;letter-spacing:-.025em}
+
+@media (prefers-reduced-motion:reduce){.page,.page.on .card{animation:none}.app{transition:none}}
+body.rm .page,body.rm .page.on .card{animation:none}
+
+/* ==========================================================================
+   Rhythm and hierarchy
+   ========================================================================== */
+.page>.card+*,.page>.grid+*,.page>.grid2+*{margin-top:16px}
+.grid,.grid2{gap:16px}
+.card{padding:20px 22px}
+.grid>.card{min-height:112px}
+
+/* ==========================================================================
+   Native window glass (class set by glassfx.js once Windows confirms the effect)
+   The page turns translucent so the blurred desktop shows through.
+   ========================================================================== */
+:root.fx,:root.fx body{background:transparent}
+/* Dark smoky glass: a scrim sits over the colour glows so any wallpaper (even a bright one)
+   stays readable. The desktop shows through as a soft blurred tint, not as a wash. */
+.fx{--m:#B9BBC8;--t:#E4E5EC}
+.fx .app::before{
+  background:
+    linear-gradient(180deg,rgba(9,9,15,.62),rgba(6,6,10,.74)),
+    radial-gradient(1100px 760px at 6% -8%,var(--o1),transparent 64%),
+    radial-gradient(980px 700px at 104% 4%,var(--o2),transparent 64%),
+    radial-gradient(1200px 820px at 66% 116%,var(--o3),transparent 64%),
+    radial-gradient(760px 560px at 42% 46%,var(--o4),transparent 72%);
+}
+.fx .side::before{background:var(--grain),linear-gradient(180deg,rgba(14,14,22,.50),rgba(10,10,16,.62));background-size:160px 160px,auto}
+.fx .card{background-color:rgba(12,12,20,.46)}
+.fx .aery-shell,.fx .at-hero{background-color:rgba(12,12,20,.44)}
+.fx .pbox,.fx .dbox{background-color:rgba(14,14,22,.78)}
+/* the wordmark PNG has a black background; in native-glass mode turn its brightness into transparency */
+.fx .wordmark{mix-blend-mode:normal;filter:url(#l2a)}
+
+/* ==========================================================================
+   Dashboard v3 and sidebar polish (works with dashx.js; attaches by element id)
+   ========================================================================== */
+#dashboard.on{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;align-content:start;position:relative}
+#dashboard>h1,#dashboard>.sub{grid-column:1/-1;margin:0}
+#dashboard>.sub{margin-bottom:8px}
+#dashboard>.grid{display:contents}
+#dashboard .card{margin:0!important}
+/* four equal stat tiles (overrides the older rule that stretched CPU and Memory) */
+#dashboard .card:has(#cpu){order:1;grid-column:span 1}
+#dashboard .card:has(#mem){order:2;grid-column:span 1}
+#dashboard .card:has(#tempB){order:3;grid-column:span 1}
+#dashboard .card:has(#net){order:4;grid-column:span 1}
+#dashboard #health{order:5;grid-column:1/-1}
+#dashboard .card:has(#up){order:6;grid-column:span 2}
+#dashboard .card:has(#disks){order:7;grid-column:span 2}
+@media (max-width:1180px){#dashboard.on{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.dx-stat{display:flex;flex-direction:column;gap:8px;min-height:164px}
+.dx-stat>b{font-size:34px;line-height:1.05}
+.dx-stat .bar{margin-top:2px}
+.spark{margin-top:auto;height:36px}
+.spark svg{display:block;width:100%;height:100%;overflow:visible}
+.spark .a{fill:color-mix(in srgb,var(--v) 20%,transparent)}
+.spark .l{fill:none;stroke:var(--v);stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke;filter:drop-shadow(0 0 4px color-mix(in srgb,var(--v) 55%,transparent))}
+
+.disk{flex-wrap:wrap;row-gap:7px}
+.dbar{flex:0 0 100%;height:6px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}
+.dbar i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,color-mix(in srgb,var(--v) 70%,#fff),var(--v))}
+
+.ptools{position:absolute;right:0;top:8px;display:flex;align-items:center;gap:12px;color:var(--m);font-size:12px}
+.ptools .btn{padding:6px 14px;font-size:12px;border-radius:10px}
+.live{width:7px;height:7px;border-radius:50%;background:#22C55E;box-shadow:0 0 10px #22C55E;animation:pulse 2.4s infinite}
+
+.nx-search{display:flex;align-items:center;gap:10px;width:100%;height:38px;margin:0;padding:0 12px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);color:var(--m);font-size:13px;box-shadow:var(--glass-edge);transition:background .18s,color .18s}
+.nx-search:hover{background:rgba(255,255,255,.10);color:var(--hi)}
+.nx-search kbd{margin-left:auto;font-size:11px}
+.compact .nx-search{justify-content:center;padding:0}.compact .nx-search span,.compact .nx-search kbd{display:none}
+.grp.nx-btn{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
+.grp.nx-btn:hover{opacity:1;color:var(--t)}
+.grp.nx-btn::after{content:"";width:6px;height:6px;margin-right:2px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg) translateY(-2px);transition:transform .2s;opacity:.7}
+.grp.nx-shut::after{transform:rotate(-45deg)}
+.nx-hide{display:none!important}
+
+/* ---- fallbacks ---- */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .card,.pbox,.dbox,.toast{background:rgba(22,22,31,.94)}
+  .side::before{background:rgba(22,22,31,.94)}
+  .card{background-image:none}
+}
+@media (prefers-reduced-transparency:reduce){
+  .side::before,.card,.pbox,.dbox,.toast,.ov,.at-detailwrap{-webkit-backdrop-filter:none;backdrop-filter:none}
+  .card,.side::before{background:rgba(22,22,31,.94)}
+}

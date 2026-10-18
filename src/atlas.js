@@ -64,6 +64,9 @@ const hasBackend = () => typeof invoke === "function";
   let editingId = null, detailId = null;
   // Set when a scan fails, so the page can say why instead of showing an empty library.
   let scanError = null;
+  // The last scan's per-source report, so the page can say what was read and
+  // what could not be. Null when the backend answered with a bare list.
+  let sourceReport = null;
   // Single source of truth for the toolbar, so the page and the code cannot drift.
   const SORTS = ["recent", "lastLaunch", "name", "plays", "size"];
   const filters = { favOnly: false, missingOnly: false };
@@ -331,6 +334,43 @@ const launchers = [...new Set(games.map((g) => g.launcher))].filter(Boolean);
       <div><b>${escF(secs ? dur(secs) : "Not measured")}</b><small>measured play time</small></div>`;
   }
 
+  // ---- source status ----
+  // Says what ATLAS actually read. A launcher that is not installed, one that is
+  // turned off, and one whose files could not be read are three different things,
+  // and each is stated in its own words rather than folded into one number.
+  const SRC_WORD = {
+    ok: "Read",
+    notinstalled: "Not installed",
+    disabled: "Off",
+    unreadable: "Could not read",
+    failed: "Failed",
+  };
+  function renderSources() {
+    const host = E("atlasSources");
+    if (!host) return;
+    const rep = sourceReport;
+    if (!rep || !Array.isArray(rep.sources)) { show("atlasSources", false); return; }
+    const rows = rep.sources.map((s) => {
+      const word = SRC_WORD[String(s.status || "").toLowerCase()] || String(s.status || "Unknown");
+      const n = Number(s.found) || 0;
+      const what = s.status === "ok" ? (n === 1 ? "1 game" : n + " games") : (s.detail || "");
+      const slow = Number(s.ms) || 0;
+      return `<div class="at-src at-src-${escF(String(s.status || "ok"))}">
+        <b>${escF(s.name)}</b>
+        <span class="at-srcw">${escF(word)}</span>
+        <small>${escF(what)}${s.status === "ok" && slow > 0 ? " · " + slow + " ms" : ""}</small>
+      </div>`;
+    });
+    // Launchers ATLAS has not built support for are named, so the gap is stated
+    // instead of leaving the user to wonder why Epic is empty.
+    const missing = Array.isArray(rep.not_supported) && rep.not_supported.length
+      ? `<p class="at-srcnote">Not read yet: ${escF(rep.not_supported.join(", "))}. ATLAS does not pretend to see these.</p>`
+      : "";
+    const ms = Number(rep.ms) || 0;
+    const head = `<p class="at-srch">${escF(String(ms) + " ms")} to read everything below.</p>`;
+    host.innerHTML = head + `<div class="at-srcrow">${rows.join("")}</div>` + missing;
+    show("atlasSources", true);
+  }
   function renderSessions() {
     const host = E("atlasSess");
     if (!host) return;
@@ -351,6 +391,7 @@ const launchers = [...new Set(games.map((g) => g.launcher))].filter(Boolean);
     renderFeature();
     renderGrid();
     renderSessions();
+    renderSources();
     const restored = ST.get("atlas.removed", false);
     show("atlasRestore", !!restored);
     const active = filters.favOnly || filters.missingOnly || ((E("atlasQ") && E("atlasQ").value || "").trim());
@@ -363,11 +404,15 @@ if (busy) return;
       // Renders before bailing, so the sessions panel can explain that it cannot
       // read rather than quietly claiming there is nothing recorded.
       if (!hasBackend()) { render(); loadSessions(); return; }
-    busy = true;
+busy = true;
     const btn = E("atlasScan");
     if (btn) { btn.disabled = true; if (manual) btn.textContent = "Scanning…"; }
     try {
-      games = await call("atlas_scan");
+      // The backend answers with a report, not a bare list, so the page can say
+      // which sources were read and which could not be.
+      const res = await call("atlas_scan");
+      games = Array.isArray(res) ? res : (res && Array.isArray(res.games) ? res.games : []);
+      sourceReport = Array.isArray(res) ? null : (res || null);
       scanError = null;
       loadSessions();
       A.log({ text: "ATLAS library rescan", status: "done", detail: JSON.stringify({ found: games.length }) });
@@ -691,7 +736,8 @@ on("atlasRestore", "click", async () => {
       try {
         await call("atlas_clear_sessions"); sessions = [];
         A.update(act, { status: "done", detail: "Play time cleared. Games were not touched." });
-        renderSessions(); T("Session history cleared.");
+        renderSessions();
+        T("Session history cleared.");
       } catch (e) {
         A.update(act, { status: "failed", detail: String(e.message || e) });
         TG.add("atlas.sessions.clear", e); T(String(e.message || e), true);

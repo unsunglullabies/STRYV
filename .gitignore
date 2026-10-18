@@ -74,3 +74,8 @@ desktop.ini
   CONTEXT-BUNDLE.txt
   # Older name for the same generated file.
   CLAUDE-CONTEXT.txt
+
+# --- Verification screenshots --------------------------------------------------
+# Written by scripts/dev-shot.js when checking a page renders. Build artefacts of
+# the verification step, not application source.
+shots/

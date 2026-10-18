@@ -92,7 +92,20 @@
     get_temps: () => [{ name: "Mock CPU Package", temp: wob(58, 6, 2500), kind: "cpu" }],
 
     // --- ATLAS ------------------------------------------------------------
-    atlas_scan: () => GAMES,
+    // A real scan answers with a report, not a bare list, so the mock has to
+    // match that shape or the source panel would never be exercised in dev.
+    atlas_scan: () => ({
+      started: 1758100000,
+      ms: 47,
+      games: GAMES,
+      sources: [
+        { id: "steam", name: "Steam", group: "launcher", enabled: true, status: "ok", found: GAMES.filter((g) => g.launcher === "Steam").length, ms: 41, detail: "" },
+        { id: "standalone", name: "Manual", group: "standalone", enabled: true, status: "ok", found: GAMES.filter((g) => g.launcher !== "Steam").length, ms: 1, detail: "" },
+      ],
+      not_supported: ["Epic Games", "GOG Galaxy", "Xbox / Microsoft Store", "EA App", "Ubisoft Connect", "Battle.net", "Riot Client", "Amazon Games"],
+    }),
+    atlas_source_list: () => [],
+    atlas_set_source: () => null,
     atlas_sessions: () => [{ id: "mock:1:1", game_id: "mock:1", name: "Mock Title One", launcher: "Steam", started: 1758100000, ended: 1758104200, duration_secs: 4200, cpu_pct: 62.5, mem_bytes: 8200000000, measured: true }],
     atlas_add_manual: () => GAMES[2],
     atlas_update: () => GAMES[2],

@@ -1,36 +1,39 @@
 "use strict";
 const Intro = (() => {
-  // Defined here rather than borrowed from core.js. A launch screen that
-  // silently depends on another file loading first is one refactor away from
-  // being a black screen again, and these shadow any global of the same name
-  // without colliding with it.
-  const q = (id) => document.getElementById(id);
-  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const TL = { appear: 260, lid: 300, ign: 720, launch: 520, cover0: 900, cover1: 1750, clr0: 1700, clr1: 3050, end: 3400 };
-  const SP = 128, K = 0.65;
+  // The window itself is the stage: a dark rectangle (the menu), a rocket on a pad, GPU smoke.
+  const TL = { appear: 300, ign: 650, launch: 520, cover0: 850, cover1: 1900, clr0: 1950, clr1: 3400, end: 3550 };
+  const KG = 0.5, K2 = 0.75;   // smoke renders at half size (it is soft); sparks at 3/4
   let st = null, shown = false;
 
-// Startup timeline. Mirrors boot_mark on the Rust side into
-// %TEMP%\stryv-startup.log so a slow start can be traced, not guessed at.
-const mark = (label) => {
-  try {
-    const t = window.__TAURI__;
-    if (t && t.core && t.core.invoke)
-      t.core.invoke("boot_mark", { label: "JS  " + label + " (page time " + Math.round(performance.now()) + " ms)" }).catch(() => {});
-  } catch (e) { /* diagnostics only */ }
-};
-mark("scripts running (intro.js loaded)");
+  // Startup timeline: lines land in %TEMP%\stryv-startup.log (written by the Rust side).
+  const mark = (label) => {
+    try {
+      const t = window.__TAURI__;
+      if (t && t.core && t.core.invoke) t.core.invoke("boot_mark", { label: "JS  " + label + " (page time " + Math.round(performance.now()) + " ms)" }).catch(() => {});
+    } catch (e) { /* diagnostics only */ }
+  };
+  mark("scripts running (intro.js loaded)");
+
+  // Show the window now. requestAnimationFrame can be paused while the window is hidden,
+  // so the reveal must not wait for a frame. Returns false if the window API is not there yet.
+  function reveal() {
+    try {
+      const w = window.__TAURI__ && window.__TAURI__.window && window.__TAURI__.window.getCurrentWindow && window.__TAURI__.window.getCurrentWindow();
+      if (w && typeof w.show === "function") {
+        mark("calling window.show()");
+        Promise.resolve(w.show()).then(() => mark("window.show() done"), () => mark("window.show() FAILED"));
+        return true;
+      }
+    } catch (e) { /* retried below */ }
+    return false;
+  }
   const c01 = (v) => Math.min(1, Math.max(0, v));
   const cl = (v, a, b) => Math.min(b, Math.max(a, v));
   const sm = (a, b, v) => { const t = c01((v - a) / (b - a)); return t * t * (3 - 2 * t); };
   const rnd = (a, b) => a + Math.random() * (b - a);
   const rgb = (h) => { const n = parseInt(h.replace("#", ""), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
-  const hash = (x, y) => { let h = Math.imul(x, 374761393) + Math.imul(y, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967295; };
-  const vn = (x, y) => { const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf); return hash(xi, yi) * (1 - u) * (1 - v) + hash(xi + 1, yi) * u * (1 - v) + hash(xi, yi + 1) * (1 - u) * v + hash(xi + 1, yi + 1) * u * v; };
-  const fbm = (x, y) => { let s = 0, a = .5, f = 1; for (let i = 0; i < 3; i++) { s += a * vn(x * f, y * f); f *= 2; a *= .5; } return s / .875; };
 
-  const HTML = `<canvas id="icv"></canvas><div class="iback"><div class="iglow"></div></div>
+  const HTML = `<canvas id="icv"></canvas><div class="iback"></div>
 <svg class="irk" viewBox="0 0 40 120" overflow="visible"><defs>
 <linearGradient id="ig1" x1="0" x2="1"><stop offset="0" stop-color="#4a4f5e"/><stop offset=".38" stop-color="#e8eaf2"/><stop offset=".62" stop-color="#8a90a4"/><stop offset="1" stop-color="#2a2d38"/></linearGradient>
 <linearGradient id="ig3" x1="0" x2="1"><stop offset="0" stop-color="#2d303b"/><stop offset="1" stop-color="#5a5f70"/></linearGradient>
@@ -41,23 +44,101 @@ mark("scripts running (intro.js loaded)");
 <path d="M20 2C27 18 29 40 28 96H12C11 40 13 18 20 2Z" fill="url(#ig1)"/>
 <rect x="10" y="60" width="20" height="6" style="fill:var(--v)" clip-path="url(#igc)"/>
 <path d="M13 96H27L25 107H15Z" fill="#1c1f29" stroke="#3a3e4c" stroke-width=".6"/></svg>
-<div class="ilid l"></div><div class="ilid r"></div><div class="ifront"></div>
-<div class="iwait"></div><div class="ifoot"><span class="iv">STRYV</span><button class="iskip" type="button">Skip</button></div><div class="imsg" role="status" aria-live="polite"></div><div class="isweep"></div>`;
+<div class="ipad"></div><canvas id="ics"></canvas>
+<div class="iwait"></div><div class="ifoot"><span class="iv">STRYV</span><button class="iskip" type="button">Skip</button></div><div class="imsg" role="status" aria-live="polite"></div>`;
 
-  // Geometry without a live state object, so launch() can size the smoke
-  // field before the first frame runs.
-  function g0() { return geom(); }
+  // ---- smoke: a domain-warped fractal density field, lit by the engine flame -----------
+  const VS = "attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}";
+  const FS = `precision highp float;
+uniform vec2 uRes,uPad;uniform vec3 uAc;
+uniform float uT,uRy,uBlast,uPlume,uCover,uClear,uFire;
+float h21(vec2 p){p=fract(p*vec2(233.34,851.73));p+=dot(p,p+23.45);return fract(p.x*p.y);}
+float vn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
+  return mix(mix(h21(i),h21(i+vec2(1.,0.)),f.x),mix(h21(i+vec2(0.,1.)),h21(i+vec2(1.,1.)),f.x),f.y);}
+float fbm(vec2 p){float s=0.,a=.5;for(int i=0;i<5;i++){s+=a*vn(p);p=p*2.02+vec2(31.7,17.3);a*=.5;}return s;}
+float sm(float a,float b,float x){x=clamp((x-a)/(b-a),0.,1.);return x*x*(3.-2.*x);}
+void main(){
+  vec2 R=uRes;
+  vec2 p=(gl_FragCoord.xy-.5*R)/R.y;
+  vec2 pad=(vec2(uPad.x,R.y-uPad.y)-.5*R)/R.y;
+  vec2 nz=(vec2(uPad.x,R.y-uRy)-.5*R)/R.y;
+  float t=uT;
+  // puffy density: a gently warped fractal field
+  vec2 q=vec2(fbm(p*1.4+vec2(0.,-t*.10)),fbm(p*1.4+vec2(5.2+t*.07,1.3)));
+  vec2 pw=p*1.9+1.35*q+vec2(0.,-t*.07);
+  float d0=fbm(pw);
+  float dx=fbm(pw+vec2(.10,0.))-d0,dy=fbm(pw+vec2(0.,.10))-d0;
+  float dd=mix(d0,.5,.25);
+  // ground blast: a wide cloud rolling out from the pad
+  vec2 b=(p-pad)*vec2(.62,1.35);
+  float Rb=.06+uBlast*1.0;
+  float blast=sm(Rb,Rb*.2,length(b)+(dd-.5)*.6*Rb);
+  // exhaust column from the pad up to the nozzle, with soft ends
+  float span=max(nz.y-pad.y,.002);
+  float along=clamp((p.y-pad.y)/span,0.,1.);
+  float inCol=sm(pad.y-.10,pad.y+.03,p.y)*(1.-sm(nz.y-.03,nz.y+.14,p.y));
+  float w=mix(.13,.05,along)*(1.+.9*uBlast)*(.7+.9*dd);
+  float sway=(q.x-.5)*.22*along;
+  float col=sm(w,w*.10,abs(p.x-pad.x-sway))*inCol*uPlume;
+  float rho=clamp(max(blast,col*.92)*(.35+1.1*dd),0.,1.);
+  // the veil that fills the window (reaches full opacity at uCover=1)
+  rho=max(rho,sm(0.,1.,uCover*1.25-(1.-dd)*.25));
+  // wispy fine detail on the thin parts
+  float fine=fbm(p*5.5+q*2.-vec2(0.,t*.2));
+  rho=clamp(rho*mix(.6+.8*fine,1.,uCover),0.,1.);
+  // soft, wrapped lighting from the engine flame; dense cores sit a little darker
+  vec3 n3=normalize(vec3(-dx*2.2,-dy*2.2,.35));
+  vec3 L=normalize(vec3(nz-p,.45));
+  float dif=clamp(dot(n3,L)*.5+.5,0.,1.);
+  vec2 dn=p-nz;vec2 dp=p-pad;
+  float fire=uFire/(1.+24.*dot(dn,dn))+uFire*.5/(1.+18.*dot(dp,dp));
+  vec3 base=mix(vec3(.11,.12,.16),vec3(.60,.62,.70),clamp(dif*.8+.25*dd,0.,1.));
+  base*=1.1-.35*rho*rho;
+  base=mix(base,uAc*.9,.07);
+  vec3 c=base+vec3(1.,.55,.2)*fire*(.30+.9*dif)+vec3(.9,.95,1.)*(1.-rho)*rho*.10;
+  // clearing: the smoke thins from the centre outward with a ragged edge
+  float fld=length(p*vec2(.62,1.))*1.15+(dd-.5)*.5-p.y*.12;
+  float rev=mix(1.,sm(uClear-.24,uClear,fld),step(.001,uClear));
+  float a=rho*rev;
+  gl_FragColor=vec4(c*a,a);
+}`;
+  function initGL(cv) {
+    try {
+      const gl = cv.getContext("webgl", { alpha: true, premultipliedAlpha: true, antialias: false, depth: false, stencil: false, powerPreference: "high-performance" });
+      if (!gl) throw new Error("WebGL is not available");
+      const sh = (t, src) => { const s = gl.createShader(t); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s) || "shader failed"); return s; };
+      const pr = gl.createProgram();
+      gl.attachShader(pr, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(pr);
+      if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr) || "link failed");
+      gl.useProgram(pr);
+      gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+      const loc = gl.getAttribLocation(pr, "a"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+      const U = {};
+      ["uRes", "uPad", "uAc", "uT", "uRy", "uBlast", "uPlume", "uCover", "uClear", "uFire"].forEach((n) => { U[n] = gl.getUniformLocation(pr, n); });
+      gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      return { gl, U };
+    } catch (e) { console.warn("launch smoke unavailable:", e); if (typeof Tech !== "undefined") Tech.add("launch smoke", String(e)); return null; }
+  }
+  function drawGL(G, cv, v) {
+    const gl = G.gl, U = G.U;
+    gl.viewport(0, 0, cv.width, cv.height); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.uniform2f(U.uRes, cv.width, cv.height); gl.uniform2f(U.uPad, v.px * KG, v.py * KG);
+    gl.uniform3f(U.uAc, v.ac[0] / 255, v.ac[1] / 255, v.ac[2] / 255);
+    gl.uniform1f(U.uT, v.t); gl.uniform1f(U.uRy, v.ry * KG); gl.uniform1f(U.uBlast, v.blast); gl.uniform1f(U.uPlume, v.plume);
+    gl.uniform1f(U.uCover, v.cover); gl.uniform1f(U.uClear, v.clear); gl.uniform1f(U.uFire, v.fire);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
 
   function geom() {
-
-    const vw = innerWidth, vh = innerHeight, bh = cl(vh * .4, 200, 460), bw = bh * .74, rh = bh * .56, cx = vw / 2, cy = vh / 2, boxBot = cy + bh / 2, rkBottom = boxBot - bh * .14;
-    return { vw, vh, bh, bw, rh, cx, cy, boxTop: cy - bh / 2, rkBottom, D: rkBottom + rh * .6 + 40, maxD: Math.hypot(cx, cy) };
+    const vw = innerWidth, vh = innerHeight, rh = cl(vh * .30, 170, 340), padY = vh * .74;
+    return { vw, vh, rh, cx: vw / 2, padY, nozBase: padY - 13 / 120 * rh, D: padY + rh * .5 + 80 };
   }
   function setVars() {
     const g = geom(), s = st.root.style;
-    s.setProperty("--bh", g.bh + "px"); s.setProperty("--bw", g.bw + "px"); s.setProperty("--rh", g.rh + "px");
-    st.cv.width = Math.round(g.vw * K); st.cv.height = Math.round(g.vh * K);
-    if (st.field) st.field.resize(g.vw, g.vh, st.spread);
+    s.setProperty("--rh", g.rh + "px"); s.setProperty("--pad", g.padY + "px");
+    st.cv.width = Math.round(g.vw * KG); st.cv.height = Math.round(g.vh * KG);
+    st.c2.width = Math.round(g.vw * K2); st.c2.height = Math.round(g.vh * K2);
   }
 
   function msg(text, btns = []) {
@@ -65,36 +146,52 @@ mark("scripts running (intro.js loaded)");
     btns.forEach(([t, f], i) => { const b = document.createElement("button"); b.className = "btn" + (i ? " ghost" : ""); b.textContent = t; b.onclick = f; m.querySelector(".ibtn").appendChild(b); });
     const b0 = m.querySelector("button"); if (b0) b0.focus();
   }
-  // Screenshots cannot answer this: WebView2 windows do not composite into
-  // PrintWindow, and a screen grab records whatever happens to be in front. The
-  // app reporting its own DOM is the only trustworthy evidence that nothing is
-  // left painting over the interface.
+  function finish() {
+    if (!st) return;
+    mark("launch screen finished");
+    st.timers.forEach(clearTimeout); cancelAnimationFrame(st.raf); removeEventListener("resize", st.onR);
+    try { const e = st.G && st.G.gl.getExtension("WEBGL_lose_context"); if (e) e.loseContext(); } catch (e) { /* freeing early is optional */ }
+    st.root.remove(); st = null;
+    audit();
+  }
+
+  // A screenshot cannot answer this: WebView2 windows do not composite into
+  // PrintWindow, and a screen grab records whatever happens to be in front of
+  // them. The app reporting its own DOM is the only trustworthy evidence that
+  // the launch screen took itself down and left nothing painting over the UI.
   function audit() {
     setTimeout(() => {
-      const cv = document.getElementById("icv");
       const intro = document.getElementById("intro");
+      const cv = document.getElementById("icv");
       let lit = "n/a";
       if (cv) {
         try {
-          const d = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
-          let n = 0;
-          for (let k = 3; k < d.length; k += 4) if (d[k] > 4) n++;
-          lit = n + "px";
+          const gl = cv.getContext("webgl") || cv.getContext("webgl2");
+          if (gl) {
+            const px = new Uint8Array(4);
+            gl.readPixels(Math.floor(cv.width / 2), Math.floor(cv.height / 2), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+            lit = px[3] > 4 ? "lit" : "cleared";
+          } else { lit = "no-context"; }
         } catch (e) { lit = "unreadable"; }
       }
       mark("audit+3s: intro=" + (intro ? "PRESENT" : "gone") +
-           " canvas=" + (cv ? "PRESENT " + cv.width + "x" + cv.height + " lit=" + lit : "gone") +
+           " canvas=" + (cv ? "PRESENT " + cv.width + "x" + cv.height + " " + lit : "gone") +
            " st=" + (st ? "live" : "null"));
     }, 3000);
   }
-  // Skip must be reachable by pointer and keyboard. A launch screen you cannot
-  // get past with a mouse is a launch screen that hangs the app.
+  function quick() { if (!st) return; st.root.classList.add("nopt", "fade"); st.timers.push(setTimeout(finish, 220)); }
+
+  // Skip must be reachable by pointer and keyboard. 0.2.6 shipped this and a
+  // rewrite of the smoke renderer dropped it, which left a launch screen you
+  // could only wait out - including for anyone who cannot tolerate 3.5 seconds
+  // of animation on every launch. A launch screen you cannot get past is a
+  // launch screen that hangs the app.
   function bindSkip(root) {
     const go = (e) => { if (e) e.preventDefault(); quick(); };
     const b = root.querySelector(".iskip");
     if (b) {
       b.addEventListener("click", go);
-      // Focus it so Enter and Space work without a click, and so the button is
+      // Focus it so Enter and Space work without a click, and so the control is
       // reachable by keyboard on first paint.
       try { setTimeout(() => b.focus(), 0); } catch (e) { /* not focusable yet */ }
     }
@@ -102,265 +199,102 @@ mark("scripts running (intro.js loaded)");
       if (e.key === "Escape" || e.key === "Enter" || e.key === " ") go(e);
     });
   }
-  function finish() {
-    if (!st) return;
-    mark("finish(): field=" + (st.field ? st.field.fw + "x" + st.field.fh : "none") + " wisps=" + (st.wisp ? st.wisp.length : "?") + " sparks=" + (st.spark ? st.spark.length : "?"));
-    st.timers.forEach(clearTimeout); cancelAnimationFrame(st.raf); removeEventListener("resize", st.onR);
-    // Free the field buffers now rather than waiting for GC. The launch screen
-    // allocates a Float32Array and a canvas every run; an earlier attempt to
-    // add this silently failed to apply and the leak shipped.
-    if (st.field) { st.field.dispose(); st.field = null; }
-    st.wisp = null; st.spark = null; st.ctx = null;
-    st.root.remove(); st = null;
-    audit();
-  }
-  function quick() { if (!st) return; st.root.classList.add("nopt", "fade"); st.timers.push(setTimeout(() => { finish(); }, 220)); }
 
   async function begin(readyFn) {
-    const s = st;
-    s.root.classList.remove("err");
-    s.root.querySelector(".imsg").innerHTML = "";
-    s.backend = null; s.animDone = false;
-    const slow = setTimeout(() => { if (st === s) msg("Still starting…", [["Open STRYV anyway", quick]]); }, 8000);
-    s.timers.push(slow);
-
-    const motion = s.force
-      ? !(matchMedia("(prefers-reduced-motion: reduce)").matches || (Cfg && Cfg.v && Cfg.v.reduceMotion))
-      : !((Cfg && Cfg.v && (Cfg.v.reduceMotion || Cfg.v.intro === false)) || matchMedia("(prefers-reduced-motion: reduce)").matches);
-
-    // The rocket lights now, not once the backend answers. A screen that is
-    // moving reads as starting; an empty one reads as hung.
-    mark("backend requested, motion=" + motion);
-    if (motion) launch(); else s.animDone = true;
-
-    let res;
-    try { res = await readyFn(); } catch (e) { res = { ok: false, reason: String(e) }; }
-    clearTimeout(slow);
-    mark("backend answered, ok=" + !!(res && res.ok));
+    const s = st; s.root.classList.remove("err"); s.root.querySelector(".imsg").innerHTML = "";
+    const appear = new Promise((r) => s.timers.push(setTimeout(r, TL.appear)));
+    const slow = setTimeout(() => { if (st === s) msg("Still starting…", [["Open STRYV anyway", quick]]); }, 8000); s.timers.push(slow);
+    let res; try { res = await readyFn(); } catch (e) { res = { ok: false, reason: String(e) }; }
+    await appear; clearTimeout(slow);
+    mark("backend startup finished, ok=" + (res && res.ok));
     if (st !== s) return;
-    s.backend = res;
     s.root.querySelector(".imsg").innerHTML = "";
-
     if (!res.ok) {
-      Tech.add("startup", res.reason || "Startup failed");
-      s.root.classList.add("err");
+      Tech.add("startup", res.reason || "Startup failed"); s.root.classList.add("err");
       return msg("STRYV couldn't finish starting. " + (res.reason || ""), [["Retry", () => begin(readyFn)], ["Open STRYV anyway", quick]]);
     }
-    try {
-      if (typeof Act !== "undefined" && Act.log)
-        Act.log({ text: "Launch timing: backend ready at " + Math.round(performance.now()) + " ms" });
-    } catch (e) { /* logging only */ }
-    // app.js hands us a second stage here. It was passed as { ready } and then
-    // never read, so the updater check silently never ran - the precise bug the
-    // comment in app.js claims was fixed.
-    if (typeof s.ready === "function") {
-      try { await s.ready(res); } catch (e) { Tech.add("post-startup", e); }
-    }
-    maybeFinish();
+    const calm = matchMedia("(prefers-reduced-motion: reduce)").matches || Cfg.v.reduceMotion;
+    if (s.force ? calm : (calm || Cfg.v.intro === false)) return quick();
+    if (!s.G) return quick();   // no GPU smoke available: skip the show rather than fake it
+    launch();
   }
 
-  // Close only when the backend has actually answered AND the rocket has
-  // finished: a fast backend never cuts the animation short, and a slow one
-  // never leaves a blank window.
-  function maybeFinish() {
-    const s = st;
-    if (!s || !s.backend || !s.animDone) return;
-    if (s.backend.ok) finish();
-  }
   function launch() {
-    const s = st;
-    s.root.classList.add("fire");
-    // Retry re-enters launch(); without this the previous field is never disposed and the
-    // previous rAF handle is overwritten, so one loop becomes uncancellable.
-    if (s.field) s.field.dispose();
-    if (s.raf) cancelAnimationFrame(s.raf);
-    s.field.resize(g0().vw, g0().vh);
-    s.ctx = s.cv.getContext("2d"); s.wisp = []; s.spark = [];
-    s.rk = s.root.querySelector(".irk"); s.fl = s.root.querySelector("#ifl");
-    s.t0 = performance.now(); s.last = s.t0; s.raf = requestAnimationFrame(frame);
-    mark("rocket sequence started");
-    s.timers.push(setTimeout(() => {
-      if (st !== s) return;
-      s.animDone = true;
-      mark("rocket sequence finished");
-      maybeFinish();
-    }, TL.end));
+    st.root.classList.add("fire");
+    st.rk = st.root.querySelector(".irk"); st.fl = st.root.querySelector("#ifl");
+    if (st.fl) st.fl.style.opacity = "1";
+    st.ctx = st.c2.getContext("2d"); st.S = [];
+    st.t0 = performance.now(); st.last = st.t0; st.raf = requestAnimationFrame(frame);
   }
+
   function frame() {
     if (!st) return;
     const now = performance.now();
-    const T = Math.max(0, now - st.t0), dt = Math.min(.05, Math.max(.001, (now - st.last) / 1000));
-    st.last = now;
-
-    const g = geom(), ctx = st.ctx, root = st.root, field = st.field;
+    const T = Math.max(0, now - st.t0), dt = Math.min(.05, Math.max(.001, (now - st.last) / 1000)); st.last = now;
+    const g = geom(), ctx = st.ctx, S = st.S, root = st.root, ac = st.ac;
     const p = c01(T / TL.ign), u = c01((T - TL.ign) / TL.launch);
-    const lift = T < TL.ign ? 0 : g.D * Math.pow(u, 2.4), vib = T < TL.ign ? p * p * 2.6 : 0;
-
-    // --- rocket ------------------------------------------------------------
+    const lift = T < TL.ign ? 0 : g.D * Math.pow(u, 2.2), vib = T < TL.ign ? p * p * 2.8 : 0;
     st.rk.style.transform = `translate(${(Math.random() - .5) * vib * 2}px,${(Math.random() - .5) * vib * 2 - lift}px) rotate(${(Math.random() - .5) * vib * .3}deg)`;
     st.rk.style.visibility = u >= 1 ? "hidden" : "visible";
-    const fl = T < TL.ign ? .12 + p * 1.05 : 1.2 + u * .75;
-    st.fl.style.transform = `scaleY(${fl * (.92 + Math.random() * .16)})`;
-    const rs = root.style;
-    rs.setProperty("--glow", T < TL.ign ? .12 + .88 * p * p : 1.2 * (1 - sm(TL.ign, TL.ign + 700, T)));
-    rs.setProperty("--lid", sm(0, TL.lid, T));
-    const sh = T >= TL.ign ? 5 * (1 - c01((T - TL.ign) / 320)) : 0;
-    rs.setProperty("--sx", (Math.random() - .5) * sh * 2 + "px");
-    rs.setProperty("--sy", (Math.random() - .5) * sh * 2 + "px");
-    if (T > TL.ign + 380) root.classList.add("boxout");
+    const fl = T < TL.ign ? .12 + p * 1.05 : 1.2 + u * .75; st.fl.style.transform = `scaleY(${fl * (.92 + Math.random() * .16)})`;
+    const rs = root.style; rs.setProperty("--glow", T < TL.ign ? .12 + .88 * p * p : 1.2 * (1 - sm(TL.ign, TL.ign + 900, T)));
+    const sh = T >= TL.ign ? 6 * (1 - c01((T - TL.ign) / 420)) : 0;
+    rs.setProperty("--sx", (Math.random() - .5) * sh * 2 + "px"); rs.setProperty("--sy", (Math.random() - .5) * sh * 2 + "px");
+    const nozY = g.nozBase - lift;
 
-    // --- smoke phases ------------------------------------------------------
-    // plume: builds while the rocket holds on the pad
-    // ground: the pad cloud, released at ignition
-    // spread: how far the cloud has rolled outward
-    // fill: the final full-screen wash that carries the reveal
-    const ph = {
-      plume: sm(0, TL.ign * 0.85, T),
-      ground: sm(TL.ign * 0.55, TL.ign + 260, T),
-      spread: sm(TL.ign, TL.clr0 + 220, T),
-      fill: sm(TL.clr0 - 420, TL.clr1 - 260, T),
-    };
-    const nozY = g.rkBottom - 13 / 120 * g.rh - lift;
+    drawGL(st.G, st.cv, {
+      px: g.cx, py: g.nozBase, ry: nozY, t: T / 1000, ac,
+      blast: sm(TL.ign, TL.ign + 1500, T),
+      plume: sm(TL.ign, TL.ign + 160, T) * (1 - sm(TL.cover1 - 300, TL.clr0 + 300, T)),
+      cover: sm(TL.cover0, TL.cover1, T),
+      clear: T >= TL.clr0 ? Math.max(.002, c01((T - TL.clr0) / (TL.clr1 - TL.clr0)) * 1.35) : 0,
+      fire: T < TL.ign ? .1 + .5 * p * p : 1.1 * (1 - sm(TL.ign + 450, TL.ign + 1300, T)),
+    });
 
-    // --- wisps and sparks --------------------------------------------------
-    // The field carries the mass of the smoke. These are the small, fast,
-    // short-lived details it cannot resolve at field resolution: wisps tearing
-    // off the plume, and sparks from ignition.
-    const W = st.wisp, S = st.spark;
-    const spawn = (arr, cap, x, y, vx, vy, life, w) => { if (arr.length < cap) arr.push({ x, y, vx, vy, life, born: T, w }); };
-    if (T < TL.ign && Math.random() < p * .5) spawn(S, 90, g.cx + rnd(-8, 8), g.rkBottom - g.rh * .2, rnd(-160, 160), rnd(-120, 40), .5, 1);
-    if (!st.burst && T >= TL.ign) {
-      st.burst = true;
-      for (let i = 0; i < 30; i++) spawn(S, 90, g.cx + rnd(-g.bw * .34, g.bw * .34), g.boxTop, rnd(-420, 420), rnd(-980, -280), rnd(.35, .8), 1);
-    }
-    // wisps peel off the nozzle and curl upward - this is the "fine detail"
-    if (T >= TL.ign && T < TL.ign + TL.launch + 700) {
-      const n = T < TL.ign + TL.launch ? 4 : 2;
-      for (let i = 0; i < n; i++) spawn(W, 150, g.cx + rnd(-g.bh * .12, g.bh * .12), nozY - rnd(0, g.bh * .2),
-        rnd(-150, 150), rnd(-260, -60), rnd(.9, 1.8), rnd(.6, 1.8));
-    }
-    if (T >= TL.clr0) for (let i = 0; i < 2; i++) spawn(W, 150, g.cx + rnd(-g.bw * .5, g.bw * .5), g.cy + rnd(-g.bh * .4, g.bh * .5),
-      rnd(-120, 120), rnd(-180, -40), rnd(1.2, 2.2), rnd(1.2, 2.6));
-
-    // --- render ------------------------------------------------------------
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, st.cv.width, st.cv.height);
-
-    // The reveal is carried by the smoke itself rather than a flat vignette:
-    // the cloud expands past the viewport and thins as it goes, so the app is
-    // uncovered from the centre outward.
-    // The smoke IS the reveal, so it has to start fading the moment the reveal
-    // starts. It used to hold full opacity until expand>0.55 (2082ms) while
-    // .clr went transparent at 1750ms, which put a full-strength smoke layer
-    // over the fully visible app for a third of a second and then over a
-    // fading app for another second. That is what it looked like.
-    const expand = c01((T - TL.cover0) / (TL.clr1 - TL.cover0));
-    const alpha = 1 - sm(0, 1, expand);
-
-    st.spread = ph.spread;
-    // geom() cannot carry nozY: it changes every frame as the rocket lifts, and
-    // passing g without it made the entire density field NaN, which is why the
-    // smoke rendered as nothing in the app while looking correct in isolation.
-    const rg = { vw: g.vw, vh: g.vh, cx: g.cx, cy: g.cy, bh: g.bh, rh: g.rh, nozY: nozY };
-    field.resize(g.vw, g.vh, ph.spread);
-    field.render(T, rg, ph);
-    field.blit(ctx, g, alpha, st.cv.width, st.cv.height);
-
-    // flame core, additive, sits over the smoke rather than inside it
-    const coreI = (1 - sm(TL.ign + 200, TL.clr0, T)) * (u < 1 ? 1 : .35);
-    field.core(ctx, rg, g.cx * K, nozY * K, g.rh * (1.1 + p * .5) * K, coreI * .55);
-    field.core(ctx, rg, g.cx * K, (g.cy - g.bh * .05) * K, g.bh * (1.2 + spreadScale(ph.spread) * 1.6) * K, .16 * (1 - expand * .5));
-
-    // --- wisps -------------------------------------------------------------
-    ctx.save();
-    ctx.globalCompositeOperation = "lighter";
-    ctx.setTransform(K, 0, 0, K, 0, 0);
-    for (let i = W.length - 1; i >= 0; i--) {
-      const w = W[i], age = (T - w.born) / 1000, f = age / w.life;
-      if (f >= 1) { W.splice(i, 1); continue; }
-      w.vy -= 26 * dt; w.vx += Math.sin(age * 3 + w.w) * 34 * dt;
-      w.x += w.vx * dt; w.y += w.vy * dt;
-      const a = (1 - f) * .16 * sm(0, .18, f);
-      if (a < .004) continue;
-      const rr = w.w * (10 + f * 46);
-      const g2 = ctx.createRadialGradient(w.x, w.y, 0, w.x, w.y, rr);
-      g2.addColorStop(0, `rgba(150,140,175,${a})`);
-      g2.addColorStop(1, "rgba(120,110,150,0)");
-      ctx.fillStyle = g2;
-      ctx.fillRect(w.x - rr, w.y - rr, rr * 2, rr * 2);
-    }
-    ctx.restore();
-
-    // --- sparks ------------------------------------------------------------
-    ctx.save();
-    ctx.globalCompositeOperation = "lighter";
-    ctx.setTransform(K, 0, 0, K, 0, 0);
-    ctx.lineWidth = 1.6 * K; ctx.lineCap = "round";
+    // glows and sparks, drawn on top of the rocket
+    const spark = (x, y, vx, vy, life) => S.push({ x, y, vx, vy, life, born: T });
+    if (T < TL.ign && Math.random() < p * .7) spark(g.cx + rnd(-10, 10), g.nozBase, rnd(-180, 180), rnd(-140, 30), .5);
+    if (!st.burst && T >= TL.ign) { st.burst = true; for (let i = 0; i < 60; i++) spark(g.cx + rnd(-g.rh * .3, g.rh * .3), g.nozBase, rnd(-520, 520), rnd(-950, -150), rnd(.4, .9)); }
+    if (T >= TL.ign && u < 1) for (let i = 0; i < 2; i++) spark(g.cx + rnd(-6, 6), nozY, rnd(-160, 160), rnd(80, 300), rnd(.35, .7));
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, st.c2.width, st.c2.height);
+    ctx.setTransform(K2, 0, 0, K2, 0, 0); ctx.globalCompositeOperation = "lighter";
+    const ga = .17 * sm(TL.ign, TL.ign + 120, T) * (1 - sm(TL.ign + 300, TL.ign + 1000, T));
+    if (ga > .01) { const rg = ctx.createRadialGradient(g.cx, g.nozBase, 0, g.cx, g.nozBase, g.vh * .6); rg.addColorStop(0, `rgba(${ac},${ga * 2})`); rg.addColorStop(1, `rgba(${ac},0)`); ctx.fillStyle = rg; ctx.fillRect(0, 0, g.vw, g.vh); }
+    if (u < 1) { const na = .34 * Math.min(1, fl), rg = ctx.createRadialGradient(g.cx, nozY, 0, g.cx, nozY, g.rh * .8); rg.addColorStop(0, `rgba(${ac},${na})`); rg.addColorStop(1, `rgba(${ac},0)`); ctx.fillStyle = rg; ctx.fillRect(g.cx - g.rh, nozY - g.rh, g.rh * 2, g.rh * 2); }
+    ctx.lineWidth = 1.6; ctx.lineCap = "round";
     for (let i = S.length - 1; i >= 0; i--) {
-      const s = S[i], age = (T - s.born) / 1000; if (age >= s.life) { S.splice(i, 1); continue; }
-      s.vy += 700 * dt; s.x += s.vx * dt; s.y += s.vy * dt;
-      ctx.strokeStyle = `rgba(${i % 3 ? "245,166,35" : "235,230,255"},${(1 - age / s.life) * .85})`;
-      ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(s.x - s.vx * .03, s.y - s.vy * .03); ctx.stroke();
+      const q = S[i], age = (T - q.born) / 1000; if (age >= q.life) { S.splice(i, 1); continue; }
+      q.vy += 700 * dt; q.x += q.vx * dt; q.y += q.vy * dt;
+      ctx.strokeStyle = `rgba(${i % 3 ? ac : "235,230,255"},${1 - age / q.life})`; ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(q.x - q.vx * .03, q.y - q.vy * .03); ctx.stroke();
     }
-    ctx.restore();
-
-    // Tie the backdrop clear to the smoke alpha instead of a fixed time, so the
-    // two can never drift apart again.
-    if (alpha < 0.45 && !st.clr) { st.clr = 1; root.classList.add("clr"); }
+    ctx.globalCompositeOperation = "source-over";
+    if (T >= TL.cover1 && !st.clr) { st.clr = 1; root.classList.add("clr"); }
     if (T >= TL.clr0 && !st.pe) { st.pe = 1; root.classList.add("nopt"); }
-    if (T >= TL.clr1 && !st.sw) { st.sw = 1; root.classList.add("sw"); }
-    if (T >= TL.end) { finish(); return; }
-
+    if (T >= TL.end) return finish();
     st.raf = requestAnimationFrame(frame);
   }
 
-  function spreadScale(v) { return v * v * (3 - 2 * v); }
   function run(readyFn, o = {}) {
     if (st) return;
-    let root = q("intro");
-    if (!root) { root = document.createElement("div"); root.id = "intro"; document.body.appendChild(root); }
-    // index.html paints a plain splash before any script runs. Hand over to the
-    // rocket on top of it, so the window is never blank while scripts load.
+    let root = q("intro"); if (!root) { root = document.createElement("div"); root.id = "intro"; document.body.appendChild(root); }
+    // keep the static splash that index.html painted, and fade it out over the stage
     const pre = root.querySelector(".ipre");
     root.className = ""; root.style.cssText = ""; root.innerHTML = HTML;
-    document.body.appendChild(root);
-    if (pre) {
-      root.appendChild(pre);
-      requestAnimationFrame(() => { pre.style.transition = "opacity .3s"; pre.style.opacity = "0"; setTimeout(() => pre.remove(), 320); });
-    }
-    st = {
-      root, cv: root.querySelector("#icv"), timers: [], raf: 0, force: !!o.force,
-      jsAt: Math.round(performance.now()), backend: null, animDone: false, ready: o.ready,
-      ac: rgb(getComputedStyle(document.documentElement).getPropertyValue("--v").trim() || "#F5A623")
-    };
+    if (pre) { root.appendChild(pre); setTimeout(() => { pre.style.transition = "opacity .3s"; pre.style.opacity = "0"; setTimeout(() => pre.remove(), 340); }, 80); }
+    st = { root, cv: root.querySelector("#icv"), c2: root.querySelector("#ics"), timers: [], force: !!o.force, ac: rgb(getComputedStyle(document.documentElement).getPropertyValue("--v").trim() || "#F5A623") };
+    const f0 = root.querySelector("#ifl"); if (f0) f0.style.opacity = "0";
     st.onR = setVars; addEventListener("resize", st.onR); setVars();
+    // Show the window first, so the static splash is on screen while the shader compiles.
+    if (!shown) { shown = true; if (!reveal()) { let n = 0; const t = setInterval(() => { if (reveal() || ++n > 40) clearInterval(t); }, 50); } }
+    setTimeout(() => root.classList.add("in"), 0);
+    const s0 = st;
+    st.timers.push(setTimeout(() => {
+      if (st !== s0) return;
+      st.G = initGL(st.cv);
+      if (st.G) { try { drawGL(st.G, st.cv, { px: 0, py: 0, ry: 0, t: 0, ac: st.ac, blast: 0, plume: 0, cover: 0, clear: 0, fire: 0 }); } catch (e) { /* warm-up only */ } }
+    }, 30));
     bindSkip(root);
-    root.classList.add("in");
-
-    // requestAnimationFrame can stay paused while the window is hidden, so the
-    // reveal must not wait on it. Show now, retry briefly if the window API is
-    // not attached yet.
-    const reveal = () => {
-      try {
-        const t = window.__TAURI__;
-        const w = t && t.window && t.window.getCurrentWindow ? t.window.getCurrentWindow() : null;
-        if (w && typeof w.show === "function") {
-          mark("calling window.show()");
-          Promise.resolve(w.show()).then(() => mark("window shown"), () => mark("window.show() FAILED"));
-          return true;
-        }
-      } catch (e) { /* not under Tauri */ }
-      return false;
-    };
-    if (!shown) {
-      shown = true;
-      if (!reveal()) { let n = 0; const iv = setInterval(() => { if (reveal() || ++n > 40) clearInterval(iv); }, 50); }
-    }
-
-    // The old sprite precompute is gone: SmokeField builds its own buffers on first
-    // render. Calling makeSprites() here threw an uncaught ReferenceError on
-    // every single launch once the field renderer replaced it.
-    begin(readyFn);
+    begin(o.ready || readyFn);
   }
   return { run, active: () => !!st };
 })();

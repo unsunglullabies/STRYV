@@ -29,11 +29,14 @@ const pass = (m) => console.log("  ok    " + m);
 const defs = [...src.matchAll(/#\[tauri::command(?:\([^)]*\))?\]\s*(?:pub\s+)?(?:async\s+)?fn\s+(\w+)/g)].map((m) => m[1]);
 const handlerMatch = src.match(/generate_handler!\[([^\]]+)\]/);
 const reg = handlerMatch ? handlerMatch[1].split(",").map((s) => s.trim()).filter(Boolean) : [];
-
+// A command in a module is registered as module::name but defined as fn name,
+// so both sides are compared as the bare name.
+const bare = (n) => n.replace(/^[A-Za-z_][A-Za-z0-9_]*::/, "");
+const regBare = reg.map(bare);
 console.log(`  ${defs.length} commands defined, ${reg.length} registered`);
 
-const unregistered = defs.filter((d) => !reg.includes(d));
-const ghost = reg.filter((r) => !defs.includes(r));
+const unregistered = defs.filter((d) => !regBare.includes(d));
+const ghost = regBare.filter((r) => !defs.includes(r));
 
 if (unregistered.length) fail(`defined but not registered: ${unregistered.join(", ")}`);
 if (ghost.length) fail(`registered but not defined: ${ghost.join(", ")}`);
@@ -63,9 +66,15 @@ const need = [
   "fn aery_vault_create",
   "fn aery_vault_forget",
   "fn merge_library",
-  "fn detected_games",
+  "fn canonicalize",
+  "fn scan",
+  "fn registry",
   "fn push_session",
   "fn steam_start",
+  "fn atlas_source_list",
+  "fn atlas_set_source",
+  "fn atlas_source_list",
+  "fn atlas_set_source",
   "fn read_atlas",
   "fn write_atlas",
 ];

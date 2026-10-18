@@ -2,8 +2,29 @@
 const q = (id) => document.getElementById(id);
 const PAGES = ["dashboard", "performance", "network", "aery", "atlas", "optimizations", "system", "syn", "activity", "settings", "whatsnew", "help"];
 const ACCENTS = { Amber: "#F5A623", Cyan: "#38BDF8", Violet: "#8B5CF6" };
-const VERSION = "0.2.6";
-const CHANGELOG = [{
+const VERSION = "0.2.7";
+const CHANGELOG = [
+  {
+    v: "0.2.7", date: "2026-10-17", tag: "ATLAS learns to look around",
+    groups: {
+      ATLAS: [
+        "ATLAS now scans through a set of independent sources instead of one hardcoded Steam reader, and it reports on each one separately. A launcher that is not installed, one you have turned off, and one whose files could not be read are three different problems, so each is stated in its own words rather than collapsed into a single number. The panel at the top of ATLAS tells you exactly what was read, how long it took, and which launchers it does not read yet.",
+        "One game is now one card, however many copies of it you own. ATLAS works out that Hollow Knight from Steam and the copy you added by hand are the same game, keeps both installations against it, and counts the disk only once. Before this, the same title bought from two places appeared twice and there was no way to tell them apart.",
+        "Your favourites, hidden games and measured play time all survive this. Entries saved by an earlier build were filed against old per-launcher ids, and ATLAS still recognises those, so nothing you starred or played is lost by upgrading. A store written by any earlier version opens without being rewritten.",
+        "Applications are no longer dressed up as games. Wallpaper Engine and the Steam redistributables are recognised as the tools they are, instead of sitting in your library pretending to be something you can play."
+      ],
+      Window: [
+        "Optional window glass, so your desktop can show through the window. Mica and Acrylic are in Settings, under Appearance. It is off unless you turn it on, because making the whole app translucent changes how it behaves and how it performs, and that is your call to make rather than something to find out afterwards. Acrylic in particular can feel sluggish while dragging a window on some PCs, which is why the option says so."
+      ],
+      Fixed: [
+        "The app version had drifted apart between the config and the code, so an installed build could compare itself against the published release and disagree about which was newer. Every file now reads the same version."
+      ],
+      Signature: [
+        "Signed, like every STRYV release. STRYV checks the published release feed, downloads the installer, and verifies its signature against the key built into the app before running it."
+      ]
+    }
+  },
+  {
     v: "0.2.6", date: "2026-10-17", tag: "the rocket is back",
     groups: {
       Fixed: [
@@ -282,3 +303,5 @@ q("delAll").onclick = async () => { if (await confirmBox({ title: "Delete all ST
 q("ver").textContent = "v" + VERSION; q("aboutV").textContent = "Version " + VERSION;
 
 Cfg.load(); Act.init(); Cfg.apply(); updateDot(); go(Cfg.v.startPage);
+
+// probe 1448593780

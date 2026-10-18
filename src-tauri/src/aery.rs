@@ -5,7 +5,6 @@ use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use tauri::Manager;
-use super::now_unix;
 // ============================================================================
 // AERY - the vault
 //
@@ -221,17 +220,6 @@ pub fn aery_front_id(text: &str) -> Option<String> {
     None
 }
 
-/// Deterministic per-path fallback id for notes that have never been saved by
-/// Aery. Deterministic so a scan run twice in a row does not invent two ids.
-pub fn aery_new_id(rel: &str, salt: u64) -> String {
-    let mut h: u64 = 0x9e37_79b9_7f4a_7c15 ^ salt;
-    for b in rel.to_lowercase().bytes() {
-        h ^= b as u64;
-        h = h.wrapping_mul(0x100_0000_01b3);
-        h ^= h >> 29;
-    }
-    format!("a{:016x}", h)
-}
 
 /// Insert or replace the `aery_id:` key, preserving every other front-matter
 /// key and the body byte for byte.
@@ -550,7 +538,14 @@ pub fn aery_save(app: tauri::AppHandle, id: String, content: String) -> Result<(
         return Err("That note is not in the vault.".into());
     };
     let path = aery_resolve(&root, &note.path)?;
-    aery_atomic_write(&path, content.as_bytes())
+    // Stamp a stable identity the first time a note is saved, so a later rename
+    // cannot orphan its pins or the note open in the editor. Idempotent: a note
+    // that already carries an id is written back byte for byte.
+    let body = match aery_front_id(&content) {
+        Some(_) => content,
+        None => aery_ensure_id(&content, &note.id),
+    };
+    aery_atomic_write(&path, body.as_bytes())
 }
 
 #[tauri::command]
@@ -583,7 +578,10 @@ pub fn aery_create(app: tauri::AppHandle, title: Option<String>, folder: Option<
         if !candidate.exists() {
             let rel = aery_rel_of(&root, &candidate);
             let id = aery_id(&rel);
-            let body = format!("---\ntitle: {}\n---\n\n", base);
+              // The id goes into the note itself, so it survives a rename. Deriving it and
+              // returning it without writing it down would leave every note keyed by its
+              // path, which is what aery_front_id exists to stop.
+              let body = aery_ensure_id(&format!("---\ntitle: {}\n---\n\n", base), &id);
             aery_atomic_write(&candidate, body.as_bytes())?;
             let mut meta = aery_read_meta(&root);
             let ts = super::now_unix();
@@ -841,7 +839,7 @@ mod tests {
 
     #[test]
     fn front_matter_id_round_trips() {
-        let id = aery_new_id("notes/idea.md", 7);
+        let id = aery_id("notes/idea.md");
         let doc = aery_ensure_id("# Idea\n\nbody", &id);
         assert!(doc.starts_with("---\n"), "front matter must be added");
         assert!(doc.contains(&format!("aery_id: {}", id)));
@@ -851,8 +849,8 @@ mod tests {
 
     #[test]
     fn ensure_id_is_idempotent_and_never_rewrites_an_existing_id() {
-        let a = aery_new_id("x.md", 1);
-        let b = aery_new_id("x.md", 2);
+        let a = aery_id("x.md");
+        let b = aery_id("other.md");
         let once = aery_ensure_id("text", &a);
         let twice = aery_ensure_id(&once, &b);
         assert_eq!(once, twice, "a second ensure must not overwrite the id");
@@ -861,7 +859,7 @@ mod tests {
 
     #[test]
     fn ensure_id_preserves_other_front_matter_keys() {
-        let id = aery_new_id("y.md", 3);
+        let id = aery_id("y.md");
         let doc = "---\ntitle: Mine\ntags: [a, b]\n---\n\nbody";
         let out = aery_ensure_id(doc, &id);
         assert!(out.contains("title: Mine"));
@@ -1084,5 +1082,33 @@ mod vault_tests {
         // A truncated or hand-edited config must not make every command fail.
         let c: AeryVaults = serde_json::from_str("{ not json").unwrap_or_default();
         assert!(c.current.is_empty());
+    }
+
+    #[test]
+    fn a_saved_note_carries_an_id_that_survives_being_renamed() {
+        // The point of the front-matter id: a note found at one path and later
+        // moved to another must keep the same identity. Without it every id is a
+        // hash of the path, so a rename silently orphans the pin and the note the
+        // editor had open.
+        let before = aery_id("notes/idea.md");
+        let saved = aery_ensure_id("---\ntitle: Idea\n---\n\nbody", &before);
+        assert_eq!(aery_front_id(&saved).as_deref(), Some(before.as_str()));
+
+        // Same file, new path. The reader takes the id from the note, not the path.
+        let after = aery_id("archive/renamed.md");
+        assert_ne!(before, after, "the path hash does change on a rename");
+        assert_eq!(
+            aery_front_id(&saved).as_deref(),
+            aery_front_id(&aery_ensure_id(&saved, &after)).as_deref(),
+            "the id stays the one already in the note"
+        );
+    }
+
+    #[test]
+    fn stamping_an_id_preserves_the_title_and_the_body() {
+        let doc = aery_ensure_id("---\ntitle: Mine\ntags: [a, b]\n---\n\nbody text", &aery_id("m.md"));
+        assert!(doc.contains("title: Mine"));
+        assert!(doc.contains("tags: [a, b]"));
+        assert!(doc.ends_with("body text"), "the body is never rewritten");
     }
 }
