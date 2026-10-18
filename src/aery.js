@@ -18,6 +18,9 @@ const Aery = (() => {
   let content = "";            // the editor buffer
   let dirty = false;
   let saveTimer = null;
+  // Consecutive save attempts against one note, so a vault that cannot be
+  // written to stops asking instead of retrying for as long as it stays open.
+  const saves = { retries: 0 };
   let saving = false;
   let vaultPath = "";
 
@@ -164,15 +167,21 @@ const Aery = (() => {
       await call("aery_save", { id, content: sent });
       // Only call it saved if what is on screen is what was written. If the user
       // typed during the write, this save is stale and the note is still dirty.
-      if (id === cur && content === sent) dirty = false;
+      if (id === cur && content === sent) { dirty = false; saves.retries = 0; }
     } catch (e) {
       TG.add("aery.save", e);
       T("Could not save: " + (e.message || e), true);
     } finally {
       saving = false;
       renderStatus();
-      if (dirty && id === cur) { saveTimer = setTimeout(() => { flush(); }, 1500); }
-      else await refresh();
+      // Retry a bounded number of times, and only for a note that is still the
+      // one being edited. Retrying forever turns one persistent failure into a
+      // stream of identical toasts and floods Tech.list, which is capped - so
+      // the failure evicts the real errors needed to diagnose it.
+      if (dirty && id === cur && saves.retries < 3) {
+        saves.retries++;
+        saveTimer = setTimeout(() => { flush(); }, 1500);
+      } else await refresh();
     }
   }
 
@@ -255,7 +264,11 @@ const Aery = (() => {
     if (!cur) return;
     const n = notes.find((x) => x.id === cur);
     if (!n) return;
+    // Flush before touching the vault. Without this the pending autosave is
+    // cancelled and aery_delete then moves the *pre-edit* file into the trash,
+    // so anything typed inside the autosave window is lost silently.
     clearTimeout(saveTimer);
+    if (dirty) await flush();
     const ok = await (typeof confirmBox === "function"
       ? confirmBox({ title: "Move note to trash", body: 'Move "' + n.title + '" out of the vault?\n\nThe file is moved, not deleted, and can be restored from the trash.', yes: "Move to trash", danger: true })
       : Promise.resolve(true));
@@ -318,7 +331,10 @@ const Aery = (() => {
     if (typeof window !== "undefined") {
       window.addEventListener("beforeunload", (ev) => {
         if (!dirty) return;
-        flush();
+        // Deliberately not calling flush() here. flush() is async: it clears the
+        // pending autosave and then awaits IPC, which cannot complete once the
+        // document is going away. Blocking the close is right; swapping a timer
+        // that would have finished the save for a write that cannot is not.
         ev.preventDefault();
         ev.returnValue = "";
       });

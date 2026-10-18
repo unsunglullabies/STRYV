@@ -104,18 +104,18 @@ const SYN = (() => {
   }
 
   function analyseTemp(snap, temps) {
-    const t = temps?.length ? temps.reduce((a, b) => (b.temp > a.temp ? b : a)) : null;
+    const t = temps?.length ? temps.reduce((a, b) => (b.celsius > a.celsius ? b : a)) : null;
     if (!t) return null;
-    if (t.temp < T.temp) {
+    if (t.celsius < T.temp) {
       return {
-        level: "ok", title: `Highest sensor reads ${t.temp.toFixed(0)}°C`,
-        detail: `${t.name}.`,
+        level: "ok", title: `Highest sensor reads ${t.celsius.toFixed(0)}°C`,
+        detail: `${t.label}.`,
         why: "",
       };
     }
     return {
-      level: t.temp >= 95 ? "high" : "warn",
-      title: `${t.name} is at ${t.temp.toFixed(0)}°C`,
+      level: t.celsius >= 95 ? "high" : "warn",
+      title: `${t.label} is at ${t.celsius.toFixed(0)}°C`,
       detail: "Sustained readings above 85°C usually mean the cooling is not keeping up with the load.",
       why: "Short spikes under load are normal. It is the reading that stays high while the machine is idle that matters.",
     };
@@ -220,7 +220,7 @@ const SYN = (() => {
       if (!g) return null;
       return {
         level: "ok", title: "GPU",
-        detail: `${g.name || "Unknown GPU"}${typeof g.pct === "number" ? " at " + g.pct.toFixed(0) + "% load" : ""}.`,
+        detail: `${g.name || "Unknown GPU"}${typeof g.util === "number" ? " at " + g.util.toFixed(0) + "% load" : ""}.`,
         why: "GPU load is a share of the card, not of system CPU.",
       };
     } catch (e) {

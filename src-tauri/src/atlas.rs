@@ -952,23 +952,27 @@ fn manual_entries(manual: &[Game]) -> Vec<SourceEntry> {
 // ---------- commands ----------
 
 #[tauri::command]
-pub async fn atlas_scan(app: tauri::AppHandle) -> ScanReport {
+pub async fn atlas_scan(app: tauri::AppHandle) -> Result<ScanReport, String> {
     let store = read_atlas(&app);
     let manual = manual_entries(&store.manual);
     let disabled: HashSet<String> = store.disabled_sources.iter().cloned().collect();
 
+    // A scan that could not be run is not an empty library. The old
+    // unwrap_or_default turned a dead blocking task into an empty RawScan: no
+    // games and no per-source list, so the panel hid itself and the grid fell
+    // through to "No games found yet." while every game was still on disk.
     let raw = tauri::async_runtime::spawn_blocking(move || scan(registry(manual), &disabled))
         .await
-        .unwrap_or_default();
+        .map_err(|e| format!("The library scan could not be started: {}.", e))?;
 
     let games = merge_library(&store, canonicalize(raw.entries));
-    ScanReport {
+    Ok(ScanReport {
         started: now_unix(),
         ms: raw.ms,
         games,
         sources: raw.sources,
         not_supported: NOT_SUPPORTED_YET.iter().map(|s| s.to_string()).collect(),
-    }
+    })
 }
 
 #[tauri::command]
@@ -1190,8 +1194,13 @@ pub fn atlas_update(
     // A re-pointed entry is a new identity, so carry its flags across and drop
     // the launch history that belonged to the old executable.
     if renamed {
-        store.sessions.retain(|s| s.game_id != new_id);
-        store.hidden.retain(|h| h != &new_id);
+        // old_id, not new_id. retain keeps what matches, so this line decides
+        // which history survives. new_id is an executable that by construction
+        // has no sessions (a duplicate path is rejected above), so the old
+        // operand dropped nothing and kept everything - the exact opposite of
+        // what the comment above promises.
+        store.sessions.retain(|s| s.game_id != old_id);
+        store.hidden.retain(|h| h != &old_id);
         let was_fav = store.favorites.iter().any(|f| f == &old_id);
         store.favorites.retain(|f| f != &old_id);
         if was_fav {

@@ -69,7 +69,14 @@ const DashX = (() => {
     const t = document.createElement("div"); t.className = "ptools";
     t.innerHTML = '<span class="live"></span><span id="dxAge">Live</span><button class="btn ghost" id="dxRef" type="button">Refresh</button>';
     host.appendChild(t);
-    get("dxRef").onclick = () => { if (typeof tick === "function") tick(); };
+    // tick() only covers CPU, memory, uptime and disks. Network and
+    // temperature are read on their own intervals, so without these two the
+    // button refreshed half the page and the header still read "Live".
+    get("dxRef").onclick = () => {
+      if (typeof tick === "function") tick();
+      if (typeof net === "function") net();
+      if (typeof Sensors !== "undefined" && typeof Sensors.poll === "function") Sensors.poll();
+    };
     setInterval(() => { const s = Math.round((Date.now() - last) / 1000); get("dxAge").textContent = s < 5 ? "Live" : "Updated " + s + " s ago"; }, 1000);
   }
 

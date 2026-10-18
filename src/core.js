@@ -200,7 +200,18 @@ const Cfg = {
     this.v = v;
   },
   set(k, val, label) {
-    this.v[k] = val; store.set("settings", this.v); this.apply();
+    this.old = { [k]: this.v[k] };
+    this.v[k] = val;
+    // Write first. apply() moves the UI whether or not the write landed, so if
+    // storage is full or blocked the setting would revert on next launch while
+    // the user was told it had been saved.
+    if (!store.set("settings", this.v)) {
+      this.v[k] = this.old ? this.old[k] : val;
+      toast("Could not save that setting", true);
+      return;
+    }
+    this.old = null;
+    this.apply();
     if (k === "keepActivity") { if (!val) localStorage.removeItem("stryv.act"); else Act.save(); }
     if (k === "interval" && window.startTimers) startTimers();
     Act.log({ text: "Setting changed: " + label }); toast("Saved");
