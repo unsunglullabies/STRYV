@@ -5,14 +5,65 @@ const ACCENTS = { Amber: "#F5A623", Cyan: "#38BDF8", Violet: "#8B5CF6" };
 const VERSION = "0.2.8";
 const CHANGELOG = [
   {
-    v: "0.2.8", date: "2026-10-17", tag: "the ask box stops shouting",
+    v: "0.2.8", patch: 4, date: "2026-10-17", tag: "Adding Sources",
     groups: {
+      Sources: [
+        "Epic Games, GOG Galaxy, EA App and Xbox / Store are now read by ATLAS, joining Steam and hand-added. Six sources, and the panel at the top of the library says which were read, how long each took, and which four launchers ATLAS still does not read.",
+        "No DRM, anti-cheat or authentication is touched. ATLAS reads the files a launcher has already written, never writes into one, and starts nothing through one.",
+        "The Xbox list is deliberately short. Store packages carry no flag saying which are games, so only known game publishers are listed - a short library is honest, and one full of Calculator and Paint would look complete and be wrong.",
+        "What was not verified: none of these four is installed on the machine this was built on, so the parsers are tested against fixtures built from each launcher's documented format rather than a real library. A field that changes without notice reads as absent, which shortens the library rather than corrupting it.",
+      ],
       Fixed: [
-        "The \"Ask about this PC\" box on the SYN page was a white rectangle in the middle of a dark window. Nothing had failed - the stylesheet had a rule for select elements and none for text inputs, and that one box was the only input in STRYV not covered by a rule of its own. Text inputs now share one appearance, and a field added later will look right without anyone having to remember to style it.",
-        "The input and the Ask button also disagreed on height by several pixels, which read as a misalignment rather than as a text box and the button that submits it. Both are the same height now, and the focus ring moved up to the row so focusing the field is actually visible."
+        "A Play button that started a process which then died quietly is gone. A game ATLAS can see on a launcher it cannot start through now says so, and names the launcher, instead of offering a button that may do nothing.",
+        "The launcher badge stopped treating everything that is not Steam as hand-added. Epic, GOG, EA and Store each have their own colour now.",
+        "Whether a game cannot be started is decided in one place and asked by all three surfaces. It used to be written twice, which is how a Store title came to read as missing an executable when nothing was missing."
       ],
       Signature: [
         "Signed, like every STRYV release. STRYV checks the published release feed, downloads the installer, and verifies its signature against the key built into the app before running it."
+      ]
+    }
+  },
+  {
+    v: "0.2.8", patch: 3, date: "2026-10-17", tag: "A Library You Can Read",
+    groups: {
+      Library: [
+        "The featured game stopped being a wall. It was a full-bleed block of at least 214 pixels with a 25-pixel title and a stacked list of figures, which on a 760-pixel window pushed the first row of cards below the fold. It is a banner now.",
+        "Cards carry two facts instead of four stacked rows. Size, Played, Launches and Session were printed under every card, three of them the same kind of value, and launches was already on the hero directly above.",
+        "The honesty rules did not change to achieve it. An unreported size is still a dash, a never-played entry still says Never, a duration that was never measured still reads Not measured. The values moved to where they are worth reading; what they say did not.",
+        "Applications say what they are. Wallpaper Engine and the Steam redistributables are labelled as applications and tools rather than sitting in a list of games pretending to be playable.",
+        "One game bought twice is one card that tells you so, and the detail panel lists each copy with the launcher that reported it and whether it is still on disk.",
+        "The library can be narrowed by launcher and by kind. Both chip groups are built from what the last scan actually returned, so they cannot offer to filter by something that is not installed on your PC.",
+      ],
+      Housekeeping: [
+        "293 lines and 13 KB of CPU smoke renderer were deleted. The launch screen moved to a GPU shader some time ago and nothing had loaded it since."
+      ]
+    }
+  },
+  {
+    v: "0.2.8", patch: 2, date: "2026-10-17", tag: "Honest Numbers",
+    groups: {
+      Fixed: [
+        "SYN did not work. It read the temperature field as 'temp' when the backend sends 'celsius', so asking SYN to check this PC threw on any machine that reports a sensor - and because the findings are built together, that one throw abandoned all of them. The page would sit on Reading this PC forever. It shipped because SYN had no test at all.",
+        "GPU load was being read from a field the backend never sends, so it was silently dropped while the sentence beneath it explained what GPU load means.",
+        "Moving a note to trash threw away unsaved edits. The autosave was cancelled and then the file on disk - the pre-edit version - was moved to the trash. Opening a note, creating one and restoring from trash all flushed first; trashing was the one that did not.",
+        "Closing the window replaced a working autosave with a write that could not finish. The save handler is asynchronous and cleared the timer on its first line, so the retry it destroyed was the only thing that would have completed the save.",
+        "A save that kept failing retried forever, once a second and a half, raising another error toast each time and filling a capped technical log - which meant the real reason was the first thing to be discarded.",
+        "ATLAS dropped the wrong launch history when a hand-added game was pointed at a different executable. The comment said the old one; the code kept it. Point the path back and the supposedly-lost history reappeared.",
+        "A scan that failed internally was reported as an empty library, while every game was still sitting on disk. It now says the library could not be read.",
+        "The dashboard Refresh button refreshed half the page, leaving network and temperature untouched while the header still read Live.",
+        "Settings reported Saved even when the write had failed and the setting would revert on the next launch.",
+      ],
+      Tests: [
+        "SYN has a test now. It reads the response structs out of the Rust source and asserts that every field the frontend reads actually exists on the struct that produces it - the class of bug that review does not catch and that exercising the interface cannot either, because the interface only ever sees the same wrong shape twice. It was checked against the original bug and fails on it."
+      ]
+    }
+  },
+  {
+    v: "0.2.8", patch: 1, date: "2026-10-17", tag: "Asking Questions",
+    groups: {
+      Fixed: [
+        "The Ask about this PC box was a white rectangle in the middle of a dark window. Nothing had failed: the stylesheet had a rule for dropdowns and none for text inputs, and that one box was the only input in the app not covered by a rule of its own. Text inputs now share one appearance, so a field added later looks right without anyone having to remember to style it.",
+        "The input and the Ask button disagreed on height by several pixels, which reads as a misalignment rather than as a text box and the button that submits it."
       ]
     }
   },
@@ -250,7 +301,7 @@ async function copyText(t) { try { await navigator.clipboard.writeText(redact(t)
 
 function renderNews() {
   const unseen = store.get("seen", "") !== CHANGELOG[0].v;
-  q("newsList").innerHTML = CHANGELOG.map((r) => `<article class="rel"><div class="relh"><b>v${r.v}</b><span>${r.date} · ${r.tag}</span></div>` + Object.entries(r.groups).map(([g, l]) => `<h4>${g}</h4><ul>${l.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`).join("") + "</article>").join("");
+  q("newsList").innerHTML = CHANGELOG.map((r) => `<article class="rel"><div class="relh"><b>v${r.v}${r.patch ? " · patch " + r.patch : ""}</b><span>${r.date} · ${r.tag}</span></div>` + Object.entries(r.groups).map(([g, l]) => `<h4>${g}</h4><ul>${l.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`).join("") + "</article>").join("");
   q("markSeen").style.display = unseen ? "" : "none";
 }
 function updateDot() { document.querySelector('[data-p="whatsnew"]').classList.toggle("unseen", store.get("seen", "") !== CHANGELOG[0].v); }

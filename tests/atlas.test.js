@@ -960,10 +960,19 @@ check("a failed scan never prints a size total of zero", !/<b>0(\.0)? (B|KB|MB|G
     check("log parses as an array", Array.isArray(log) && log.length > 0);
     const entry = log[0];
     check("entry has a version, date and tag", !!(entry && entry.v && entry.date && entry.tag));
+  check("every entry has a main title", log.every((e) => !!(e && typeof e.tag === "string" && e.tag.trim())));
     check("groups is a plain object", !!(entry && entry.groups && typeof entry.groups === "object"));
     check("newest entry is the current version", entry.v === VERSION);
     check("every entry is well formed", log.every((e) => e && e.v && e.date && e.tag && e.groups && typeof e.groups === "object"));
-    check("versions run newest first", log.every((e, i) => i === 0 || log[i - 1].v !== e.v));
+    // Newest first, allowing several patches under one version: a release can land
+  // as four patches, and that is still newest-first. Comparing whole versions
+  // alone could not tell those four apart in either direction.
+  check("versions run newest first", log.every((e, i) => {
+    if (i === 0) return true;
+    const prev = log[i - 1];
+    if (prev.v !== e.v) return true;
+    return typeof prev.patch === "number" && typeof e.patch === "number" && prev.patch > e.patch;
+  }));
 
     const groups = log.map((e) => Object.entries(e.groups));
     check("every group has entries", groups.flat().every(([, items]) => Array.isArray(items) && items.length > 0));
