@@ -204,12 +204,36 @@ void main(){
     const s = st; s.root.classList.remove("err"); s.root.querySelector(".imsg").innerHTML = "";
     const appear = new Promise((r) => s.timers.push(setTimeout(r, TL.appear)));
     const slow = setTimeout(() => { if (st === s) msg("Still starting…", [["Open STRYV anyway", quick]]); }, 8000); s.timers.push(slow);
-    let res; try { res = await readyFn(); } catch (e) { res = { ok: false, reason: String(e) }; }
-    await appear; clearTimeout(slow);
-    mark("backend startup finished, ok=" + (res && res.ok));
-    if (st !== s) return;
-    s.root.querySelector(".imsg").innerHTML = "";
-    if (!res.ok) {
+      // Startup is raced against a hard cap. Without it, a backend call that never
+      // returns leaves the launch screen up indefinitely: the 8s message offers a
+      // button, but a button is only an escape hatch if someone presses it.
+      const HARD_CAP = 12000;
+      let timedOut = false;
+      let res;
+      try {
+        res = await Promise.race([
+          Promise.resolve(readyFn()),
+          new Promise((r) => s.timers.push(setTimeout(() => { timedOut = true; r(null); }, HARD_CAP))),
+        ]);
+      } catch (e) {
+        res = { ok: false, reason: String(e && e.message ? e.message : e) };
+      }
+      await appear; clearTimeout(slow);
+      mark("backend startup finished, ok=" + !!(res && res.ok) + (timedOut ? " (HARD CAP)" : ""));
+      if (st !== s) return;
+      s.root.querySelector(".imsg").innerHTML = "";
+
+      if (timedOut) {
+        // Recorded, not swallowed - then the app opens anyway. A dashboard that
+        // cannot read one figure yet is still worth showing. A window that never
+        // opens is not.
+        Tech.add("startup", "Startup did not finish within " + (HARD_CAP / 1000) + "s; opening anyway.");
+        return quick();
+      }
+
+      // Falsy, missing, or an object without ok all mean the same thing here.
+      if (!res || res.ok !== true) {
+        res = res && typeof res === "object" ? res : { reason: "Startup returned nothing usable." };
       Tech.add("startup", res.reason || "Startup failed"); s.root.classList.add("err");
       return msg("STRYV couldn't finish starting. " + (res.reason || ""), [["Retry", () => begin(readyFn)], ["Open STRYV anyway", quick]]);
     }
