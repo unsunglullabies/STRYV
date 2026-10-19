@@ -6,7 +6,7 @@
                     "tauri":  "tauri",
                     "dev":  "tauri dev",
                     "build":  "tauri build",
-                    "test": "node tests/boot.test.js && node tests/atlas.test.js && node tests/aery.test.js && node tests/syn.test.js && node tests/rust-structure-check.js src-tauri/src/main.rs src-tauri/src/atlas.rs src-tauri/src/aery.rs",
+                    "test": "node tests/boot.test.js && node tests/tasks.test.js && node tests/atlas.test.js && node tests/aery.test.js && node tests/syn.test.js && node tests/rust-structure-check.js src-tauri/src/main.rs src-tauri/src/atlas.rs src-tauri/src/aery.rs",
                     "check":  "node --check src/app.js \u0026\u0026 npm test",
                     "build:fast":  "tauri build --debug --no-bundle",
                     "dev:app":  "tauri dev --config src-tauri/tauri.dev.conf.json",

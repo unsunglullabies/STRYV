@@ -160,8 +160,15 @@ const hasBackend = () => typeof invoke === "function";
   }
 
   // ---- filtering and sorting ---------------------------------------------------
+  // The toolbar a render is reading. The Store page carries its own search box
+  // and sort, so the two cannot share one element: only one of them exists at a
+  // time, and reading the other silently yields "" and "recent".
+  const queryFor = (only) => (only ? ST.get("store.q", "") : (E("atlasQ") && E("atlasQ").value) || "");
+  const sortFor = (only) =>
+    (only ? ST.get("store.sort", "recent") : (E("atlasSort") && E("atlasSort").value)) || "recent";
+
   const visible = (only) => {
-    const qtext = (E("atlasQ") && E("atlasQ").value || "").trim().toLowerCase();
+    const qtext = queryFor(only).trim().toLowerCase();
     // An override lets the Store page show one source without the Atlas toolbar
     // adopting that filter behind the user's back.
     const want = only || filters.source;
@@ -175,15 +182,15 @@ const hasBackend = () => typeof invoke === "function";
     });
   };
 
-  function sorted(list) {
-    const key = (E("atlasSort") && E("atlasSort").value) || "recent";
+  function sorted(list, key) {
+    const k = key || "recent";
     const out = list.slice();
     out.sort((a, b) => {
       if (!!b.favorite !== !!a.favorite) return b.favorite ? 1 : -1;
-      if (key === "name") return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
-      if (key === "plays") return (b.plays || 0) - (a.plays || 0);
-      if (key === "size") return (b.size_bytes || 0) - (a.size_bytes || 0);
-      if (key === "lastLaunch") return (b.last_launch || 0) - (a.last_launch || 0);
+      if (k === "name") return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+      if (k === "plays") return (b.plays || 0) - (a.plays || 0);
+      if (k === "size") return (b.size_bytes || 0) - (a.size_bytes || 0);
+      if (k === "lastLaunch") return (b.last_launch || 0) - (a.last_launch || 0);
       return (b.last_played || 0) - (a.last_played || 0);
     });
     return out;
@@ -380,7 +387,7 @@ function cannotLaunch(g) {
   }
 
   function renderGrid(hostId, emptyId, only) {
-    const list = sorted(visible(only));
+    const list = sorted(visible(only), sortFor(only));
     const grid = E(hostId || "atlasGrid");
     const empty = E(emptyId || "atlasEmpty");
     if (grid) grid.innerHTML = list.map(card).join("");
@@ -964,10 +971,30 @@ on("atlasRestore", "click", async () => {
         </div>
         <button class="btn" id="storeScan">Rescan</button>
       </header>
+      <div class="at-bar">
+        <input id="storeQ" type="search" placeholder="Search Store games" aria-label="Search Store games" autocomplete="off">
+        <select id="storeSort" aria-label="Sort Store games">
+          <option value="recent">Recently played</option>
+          <option value="lastLaunch">Last launched</option>
+          <option value="name">Name</option>
+          <option value="plays">Most played</option>
+          <option value="size">Install size</option>
+        </select>
+      </div>
       <div class="at-grid" id="storeGrid"></div>
       <p class="at-empty" id="storeEmpty" hidden></p>`;
     main.appendChild(sec);
     on("storeScan", "click", () => scan(true));
+
+    const storeBoot = () => {
+      const q = E("storeQ"); if (q) q.value = ST.get("store.q", "");
+      const s = E("storeSort"); if (s) s.value = ST.get("store.sort", "recent");
+    };
+    storeBoot();
+
+    // Search and sort both feed straight back into the one grid on this page.
+    on("storeQ", "input", () => { ST.set("store.q", E("storeQ").value); renderStore(); });
+    on("storeSort", "change", () => { ST.set("store.sort", E("storeSort").value); renderStore(); });
 
     const anchor = document.querySelector('#nav button[data-p="atlas"]');
     if (anchor) {

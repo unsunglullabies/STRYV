@@ -70,7 +70,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 const IDS = [
   "atlasHeroStat", "atlasAdd", "atlasScan", "atlasFeature", "atlasQ", "atlasSort", "atlasFavOnly", "atlasMissingOnly", "atlasReset", "atlasGrid", "atlasEmpty", "atlasNote", "atlasRestore", "atlasSessClr", "atlasSess", "atlasAddBox", "atlasAddTitle", "atlasAddNo", "atlasName", "atlasExe", "atlasPickExe", "atlasArt", "atlasPickArt", "atlasAddNo2", "atlasAddGo", "atlasEditBox", "atlasEditTitle", "atlasEditNo", "atlasEditName", "atlasEditExe", "atlasPickExe2", "atlasEditArt", "atlasPickArt2", "atlasClearArt", "atlasEditNo2", "atlasEditSave", "atlasDetailWrap", "atlasDetail", "atlasFacets",
     // Built by mountStore() at runtime, so they are absent from index.html.
-    "storeGrid", "storeEmpty", "storeScan"];
+    "storeGrid", "storeEmpty", "storeScan", "storeQ", "storeSort"];
 
 function makeEl(dataset) {
   const el = {
@@ -184,7 +184,19 @@ function makeEnv(games, invokeImpl, opts) {
     Tech: { add: (ctx, err) => log.push({ kind: "tech", m: ctx, err: (err && err.message) || String(err) }) },
     confirmBox: (d) => { log.push({ kind: "confirm", title: d.title, body: d.body }); return Promise.resolve(!(o.confirm && !o.confirm())); },
     console,
-    document: { createElement: (tag) => makeEl({ tag }), readyState: "complete", addEventListener: (ev, fn) => { if (ev === "DOMContentLoaded") fn(); } },
+    // body and querySelector exist so mountStore() actually runs. Without them it
+    // returned on its first line, and the Store page - sidebar button, scan button,
+    // search and sort wiring - was never mounted in any test.
+    document: {
+      createElement: (tag) => makeEl({ tag }),
+      readyState: "complete",
+      addEventListener: (ev, fn) => { if (ev === "DOMContentLoaded") fn(); },
+      body: { appendChild: () => {} },
+      querySelector: (sel) => {
+        if (sel === "main") return { appendChild: () => {} };
+        return { after: () => {}, dataset: {} };
+      },
+    },
     // A bare Node vm context has no timers. ATLAS schedules its post-launch refresh
     // on setTimeout exactly as it does in the WebView, so the harness provides them.
     setTimeout, clearTimeout, setInterval, clearInterval,
@@ -1192,6 +1204,65 @@ check("a failed scan never prints a size total of zero", !/<b>0(\.0)? (B|KB|MB|G
     check("they carry the QOL group", /\*\*Quality of life\*\*/.test(notes));
     check("they are not a link away from the notes", !/\[.*\]\(.*CHANGELOG.*\)/i.test(notes),
       "the point was that the release body IS the notes");
+  }
+
+  // ---- Store page search and sort -------------------------------------------
+  // Both used to read #atlasQ and #atlasSort, which do not exist on that page,
+  // so they silently did nothing. A test that only checked the controls existed
+  // would have passed anyway - which is how it shipped.
+  {
+    const many = FIXTURE.games.concat(FIXTURE.games.map((g) => ({
+      ...g,
+      id: g.id + ":z",
+      name: "Aaa Alt " + g.name,
+      // Oldest, so "recently played" puts it last while "by name" puts it
+      // first. Without that difference the two orders are identical and the
+      // sort assertion proves nothing.
+      last_played: 0,
+      favorite: false,
+      last_launch: 0,
+    })));
+    const { Atlas, els } = makeEnv(FIXTURE.games, backend({
+      atlas_scan: () => JSON.parse(JSON.stringify(many)),
+    }));
+    await Atlas.scan(false);
+    await flush();
+
+    const storeCount = () => (els.storeGrid.innerHTML.match(/at-card/g) || []).length;
+    const before = storeCount();
+    check("the Store page renders its games", before > 0);
+
+    els.storeQ.value = "Aaa Alt";
+    fire(els.storeQ, "input");
+    await flush();
+    const after = storeCount();
+    check("searching the Store page actually narrows it", after < before && after > 0,
+      "it was reading a search box that does not exist on this page");
+    check("and what is left matches the search", /Aaa Alt/.test(els.storeGrid.innerHTML) &&
+      !/>Hollow Knight</.test(els.storeGrid.innerHTML));
+
+    const headings = () => [...els.storeGrid.innerHTML.matchAll(/<h4>([^<]*)<\/h4>/g)].map((m) => m[1]);
+
+    els.storeQ.value = "";
+    fire(els.storeQ, "input");
+    check("clearing the search restores every game", storeCount() === before);
+
+    // Recorded before the sort changes, or "default" is whatever the sort was
+    // already set to and the comparison is against itself.
+    const defaultOrder = headings();
+
+    els.storeSort.value = "name";
+
+    fire(els.storeSort, "change");
+    await flush();
+    const byName = headings();
+    const alpha = defaultOrder.slice().sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+    check("sorting the Store page by name reorders it",
+      JSON.stringify(byName) === JSON.stringify(alpha),
+      "it was reading a sort control that does not exist on this page");
+    check("and the change is real, not a coincidence",
+      JSON.stringify(byName) !== JSON.stringify(defaultOrder),
+      "if the default order already happened to be alphabetical this proves nothing");
   }
 
   console.log("\n" + pass + " passed, " + fail + " failed");

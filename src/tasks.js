@@ -132,6 +132,15 @@ const Tasks = (() => {
     new MutationObserver(() => (sec.classList.contains("on") && !document.hidden) ? start() : stop()).observe(sec, { attributes: true, attributeFilter: ["class"] });
     document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); else if (sec.classList.contains("on")) start(); });
   }
-  mount();
+  // Guarded the same way atlas.js is. mount() inserts a page and then reaches
+  // into it with getElementById, which only resolves for elements already in the
+  // document - so a script tag moved to <head>, or deferred, would throw on the
+  // first line and take the module and its sidebar button with it.
+  if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount);
+    else mount();
+  } else {
+    mount();
+  }
   return { refresh };
 })();
