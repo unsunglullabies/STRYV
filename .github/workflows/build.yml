@@ -82,7 +82,9 @@ jobs:
       - name: Generate release notes
         if: github.ref_type == 'tag'
         shell: pwsh
-        run: node scripts/release-notes.js | Out-File -FilePath release-notes.md -Encoding utf8
+        run: |
+          node scripts/release-notes.js         | Out-File -FilePath release-notes.md -Encoding utf8
+          node scripts/release-notes.js --short | Out-File -FilePath release-notes-short.md -Encoding utf8
 
       # Refuses to run if any installer lacks a signature, so an unsigned
       # artifact can never reach a release.
@@ -90,7 +92,7 @@ jobs:
         if: github.ref_type == 'tag' && github.event_name != 'pull_request'
         shell: pwsh
         env:
-          RELEASE_NOTES_FILE: release-notes.md
+          RELEASE_NOTES_FILE: release-notes-short.md
         run: node scripts/make-latest-json.js
 
       - name: Upload build artifacts
