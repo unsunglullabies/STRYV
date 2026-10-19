@@ -1,0 +1,297 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>STRYV</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="glass.css"><style>#intro .ipre{position:absolute;inset:0;z-index:9;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:#0A0A0C}#intro .ipre img{height:30px;width:auto}#intro .ipre small{font:600 10px "Segoe UI",system-ui,sans-serif;letter-spacing:.26em;color:#6b6b75;text-transform:uppercase}</style></head>
+<body><svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="l2a" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  .9 .9 .9 0 -.05"/></filter></svg><div id="intro"><div class="ipre"><img src="assets/stryv-wordmark.png" alt="STRYV"><small>Starting&hellip;</small></div></div><div class="app" id="app">
+<aside class="side">
+  <div class="brand"><img class="wordmark" src="assets/stryv-wordmark.png" alt="STRYV"><span class="mono">S</span></div>
+  <nav id="nav">
+    <div class="grp">Workspace</div>
+    <button data-p="aery" class="pri"><i class="pt"><svg viewBox="0 0 24 24"><path d="M5 4h9l5 5v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/><path d="M14 4v5h5M8 13h8M8 17h5"/></svg></i><span>Aery<small>Notes</small></span></button>
+    <button data-p="atlas" class="pri"><i class="pt"><svg viewBox="0 0 24 24"><path d="M6.5 7h11a4.5 4.5 0 0 1 4.4 5.4l-.8 4A3 3 0 0 1 18 18l-1.4-2h-9.2L6 18a3 3 0 0 1-5.1-1.6l-.8-4A4.5 4.5 0 0 1 6.5 7Z"/><path d="M7.5 11.2v2.6M6.2 12.5h2.6"/><circle cx="15.6" cy="11.6" r=".9"/><circle cx="17.9" cy="13.4" r=".9"/></svg></i><span>Atlas<small>Game library</small></span></button>
+    <button data-p="syn" class="pri syn"><i class="pt"><img src="assets/syn-logo.png" alt=""></i><span>SYN<small>Assistant</small></span></button>
+    <div class="grp">Monitor</div>
+    <button data-p="dashboard" class="on"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg><span>Dashboard</span></button>
+    <button data-p="performance"><svg viewBox="0 0 24 24"><path d="M3 17l5-6 4 3 8-9"/><path d="M15 5h5v5"/></svg><span>Performance</span></button>
+    <button data-p="network"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><path d="M12 7v5M12 12l-6 5M12 12l6 5"/></svg><span>Network</span></button>
+    <button data-p="system"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg><span>System</span></button>
+    <div class="grp">STRYV</div>
+      <button data-p="optimizations"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg><span>Optimizations</span></button>
+    <button data-p="activity"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h16"/></svg><span>Activity</span></button>
+    <button data-p="settings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span>Settings</span></button>
+  </nav>
+  <nav class="foot"><button data-p="whatsnew"><svg viewBox="0 0 24 24"><path d="M12 3l2.2 5.6L20 10l-5.8 1.4L12 17l-2.2-5.6L4 10l5.8-1.4z"/></svg><span>What's New</span><i class="dot"></i></button><button data-p="help"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17v.01"/></svg><span>Help &amp; About</span></button></nav>
+  <div class="ver" id="ver"></div>
+</aside>
+<main>
+<section id="dashboard" class="page on"><h1>Dashboard</h1><p class="sub">Live measurements from this PC.</p>
+  <div class="card" id="health" style="margin-bottom:14px"><label>System health</label><small>Reading your PC…</small></div>
+  <div class="grid">
+    <div class="card"><label>CPU utilization</label><b id="cpu">—</b><div class="bar"><i id="cpuB"></i></div></div>
+    <div class="card"><label>Memory</label><b id="mem">—</b><div class="bar"><i id="memB"></i></div><small id="memD"></small></div>
+    <div class="card"><label>System uptime</label><b id="up">—</b></div>
+    <div class="card"><label>Storage</label><div id="disks"></div></div>
+    <div class="card"><label>Temperature</label><b id="tempB">—</b><small id="tempD">Reading sensors…</small></div>
+    <div class="card"><label>Network</label><b id="net">—</b><small id="netU"></small></div>
+  </div></section>
+<section id="performance" class="page"><h1>Performance</h1><p class="sub">Last 2 minutes, sampled every 2 seconds. Only measured data is plotted.</p>
+  <div class="grid2"><div class="card"><label>CPU utilization</label><svg class="chart" id="cpuC" viewBox="0 0 300 90" preserveAspectRatio="none"></svg></div>
+  <div class="card"><label>Memory usage</label><svg class="chart" id="memC" viewBox="0 0 300 90" preserveAspectRatio="none"></svg></div></div>
+  <div class="card" style="margin-top:14px"><label>GPU</label><div id="gpuB"><small>Reading GPU…</small></div></div>
+  <div class="card" style="margin-top:14px"><label>Temperature sensors</label><table id="tempT"></table><small id="tempN"></small></div>
+  <div class="card" style="margin-top:14px"><label>Top processes by CPU</label><table id="procT"></table>
+  <small>Per-process values are share of total CPU. A busy process is not necessarily a bottleneck.</small></div></section>
+<section id="network" class="page"><h1>Network</h1><p class="sub">Live throughput and connection tests.</p>
+  <div class="grid2"><div class="card"><label>Download</label><b id="dl">—</b><svg class="chart" id="dlC" viewBox="0 0 300 90" preserveAspectRatio="none"></svg></div>
+  <div class="card"><label>Upload</label><b id="ul">—</b><svg class="chart" id="ulC" viewBox="0 0 300 90" preserveAspectRatio="none"></svg></div></div>
+  <div class="card" style="margin-top:14px"><label>Adapters</label><table id="adT"></table>
+  <small>Throughput above is measured traffic, which depends on what your PC is doing, not the connection's capacity.</small></div>
+  <div class="card" style="margin-top:14px"><label>Link speed</label><table id="linkT"></table><small>The negotiated rate of the connection to your router, not your internet speed.</small></div>
+  <div class="card" style="margin-top:14px"><label>Connection tests</label><div id="tests"><small>Measures TCP connection time to public servers and DNS lookup time. It does not test download speed.</small></div>
+  <button class="btn" id="runT">Run tests</button></div></section>
+<section id="atlas" class="page at-page">
+  <header class="at-hero">
+    <div class="at-heroart" aria-hidden="true"></div>
+    <div class="at-heroin">
+      <div class="at-id">
+        <h1>ATLAS</h1>
+        <p class="at-tag">Your games. Your territory.</p>
+      </div>
+      <div class="at-herostat" id="atlasHeroStat"><span class="at-loading">Reading launcher files</span></div>
+      <div class="at-herobtns">
+        <button class="btn" id="atlasAdd">Add game</button>
+        <button class="btn ghost" id="atlasScan">Rescan</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="at-feature" id="atlasFeature" hidden></div>
+
+  <div class="at-bar">
+    <div class="at-search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      <input id="atlasQ" type="search" placeholder="Search your library" aria-label="Search games" autocomplete="off">
+    </div>
+    <label class="at-sortl" for="atlasSort">Sort</label>
+    <select id="atlasSort" aria-label="Sort games">
+      <option value="recent">Recently played</option>
+      <option value="lastLaunch">Last launched</option>
+      <option value="name">Name</option>
+      <option value="plays">Most played</option>
+      <option value="size">Install size</option>
+    </select>
+    <div class="at-filters" role="group" aria-label="Filter games">
+      <button class="at-chip" id="atlasFavOnly" aria-pressed="false">Favourites</button>
+      <button class="at-chip" id="atlasMissingOnly" aria-pressed="false">Needs attention</button>
+      <button class="at-chip at-chip-clear" id="atlasReset" hidden>Clear filters</button>
+    </div>
+  </div>
+
+  <div class="at-facets" id="atlasFacets" hidden></div>
+    <div class="at-srcpanel" id="atlasSources" hidden></div>
+  <div class="at-grid" id="atlasGrid"></div>
+  <div class="at-empty" id="atlasEmpty" hidden></div>
+
+  <div class="at-foot">
+    <small id="atlasNote">STRYV reads only what the launcher wrote. Launching a Steam game asks Steam to start it through Steam's own link handler; ATLAS never runs a Steam title's files directly. Games you add yourself are launched directly, because there is no launcher to ask. Removing an entry only removes it from ATLAS. It never uninstalls the game or deletes any file.</small>
+    <button class="lnk" id="atlasRestore" hidden>Restore removed games</button>
+  </div>
+
+  <div class="at-sess">
+    <div class="at-sessh"><h3>Recent sessions</h3><button class="lnk" id="atlasSessClr">Clear</button></div>
+    <div id="atlasSess"></div>
+  </div>
+
+  <div class="at-panel" id="atlasAddBox" hidden>
+    <div class="at-panelh"><h3 id="atlasAddTitle">Add a game</h3><button class="lnk" id="atlasAddNo">Cancel</button></div>
+    <div class="at-field">
+      <label for="atlasName">Display name <small>optional</small></label>
+      <input id="atlasName" placeholder="Leave blank to use the file name" autocomplete="off">
+    </div>
+    <div class="at-field">
+      <label for="atlasExe">Game executable</label>
+      <div class="at-pathrow">
+        <input id="atlasExe" placeholder="C:\Games\Something\game.exe" spellcheck="false">
+        <button class="btn ghost" id="atlasPickExe">Browse</button>
+      </div>
+    </div>
+    <div class="at-field">
+      <label for="atlasArt">Cover image <small>optional</small></label>
+      <div class="at-pathrow">
+        <input id="atlasArt" placeholder="Pick a local image" spellcheck="false">
+        <button class="btn ghost" id="atlasPickArt">Browse</button>
+      </div>
+    </div>
+    <small class="at-addhint">ATLAS checks the executable exists, launches it directly, and records how long it runs. A local cover is always preferred over artwork fetched from the internet.</small>
+    <div class="at-panelb"><button class="btn ghost" id="atlasAddNo2">Cancel</button><button class="btn" id="atlasAddGo">Add to library</button></div>
+  </div>
+
+  <div class="at-panel" id="atlasEditBox" hidden>
+    <div class="at-panelh"><h3 id="atlasEditTitle">Edit game</h3><button class="lnk" id="atlasEditNo">Cancel</button></div>
+    <div class="at-field">
+      <label for="atlasEditName">Display name</label>
+      <input id="atlasEditName" autocomplete="off">
+    </div>
+    <div class="at-field">
+      <label for="atlasEditExe">Executable</label>
+      <div class="at-pathrow">
+        <input id="atlasEditExe" spellcheck="false">
+        <button class="btn ghost" id="atlasPickExe2">Browse</button>
+      </div>
+    </div>
+    <div class="at-field">
+      <label for="atlasEditArt">Cover image</label>
+      <div class="at-pathrow">
+        <input id="atlasEditArt" spellcheck="false">
+        <button class="btn ghost" id="atlasPickArt2">Browse</button>
+        <button class="btn ghost" id="atlasClearArt">Clear</button>
+      </div>
+    </div>
+    <div class="at-panelb"><button class="btn ghost" id="atlasEditNo2">Cancel</button><button class="btn" id="atlasEditSave">Save changes</button></div>
+  </div>
+
+  <div class="at-detailwrap" id="atlasDetailWrap" hidden>
+    <div class="at-detail" id="atlasDetail" role="dialog" aria-modal="false" aria-label="Game details"></div>
+  </div>
+</section><section id="aery" class="page">
+      <h1>Aery</h1>
+      <p class="sub">Your notes, as Markdown files in a folder you own. Nothing here is locked inside STRYV.</p>
+
+      <div class="aery-shell">
+        <aside class="aery-rail">
+          <div class="aery-railhead">
+            <div id="aeryCounts" class="aery-counts"><b>0</b><small>notes</small></div>
+          </div>
+          <div class="aery-tools">
+            <input id="aeryQ" type="search" placeholder="Search notes" aria-label="Search notes" autocomplete="off">
+            <select id="aeryTag" aria-label="Filter by tag"><option value="">All tags</option></select>
+            <button class="btn" id="aeryNew">New</button>
+            <button class="btn ghost" id="aeryPin" title="Pin this note">Pin</button>
+            <button class="btn ghost" id="aeryRestore">Restore</button>
+            <button class="btn ghost" id="aeryDel" title="Move to trash">Trash</button>
+          </div>
+          <div id="aeryList" class="aery-list" role="list"></div>
+          <small class="aery-path" id="aeryVaultPath" title="Where your notes are stored"></small>
+        </aside>
+
+        <div class="aery-main">
+          <div class="aery-bar">
+            <input id="aeryTitle" class="aery-title" placeholder="Note title" aria-label="Note title">
+            <span id="aerySave" class="a-save clean">Saved</span>
+          </div>
+          <div id="aeryPlaceholder" class="aery-placeholder"></div>
+          <textarea id="aeryEditor" class="aery-editor" spellcheck="false"
+            placeholder="Write in Markdown. Link another note with [[double brackets]]." hidden></textarea>
+        </div>
+
+        <aside class="aery-ctx">
+          <div id="aeryContext"></div>
+          <div class="aery-help">
+            <h4>Markdown Aery understands</h4>
+            <p><code>[[Note title]]</code> links to another note.</p>
+            <p><code>[[Note title|shown text]]</code> links with different words.</p>
+            <p><code>#tag</code> on its own line tags the note.</p>
+            <p><code>--- title: Name ---</code> at the top names it.</p>
+            <p><b>Ctrl+S</b> saves now. Typing saves on its own once you pause.</p>
+          </div>
+        </aside>
+      </div>
+    </section>
+    <section id="optimizations" class="page"><h1>Optimizations</h1><p class="sub">Fixed, reviewed actions. Nothing runs without your confirmation, and every action is logged.</p>
+  <div id="optList"></div>
+  <div class="sec" style="margin-top:26px"><h3>Measure impact</h3>
+    <p class="note">Capture a baseline before a change and a comparison after it. Each capture samples for 20 seconds, so keep the PC as idle as you can. STRYV only reports a difference when it is larger than the measurement noise. Readings include STRYV's own usage.</p>
+    <div class="acts"><button class="btn ghost" id="measB">Capture baseline</button><button class="btn ghost" id="measA">Capture comparison</button><button class="btn ghost" id="measX" style="display:none">Cancel</button><button class="lnk" id="measC">Clear</button></div>
+    <p class="note" id="measS"></p><table id="measT"></table></div>
+  <div class="sec" style="margin-top:26px"><h3>Startup apps</h3><table id="startT"></table><p class="note">Controls apps in your user Run key. Changes take effect at next sign-in and are reversible here. System-wide startup items are not listed.</p></div></section>
+<section id="system" class="page"><h1>System</h1><p class="sub">Hardware and operating system.</p><div class="card"><table id="sysT"></table><button class="btn" id="copy">Copy diagnostics</button></div></section>
+<section id="syn" class="page"><h1>SYN Assistant</h1><p class="sub">Analysis of this PC, from a live reading. No model is connected, so nothing here is generated.</p>
+
+  <div class="synhead">
+    <img src="assets/syn-logo.png" alt="SYN">
+    <div><b>Local analysis</b><small>Everything on this page is computed from a reading STRYV takes of your machine. It works offline, and it cannot invent a result.</small></div>
+    <span class="synbadge" id="synState">No provider connected</span>
+  </div>
+
+  <div class="syncols">
+    <div class="synmain">
+      <div class="set">
+        <div><b>Check this PC</b><small>Reads CPU, memory, disk, temperatures and uptime, then explains what it found. Each finding cites the number it came from.</small></div>
+        <button class="btn" id="synRun">Run check</button>
+      </div>
+      <div id="synOut" aria-live="polite"></div>
+    </div>
+
+    <div class="synside">
+      <div class="sec">
+        <h3>Ask about this PC</h3>
+        <div class="synaskrow">
+          <input id="synAskQ" type="text" placeholder="Why is my CPU high?" aria-label="Ask a question about this PC" autocomplete="off">
+          <button class="btn ghost" id="synAskGo">Ask</button>
+        </div>
+        <div id="synAsk" aria-live="polite"></div>
+        <p class="note">Answered by comparing your question against a live reading. It can measure; it cannot interpret. If it cannot answer it says so.</p>
+      </div>
+
+      <div class="sec">
+        <h3>Model provider</h3>
+        <div class="card sync">
+          <div><b>Not connected</b>
+          <small>No external model is configured, and nothing has ever been sent anywhere. Connecting one is a deliberate step, described below, and it is off by default.</small></div>
+        </div>
+        <p class="note">What a provider would receive, if you ever enabled one:</p>
+        <ul class="tips">
+          <li><b>Diagnostics.</b> The specific reading that triggered a finding, and the question you asked.</li>
+          <li><b>Aery.</b> Only the notes you tick below, and only when you tick them. Nothing is selected by default.</li>
+          <li><b>Never.</b> Your vault path, your Steam library, your ATLAS activity, or your settings.</li>
+        </ul>
+        <p class="note">Credentials would be stored on this PC only, and are not implemented yet.</p>
+      </div>
+
+      <div class="sec">
+        <h3>Aery scope</h3>
+        <div id="synAeryScope"></div>
+        <p class="note">Nothing is selected, so nothing could be shared. SYN has no network code at all in this build.</p>
+      </div>
+
+      <div class="sec">
+        <h3>What stays local</h3>
+        <p class="note">Every reading, every finding and every note stays on this PC. This build contains no networking in the SYN path, so there is nothing to opt out of.</p>
+      </div>
+    </div>
+  </div>
+</section><section id="activity" class="page"><h1>Activity</h1><p class="sub">What STRYV has done, and technical errors if any.</p>
+  <div class="tabs"><button data-tab="feed" class="on">Activity</button><button data-tab="tech">Technical log</button></div><div id="actList"></div></section>
+<section id="settings" class="page"><h1>Settings</h1><p class="sub">Saved on this PC. Changes apply immediately.</p>
+  <div class="sec"><h3>Appearance</h3>
+    <div class="set"><div><b>Accent color</b><small>Used for highlights and graphs.</small></div><div class="sws"><button class="sw" data-accent="Amber" style="--c:#F5A623" aria-label="Amber"></button><button class="sw" data-accent="Cyan" style="--c:#38BDF8" aria-label="Cyan"></button><button class="sw" data-accent="Violet" style="--c:#8B5CF6" aria-label="Violet"></button></div></div>
+    <div class="set"><div><b>Window glass</b><small>Lets your desktop show through the window. Acrylic can feel laggy when dragging on some PCs; Mica is lighter.</small></div><select id="gfx" aria-label="Window glass"><option value="off">Off</option><option value="mica">Mica</option><option value="acrylic">Acrylic</option></select></div>
+    <div class="set"><div><b>Compact sidebar</b><small>Show icons only.</small></div><button class="tog" data-set="compact" data-label="Compact sidebar" aria-label="Compact sidebar"></button></div>
+    <div class="set"><div><b>Reduce motion</b><small>Turns off transitions and animations.</small></div><button class="tog" data-set="reduceMotion" data-label="Reduce motion" aria-label="Reduce motion"></button></div>
+    <div class="set"><div><b>Launch animation</b><small>Plays when STRYV starts. Skipped when Reduce motion is on.</small></div><div class="acts"><button class="btn ghost" id="replay">Replay</button><button class="tog" data-set="intro" data-label="Launch animation" aria-label="Launch animation"></button></div></div></div>
+  <div class="sec"><h3>Updates</h3>
+    <div class="set"><div><b>STRYV updates</b><small>Signed updates only. Every download is checked against the key built into this app, and an update that fails that check is discarded.</small></div><div class="acts"><button class="btn ghost" id="updCheck">Check now</button><button class="btn" id="updInstall" style="display:none">Install update</button></div></div>
+    <div id="updFound" style="display:none"><p class="note" id="updFoundV" style="color:var(--v);font-weight:600"></p><p class="note" id="updNotes"></p></div>
+    <p class="note" id="updStatus"></p></div>
+  <div class="sec"><h3>Startup and monitoring</h3>
+    <div class="set"><div><b>Open on</b><small>Page shown when STRYV starts.</small></div><select data-sel="startPage" data-label="Start page"><option value="dashboard">Dashboard</option><option value="performance">Performance</option><option value="network">Network</option><option value="system">System</option><option value="activity">Activity</option></select></div>
+    <div class="set"><div><b>Refresh interval</b><small>How often live readings update. Longer uses less CPU.</small></div><select data-sel="interval" data-label="Refresh interval"><option value="1">1 second</option><option value="2">2 seconds</option><option value="5">5 seconds</option></select></div></div>
+  <div class="sec"><h3>Privacy and storage</h3>
+    <div class="set"><div><b>Keep activity history</b><small>When off, activity is not saved between launches.</small></div><button class="tog" data-set="keepActivity" data-label="Keep activity history" aria-label="Keep activity history"></button></div>
+    <p class="note">STRYV stores settings, activity and technical errors in its own app storage on this PC. Nothing is uploaded. SYN, model and workspace settings will appear here once those features exist.</p></div>
+  <div class="sec"><h3>Keyboard shortcuts</h3>
+    <table class="keys"><tr><td>Command palette</td><td><kbd>Ctrl+K</kbd></td></tr><tr><td>Dashboard, Performance, Network, System, Activity</td><td><kbd>Ctrl+1</kbd> to <kbd>Ctrl+5</kbd></td></tr><tr><td>Settings</td><td><kbd>Ctrl+,</kbd></td></tr><tr><td>Close dialog or palette</td><td><kbd>Esc</kbd></td></tr></table></div>
+  <div class="sec"><h3>Data</h3>
+    <div class="set"><div><b>Export</b><small>Settings and activity as a JSON file.</small></div><div class="acts"><button class="btn ghost" id="expFile">Export file</button><button class="btn ghost" id="expCopy">Copy as JSON</button></div></div>
+    <div class="set"><div><b>Clear activity history</b><small>Keeps your settings.</small></div><button class="btn ghost" id="clrAct">Clear</button></div>
+    <div class="set"><div><b>Reset settings</b><small>Restore defaults.</small></div><button class="btn ghost" id="rstSet">Reset</button></div>
+    <div class="set"><div><b>Delete all STRYV data</b><small>Permanent. Removes everything STRYV stored on this PC.</small></div><button class="btn danger" id="delAll">Delete</button></div></div></section>
+<section id="whatsnew" class="page"><h1>What's New</h1><p class="sub">Release notes for this build.</p><div id="newsList"></div><button class="btn" id="markSeen">Mark as viewed</button></section>
+<section id="help" class="page"><h1>Help &amp; About</h1><p class="sub" id="aboutV"></p>
+  <div class="sec"><h3>About</h3><p class="note">STRYV: push your performance. A Windows PC performance and diagnostics utility. Built with Tauri and the sysinfo library. License: not yet specified.</p></div>
+  <div class="sec"><h3>Updates</h3><p class="note">STRYV checks for signed updates and can install them from inside the app. Every download is verified against the public key built into this version; an update that fails verification is discarded and never run. If no signed release has been published yet, Check now simply reports that you are up to date.</p></div>
+  <div class="sec"><h3>Troubleshooting</h3><ul class="tips"><li><b>A reading says Unavailable.</b> That measurement isn't supported yet or the system didn't provide it. STRYV never fills in guessed values.</li><li><b>Connection tests fail.</b> A firewall or VPN may block outbound connections on port 443. Check the Technical log in Activity.</li><li><b>Something looks wrong.</b> Open Activity, copy the details, and include them in a bug report.</li><li><b>Start fresh.</b> Settings, then Data, then Reset settings or Delete all STRYV data.</li></ul></div></section>
+</main></div><div id="pal" class="ov"><div class="pbox"><input id="pin" placeholder="Type a command…" autocomplete="off" aria-label="Command palette"><div id="plist"></div></div></div>
+<div id="dlg" class="ov mid" role="dialog" aria-modal="true"><div class="dbox"><h2 id="dT"></h2><p id="dB"></p><div class="dact"><button class="btn ghost" id="dNo">Cancel</button><button class="btn" id="dYes">Confirm</button></div></div></div>
+<div id="rv" class="ov mid" role="dialog" aria-modal="true"><div class="dbox rvb"><h2 id="rvT"></h2><div id="rvB"></div><div class="dact"><button class="btn ghost" id="rvNo">Cancel</button><button class="btn" id="rvYes">Apply</button></div></div></div>
+<div id="toasts"></div>
+<script src="core.js"></script><script src="glassfx.js"></script><script src="dashx.js"></script><script src="intro.js"></script><script src="opt.js"></script><script src="meas.js"></script><script src="health.js"></script><script src="sensors.js"></script><script src="aery.js"></script>
+    <script src="atlas.js"></script><script src="syn.js"></script><script src="updater.js"></script><script src="app.js"></script></body></html>

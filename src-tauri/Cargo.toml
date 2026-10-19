@@ -7,7 +7,7 @@ edition = "2021"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon"] }
 serde = { version = "1", features = ["derive"] }
 sysinfo = "=0.32.1"
 serde_json = "1"
@@ -16,6 +16,7 @@ serde_json = "1"
 tauri-plugin-updater = "2.8"
 tauri-plugin-process = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-notification = "2"
 # Release builds still optimise normally, but incremental caching keeps repeat
 # compiles fast. Tauri's bundling step, not the codegen, dominates the time.
 [profile.release]

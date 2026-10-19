@@ -426,6 +426,8 @@ fn boot_log(msg: &str) {
 #[tauri::command(async)]
 fn boot_mark(label: String) { boot_log(&label); }
 
+mod bg; // background monitor, tray, notifications, task manager
+
 fn main() {
     let _ = std::fs::write(std::env::temp_dir().join("stryv-startup.log"), "");
     boot_log("main() entered");
@@ -441,7 +443,10 @@ fn main() {
         })
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
+        .on_window_event(bg::on_window_event)
         .setup(|app| {
+            bg::init(app)?;
             boot_log("setup() running");
             // Signed self-update. The public key lives in tauri.conf.json; Tauri
             // refuses any artifact whose signature does not match it.
@@ -460,7 +465,7 @@ fn main() {
         })
         .manage(Monitor(Mutex::new(sys)))
         .manage(Net(Mutex::new((Networks::new_with_refreshed_list(), Instant::now()))))
-        .invoke_handler(tauri::generate_handler![boot_mark, get_snapshot, get_system_info, get_processes, get_network, run_network_tests, opt_catalog, opt_snapshots, opt_preview, opt_apply, opt_rollback, opt_startup, opt_startup_set, get_gpu, get_temps, get_link_speeds, atlas::atlas_scan, atlas::atlas_launch, atlas::atlas_launch_id, atlas::atlas_sessions, atlas::atlas_clear_sessions, atlas::atlas_add_manual, atlas::atlas_update, atlas::atlas_set_art, atlas::atlas_remove, atlas::atlas_restore, atlas::atlas_set_favorite, atlas::atlas_source_list, atlas::atlas_set_source, aery_list, aery_read, aery_save, aery_create, aery_rename, aery_delete, aery_restore, aery_set_pinned, aery_set_folder, aery_vault_path, aery_counts, aery_vaults, aery_vault_open, aery_vault_create, aery_vault_forget])
+        .invoke_handler(tauri::generate_handler![bg::task_list, bg::task_end, bg::task_end_many, bg::alerts_get, bg::alerts_set, bg::alerts_recent, bg::alerts_clear, bg::alerts_test, boot_mark, get_snapshot, get_system_info, get_processes, get_network, run_network_tests, opt_catalog, opt_snapshots, opt_preview, opt_apply, opt_rollback, opt_startup, opt_startup_set, get_gpu, get_temps, get_link_speeds, atlas::atlas_scan, atlas::atlas_launch, atlas::atlas_launch_id, atlas::atlas_sessions, atlas::atlas_clear_sessions, atlas::atlas_add_manual, atlas::atlas_update, atlas::atlas_set_art, atlas::atlas_remove, atlas::atlas_restore, atlas::atlas_set_favorite, atlas::atlas_source_list, atlas::atlas_set_source, aery_list, aery_read, aery_save, aery_create, aery_rename, aery_delete, aery_restore, aery_set_pinned, aery_set_folder, aery_vault_path, aery_counts, aery_vaults, aery_vault_open, aery_vault_create, aery_vault_forget])
         .run(tauri::generate_context!())
         .expect("error while running STRYV");
 }
