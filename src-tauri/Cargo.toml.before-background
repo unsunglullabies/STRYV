@@ -1,0 +1,28 @@
+[package]
+name = "stryv"
+version = "0.2.8"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+sysinfo = "=0.32.1"
+serde_json = "1"
+
+[target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+tauri-plugin-updater = "2.8"
+tauri-plugin-process = "2"
+tauri-plugin-dialog = "2"
+# Release builds still optimise normally, but incremental caching keeps repeat
+# compiles fast. Tauri's bundling step, not the codegen, dominates the time.
+[profile.release]
+incremental = true
+
+[patch.crates-io]
+# Temporary: every zip 4.x release is yanked on crates.io, and the Tauri updater
+# needs zip ^4. This points at the unmodified published source, vendored under
+# vendor/zip. Remove this block once crates.io restores the crate.
+zip = { path = "../vendor/zip" }

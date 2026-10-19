@@ -11,7 +11,7 @@
   --line:rgba(255,255,255,.10);
   --t:#D2D3DC; --m:#9496A3; --hi:#F7F7FA;
   --r:16px;
-  --glass:linear-gradient(180deg,rgba(255,255,255,.115),rgba(255,255,255,.05));
+  --glass:linear-gradient(180deg,rgba(255,255,255,calc(.115*var(--tint,1))),rgba(255,255,255,calc(.05*var(--tint,1))));
   --glass-edge:inset 0 1px 0 rgba(255,255,255,.09);
   --shadow:0 12px 32px rgba(0,0,0,.34);
   --viol:#A78BFA;
@@ -124,7 +124,7 @@ h1::before{display:none}
 .card{
   background:var(--glass);border:1px solid rgba(255,255,255,.09);border-radius:var(--r);
   box-shadow:var(--glass-edge),var(--shadow);
-  -webkit-backdrop-filter:blur(22px) saturate(175%);backdrop-filter:blur(22px) saturate(175%);
+  -webkit-backdrop-filter:blur(var(--blur,22px)) saturate(175%);backdrop-filter:blur(var(--blur,22px)) saturate(175%);
   padding:18px;transition:border-color .2s,box-shadow .2s;
 }
 .card:hover{border-color:rgba(255,255,255,.16)}
@@ -173,7 +173,7 @@ td{border-bottom-color:rgba(255,255,255,.06)}
 .at-detailwrap{-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 
 /* ---- Aery + Atlas inner surfaces (they set their own solid colours) ---- */
-.aery-shell{border-radius:20px;box-shadow:var(--glass-edge),var(--shadow);-webkit-backdrop-filter:blur(22px) saturate(175%);backdrop-filter:blur(22px) saturate(175%)}
+.aery-shell{border-radius:20px;box-shadow:var(--glass-edge),var(--shadow);-webkit-backdrop-filter:blur(var(--blur,22px)) saturate(175%);backdrop-filter:blur(var(--blur,22px)) saturate(175%)}
 .aery-rail{background:rgba(255,255,255,.03)}
 .aery-bar{background:rgba(255,255,255,.025)}
 .at-hero,.at-feature,.at-card{border-radius:18px;box-shadow:var(--glass-edge),var(--shadow)}
@@ -311,6 +311,62 @@ body.rm .page,body.rm .page.on .card{animation:none}
 .grp.nx-btn::after{content:"";width:6px;height:6px;margin-right:2px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg) translateY(-2px);transition:transform .2s;opacity:.7}
 .grp.nx-shut::after{transform:rotate(-45deg)}
 .nx-hide{display:none!important}
+
+/* ==========================================================================
+   Tasks page, background alerts card, glass strength controls
+   ========================================================================== */
+.tk-top{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-bottom:16px}
+.tk-top .card{padding:16px 20px;min-height:0;gap:4px}
+.tk-top b{font-size:28px}
+.tk-tools{display:flex;flex-direction:row;gap:12px;align-items:center;padding:12px 14px;margin-bottom:16px;min-height:0}
+.tk-tools input{flex:1;min-width:0;height:38px;border-radius:12px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.06);color:var(--hi);padding:0 14px;font:inherit;outline:none}
+.tk-tools input:focus{border-color:color-mix(in srgb,var(--v) 60%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--v) 18%,transparent)}
+.tk-seg{display:flex;gap:4px;padding:4px;border-radius:12px;background:rgba(255,255,255,.06)}
+.tk-seg button{background:transparent;border:0;height:30px;padding:0 14px;border-radius:9px;color:var(--m);font-size:13px;font-weight:600;transition:background .15s,color .15s}
+.tk-seg button.on{background:rgba(255,255,255,.13);color:var(--hi);box-shadow:inset 0 1px 0 rgba(255,255,255,.12)}
+.tk-wrap{padding:0}
+.tk-scroll{max-height:calc(100vh - 400px);min-height:240px;overflow:auto;border-radius:inherit}
+table.tk{width:100%;border-collapse:separate;border-spacing:0}
+table.tk th{position:sticky;top:0;z-index:2;text-align:left;padding:12px 18px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--m);background:rgba(24,24,36,.92);border-bottom:1px solid rgba(255,255,255,.08);cursor:pointer;user-select:none;white-space:nowrap}
+table.tk th[aria-sort=ascending]::after{content:" \25B2";font-size:9px}
+table.tk th[aria-sort=descending]::after{content:" \25BC";font-size:9px}
+table.tk th[aria-sort=ascending],table.tk th[aria-sort=descending]{color:var(--hi)}
+table.tk td{padding:9px 18px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle}
+table.tk tr:hover td{background:rgba(255,255,255,.045)}
+.tk-nw{display:flex;align-items:center;gap:12px;min-width:0}
+.tk-nt{min-width:0}
+.tk-nt b{display:block;font-weight:600;color:var(--hi);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:320px;font-size:14px}
+.tk-nt small{color:var(--m);font-size:12px}
+.tk-ic{flex:none;width:32px;height:32px;border-radius:10px;display:grid;place-items:center;font:700 14px/1 inherit;font-style:normal;color:hsl(var(--h) 80% 84%);background:hsl(var(--h) 55% 40% / .30);box-shadow:inset 0 0 0 1px hsl(var(--h) 70% 70% / .25)}
+.tk-c{white-space:nowrap;width:190px}
+.tk-cb{display:inline-block;vertical-align:middle;width:84px;height:6px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;margin-right:10px}
+.tk-cb i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,color-mix(in srgb,var(--v) 70%,#fff),var(--v));transition:width .4s}
+.tk-c span{display:inline-block;min-width:48px;font-variant-numeric:tabular-nums}
+.tk-m{white-space:nowrap;font-variant-numeric:tabular-nums;width:110px}
+.tk-a{text-align:right;width:130px}
+.tk-end{padding:6px 14px;font-size:12px;border-radius:10px}
+.tk-end:hover{background:rgba(239,68,68,.18);border-color:rgba(239,68,68,.5);color:#fecaca}
+.tk-lock{font-size:12px;color:var(--m);padding:5px 10px;border-radius:999px;background:rgba(255,255,255,.06)}
+.tk-empty{padding:18px 20px;color:var(--m);margin:0}
+.tk-note{color:var(--m);font-size:12px;margin:14px 2px 0}
+
+.bgctl{display:flex;align-items:center;gap:10px;color:var(--m);font-size:13px;flex-wrap:wrap;justify-content:flex-end}
+.bgctl select{height:34px}
+input[type=range]{accent-color:var(--v);width:180px}
+.bgfeed{margin-top:14px}
+.bgfh{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.bgf{display:flex;gap:12px;align-items:flex-start;padding:10px 4px;border-bottom:1px solid rgba(255,255,255,.06)}
+.bgf b{display:block;font-weight:600}
+.bgf small{color:var(--m)}
+.bgf .k{flex:none;width:8px;height:8px;margin-top:6px;border-radius:50%;background:var(--v);box-shadow:0 0 10px var(--v)}
+.k-cpu{--v:#F5A623}.k-memory{--v:#A78BFA}.k-disk{--v:#38BDF8}.k-temperature{--v:#F87171}.k-test{--v:#22C55E}
+
+/* Reduce effects: no blur, grain, edge light or entrance motion */
+html.lite *{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+html.lite .card,html.lite .aery-shell,html.lite .at-hero,html.lite .pbox,html.lite .dbox{background-image:none;background-color:rgba(24,24,34,.86)}
+html.lite .side::before{background:rgba(20,20,30,.94)}
+html.lite .card::before,html.lite .pbox::before,html.lite .dbox::before{display:none}
+html.lite .page,html.lite .page.on .card{animation:none}
 
 /* ---- fallbacks ---- */
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){

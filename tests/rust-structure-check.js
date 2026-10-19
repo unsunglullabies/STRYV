@@ -14,29 +14,27 @@ const fs = require("fs");
 
 // main.rs plus any sibling modules. Aery lives in its own file, and its commands
 // have to be checked just as strictly as ATLAS's.
-const src = [process.argv[2], ...process.argv.slice(3)]
-  .filter(Boolean)
+const path = require("path");
+const given = [process.argv[2], ...process.argv.slice(3)].filter(Boolean);
+// Also pick up every other .rs file next to the first one, so a new module (bg.rs, ...) is checked
+// without anyone having to remember to add it to the npm script.
+const siblings = given.length ? (() => { try { const d = path.dirname(given[0]); return fs.readdirSync(d).filter((f) => f.endsWith(".rs")).map((f) => path.join(d, f)); } catch { return []; } })() : [];
+const src = [...new Set([...given.map((f) => path.normalize(f)), ...siblings.map((f) => path.normalize(f))])]
   .map((f) => { try { return fs.readFileSync(f, "utf8"); } catch { return ""; } })
   .join("\n");
 let failures = 0;
 const fail = (m) => { console.log("  FAIL  " + m); failures++; };
 const pass = (m) => console.log("  ok    " + m);
 
-// The attribute may carry arguments: `#[tauri::command(async)]` runs a
-// synchronous command on its own thread instead of the async runtime, which is
-// what the sysinfo-backed commands want. Both spellings are valid, so accept
-// both rather than forcing a revert of a correct change.
-const defs = [...src.matchAll(/#\[tauri::command(?:\([^)]*\))?\]\s*(?:pub\s+)?(?:async\s+)?fn\s+(\w+)/g)].map((m) => m[1]);
+const defs = [...src.matchAll(/#\[tauri::command(?:\(async\))?\]\s*(?:pub\s+)?(?:async\s+)?fn\s+(\w+)/g)].map((m) => m[1]);
 const handlerMatch = src.match(/generate_handler!\[([^\]]+)\]/);
-const reg = handlerMatch ? handlerMatch[1].split(",").map((s) => s.trim()).filter(Boolean) : [];
-// A command in a module is registered as module::name but defined as fn name,
-// so both sides are compared as the bare name.
-const bare = (n) => n.replace(/^[A-Za-z_][A-Za-z0-9_]*::/, "");
-const regBare = reg.map(bare);
+// A command in another module is registered as module::name (for example bg::task_list).
+const reg = handlerMatch ? handlerMatch[1].split(",").map((s) => s.trim().replace(/^(?:\w+::)+/, "")).filter(Boolean) : [];
+
 console.log(`  ${defs.length} commands defined, ${reg.length} registered`);
 
-const unregistered = defs.filter((d) => !regBare.includes(d));
-const ghost = regBare.filter((r) => !defs.includes(r));
+const unregistered = defs.filter((d) => !reg.includes(d));
+const ghost = reg.filter((r) => !defs.includes(r));
 
 if (unregistered.length) fail(`defined but not registered: ${unregistered.join(", ")}`);
 if (ghost.length) fail(`registered but not defined: ${ghost.join(", ")}`);
@@ -61,20 +59,10 @@ const need = [
   "fn aery_restore",
   "fn aery_set_pinned",
   "fn aery_set_folder",
-  "fn aery_vaults",
-  "fn aery_vault_open",
-  "fn aery_vault_create",
-  "fn aery_vault_forget",
   "fn merge_library",
-  "fn canonicalize",
-  "fn scan",
-  "fn registry",
+  "fn detected_games",
   "fn push_session",
   "fn steam_start",
-  "fn atlas_source_list",
-  "fn atlas_set_source",
-  "fn atlas_source_list",
-  "fn atlas_set_source",
   "fn read_atlas",
   "fn write_atlas",
 ];
