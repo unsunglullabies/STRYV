@@ -23,6 +23,7 @@ const CHANGELOG = [
         "Games with no artwork get a letter tile instead of the same grey box. Store games have no cover art at all, so a page of them looked like a page of nothing. The tile takes the first letter of the title on a colour derived from it, which makes it obvious at a glance which card is which - and it is not pretending to be artwork.",
         "An empty Store page now offers to open the Microsoft Store. A PC with no Store games should not be left staring at a dead end.",
         "The sidebar has a thin scrollbar that strengthens on hover, stops a wheel gesture over it from scrolling the page behind, and can no longer spill sideways.",
+        "Sources you have switched off, and launchers you do not have installed, now look different in the source panel instead of matching a normal read. They had no styling at all - the rule that was meant to cover them was spelled without a dash and had an empty body - so an uninstalled launcher looked like a plain chip rather than something deliberately inactive.",
         "Release notes now reach you properly. The updater manifest shipped with an empty notes field on every release, because the workflow never set it, and the GitHub release body was a list of commit hashes from --generate-notes. Both are now generated from this changelog, so the release page and the app cannot disagree, and the body is the actual text rather than a link somewhere else.",
       ],
       Limits: [

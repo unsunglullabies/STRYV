@@ -773,11 +773,11 @@ pub struct AtlasStore {
     /// Sources the user turned off. Empty means every source is read.
     #[serde(default)]
     pub disabled_sources: Vec<String>,
-    /// Legacy id -> canonical id, so favourites and sessions recorded before the
-    /// canonical split keep working instead of silently resetting.
-    #[serde(default)]
-    pub aliases: std::collections::BTreeMap<String, String>,
-}
+    // Legacy id -> canonical id used to live here as an `aliases` map, for
+    // favourites and sessions recorded before the canonical split. Nothing ever
+    // read it - the migration rewrites those in place instead - so it was always
+    // empty and was only ever asserted empty. Removed.
+ }
 
 const STORE_VERSION: u32 = 2;
 
@@ -1779,8 +1779,7 @@ mod tests {
         // Every added field is #[serde(default)], so a v1 file opens as it stands.
         let s: AtlasStore = serde_json::from_str(r#"{"version":1,"favorites":["manual:abc"]}"#).unwrap();
         assert!(s.disabled_sources.is_empty());
-        assert!(s.aliases.is_empty());
-        assert_eq!(s.favorites, vec!["manual:abc".to_string()]);
+            assert_eq!(s.favorites, vec!["manual:abc".to_string()]);
     }
 
     #[test]

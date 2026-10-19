@@ -145,8 +145,8 @@ table tr:hover td{background:rgba(255,255,255,.02)}td.n{font-variant-numeric:tab
 /* ===== ATLAS: the game library ============================================
    Everything below is scoped to what src/atlas.js actually emits.
 
-     shell    .at-bar .at-search .at-sortl .at-btns .at-add .at-addl
-              .at-addhint .at-stats .at-grid .at-empty .at-foot
+     shell    .at-bar .at-search .at-sortl .at-add
+              .at-addhint .at-grid .at-empty .at-foot
               .at-sess .at-sessh
      card     .at-card .at-covw .at-cov .at-covf .at-cbody .at-ch
               .at-badge (+ .at-steam / .at-manual) .at-meta .at-path
@@ -186,8 +186,6 @@ table tr:hover td{background:rgba(255,255,255,.02)}td.n{font-variant-numeric:tab
   transition:border-color .12s}
 .at-bar select:hover{border-color:#33333c}
 
-.at-btns{display:flex;align-items:center;gap:8px;flex:none;margin-left:auto}
-
 /* --- add panel ------------------------------------------------------------- */
 /* Three-deep grid: label spans, two inputs side by side, actions, then the hint.
    The amber left rule repeats the h1 / nav motif so the panel reads as
@@ -197,37 +195,13 @@ table tr:hover td{background:rgba(255,255,255,.02)}td.n{font-variant-numeric:tab
   border-left:3px solid var(--v);border-radius:var(--r)}
 /* Author display values beat the UA [hidden]{display:none}, so put it back. */
 .at-add[hidden]{display:none}
-.at-addl{grid-column:1/-1;font-size:10px;font-weight:600;letter-spacing:.14em;
-  text-transform:uppercase;color:var(--m);opacity:.85}
 .at-add input{min-width:0;background:var(--p2);color:var(--t);
   border:1px solid var(--line);border-radius:var(--r);padding:8px 10px;
   font:inherit;font-size:13px;outline:0;
   transition:border-color .12s,background .12s}
 .at-add input::placeholder{color:var(--m);opacity:.7}
 .at-add input:focus{border-color:color-mix(in srgb,var(--v) 55%,var(--line));background:var(--p1)}
-.at-add .at-btns{grid-column:1/-1;margin-left:0}
 .at-addhint{grid-column:1/-1;max-width:660px;color:var(--m);font-size:11.5px;line-height:1.5}
-
-/* --- figures --------------------------------------------------------------- */
-/* One leader, three supporters, the way CPU and memory lead the dashboard.
-   The first <div> is #atlasN + #atlasSum and carries the amber rule; the other
-   three are single figures whose <small> reads as a label. */
-.at-stats{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:18px 24px;
-  padding-bottom:22px;margin-bottom:24px;border-bottom:1px solid var(--line)}
-.at-stats>div{display:flex;flex-direction:column;gap:4px;min-width:0}
-/* Figures share a top and a bottom: a value that wraps ("Not measured") must
-   not drop its caption below the others. Collapses to the 4px gap when the
-   cells are exactly as tall as their content. */
-.at-stats>div small{margin-top:auto}
-.at-stats b{font-size:22px;font-weight:650;line-height:1.15;letter-spacing:-.01em;
-  color:var(--hi);font-variant-numeric:tabular-nums}
-.at-stats>div:first-child{position:relative;padding-left:14px}
-.at-stats>div:first-child::before{content:"";position:absolute;left:0;top:2px;
-  bottom:2px;width:3px;background:var(--v)}
-.at-stats>div:first-child b{font-size:38px;letter-spacing:-.02em}
-.at-stats>div:first-child small{font-size:13px;line-height:1.5;color:var(--m)}
-.at-stats>div:not(:first-child) small{font-size:10px;font-weight:600;
-  letter-spacing:.14em;text-transform:uppercase;color:var(--m);opacity:.8}
 
 /* --- grid ------------------------------------------------------------------ */
 .at-grid{display:grid;align-items:stretch;gap:14px;
@@ -379,7 +353,6 @@ table tr:hover td{background:rgba(255,255,255,.02)}td.n{font-variant-numeric:tab
 /* The figure row stays four up for the whole supported range (960 to 1280+):
    at 960 the content column is 680px, so the three support labels wrap to two
    lines, which reads better than a 2x2 that orphans the lead figure. */
-@media(max-width:900px){.at-stats{grid-template-columns:1fr 1fr;gap:14px 24px}}
 
 /* Every ATLAS transition is already .12s. This removes them outright for the OS
    setting; the in-app "Reduce motion" toggle is handled globally by body.rm. */
@@ -868,8 +841,15 @@ table tr:hover td{background:rgba(255,255,255,.02)}td.n{font-variant-numeric:tab
 .at-src small{font:400 11px "Segoe UI",system-ui,sans-serif;color:var(--dim)}
 .at-src-ok .at-srcw{background:rgba(245,166,35,.14);color:var(--amber)}
 .at-src-unreadable .at-srcw,.at-src-failed .at-srcw{background:rgba(239,68,68,.16);color:#F87171}
-.at-srcnotinstalled,.at-src .at-srcw{}
-.at-src-note,.at-srcnote{margin:10px 0 0;font:400 11px/1.5 "Segoe UI",system-ui,sans-serif;color:var(--dim)}
+/* Not installed is entirely normal and a source the user switched off is a
+   choice, not a fault. Both read as "not active" rather than as an error, so they
+   share a muted chip instead of being left unstyled.
+   The class names come from SourceStatus serialised as lowercase, so they are
+   at-src-notinstalled and at-src-disabled - the rule here used to be spelled
+   .at-srcnotinstalled, with no dash, and had an empty body. */
+.at-src-notinstalled .at-srcw,.at-src-disabled .at-srcw{background:rgba(255,255,255,.06);color:var(--m)}
+/* atlas.js emits at-srcnote. The .at-src-note spelling matched nothing. */
+.at-srcnote{margin:10px 0 0;font:400 11px/1.5 "Segoe UI",system-ui,sans-serif;color:var(--dim)}
 /* ---- Store page --------------------------------------------------------
    * The Store page is the Atlas grid with its own header, so it reuses every
    * card, badge and empty state above rather than restating them. Only the

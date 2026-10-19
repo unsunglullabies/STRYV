@@ -3,6 +3,7 @@
 // contains an empty-string key ("packages": { "": ... }), so node does this.
 const fs = require("fs");
 const path = require("path");
+const vm = require("vm");
 
 const ROOT = path.join(__dirname, "..");
 const files = [
@@ -42,7 +43,21 @@ const pkgV = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")
 const lockV = JSON.parse(fs.readFileSync(path.join(ROOT, "package-lock.json"), "utf8")).version;
 const confV = JSON.parse(fs.readFileSync(path.join(ROOT, "src-tauri", "tauri.conf.json"), "utf8")).version;
 const cargoV = (fs.readFileSync(path.join(ROOT, "src-tauri", "Cargo.toml"), "utf8").match(/^version = "([^"]+)"/m) || [])[1];
-const changelogV = (core.match(/const CHANGELOG = \[\{\s*\n\s*v: "([^"]+)"/) || [])[1];
+// Sliced and evaluated rather than regex-matched. The regex expected
+// "CHANGELOG = [{" on one line, but the array opens on its own line - so it never
+// matched, the newest version read as undefined, and this whole check has been
+// exiting 1 while never being run. scripts/release-notes.js already solves this
+// the same way; it is the approach both should use.
+const changelogV = (() => {
+  const marker = "const CHANGELOG = [";
+  const start = core.indexOf(marker);
+  if (start < 0) return undefined;
+  const from = start + marker.length - 1;
+  const to = core.indexOf("];", from);
+  if (to < 0) return undefined;
+  const entries = vm.runInNewContext("(" + core.slice(from, to + 1) + ")");
+  return entries[0] && entries[0].v;
+})();
 
 console.log("");
 console.log("  core.js VERSION   : " + appV);
