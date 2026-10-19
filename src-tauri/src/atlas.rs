@@ -1346,6 +1346,33 @@ pub async fn atlas_launch(appid: String) -> Result<String, String> {
         .map_err(|e| e.to_string())?
 }
 
+/// Starts a Microsoft Store app by its AUMID.
+///
+/// Windows exposes no "launch this package" call other than asking Explorer to
+/// open the shell namespace for it, so this goes through explorer rather than
+/// spawning the executable inside WindowsApps. That folder is protected by ACLs
+/// and is not reliably readable or executable by another process.
+fn shell_activate(name: &str, aumid: &str) -> Result<String, String> {
+    let (family, app) = aumid
+        .split_once('!')
+        .ok_or_else(|| format!("{} has no Store id recorded. Rescan to pick it up again.", name))?;
+    // An AUMID only ever contains letters, digits, dots, dashes and underscores.
+    // Anything else is not an id, and handing it to explorer would be passing
+    // unchecked input to the shell.
+    let plain = |s: &str| {
+        !s.is_empty()
+            && s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+    };
+    if !plain(family) || !plain(app) {
+        return Err(format!("{} has a Store id that Windows would not accept.", name));
+    }
+    std::process::Command::new("explorer.exe")
+        .arg(format!("shell:AppsFolder\\{}", aumid))
+        .spawn()
+        .map_err(|e| format!("Could not reach the Microsoft Store to start {}: {}.", name, e))?;
+    Ok(format!("Started {} through the Microsoft Store.", name))
+}
+
 // The frontend only ever names a library id. The executable is resolved here from
 // ATLAS's own library, so a path can never arrive from the UI.
 #[tauri::command]
@@ -1386,6 +1413,34 @@ pub async fn atlas_launch_id(app: tauri::AppHandle, id: String) -> Result<String
         .find(|i| i.available)
         .cloned()
         .unwrap_or_default();
+
+    // A Microsoft Store entry is started by its AUMID rather than by a path. Its
+    // files live inside WindowsApps, which is ACL-protected and not something
+    // ATLAS can read or run directly.
+    if inst.source_id == "xbox" {
+        let msg = shell_activate(&game.name, &inst.app_id)?;
+        // Windows starts the app itself, so STRYV never gets a process handle.
+        // The launch is recorded and the duration left unmeasured, the same
+        // treatment Steam gets.
+        push_session(&app, &game.id, &game.name, &game.launcher, None, None, None, false);
+        return Ok(msg);
+    }
+
+    // ATLAS reads Epic, GOG and EA, but starting a game through one of those
+    // needs the launcher's own arguments and handshake, not just the path to
+    // the executable. Spawning the .exe would skip all of that and could launch
+    // the game without its anti-cheat or account. The honest answer is to say so.
+    //
+    // This used to live only in the frontend, which meant calling this command
+    // directly would bypass the refusal entirely. The rule belongs here, where
+    // nothing can route around it.
+    if !matches!(inst.source_id.as_str(), "manual" | "standalone" | "") {
+        let who = if inst.source_name.is_empty() { &game.launcher } else { &inst.source_name };
+        return Err(format!(
+            "ATLAS can see this on {} but cannot start games through it yet. Open the launcher to play.",
+            who
+        ));
+    }
 
     if inst.exe_path.is_empty() {
         return Err(format!("{} has no executable recorded. Remove it and add it again.", game.name));

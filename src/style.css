@@ -853,6 +853,16 @@ table tr:hover td{background:rgba(255,255,255,.02)}td.n{font-variant-numeric:tab
 .at-src-unreadable .at-srcw,.at-src-failed .at-srcw{background:rgba(239,68,68,.16);color:#F87171}
 .at-srcnotinstalled,.at-src .at-srcw{}
 .at-src-note,.at-srcnote{margin:10px 0 0;font:400 11px/1.5 "Segoe UI",system-ui,sans-serif;color:var(--dim)}
+/* ---- Store page --------------------------------------------------------
+   * The Store page is the Atlas grid with its own header, so it reuses every
+   * card, badge and empty state above rather than restating them. Only the
+   * header and its subtitle are new.
+   */
+.at-top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:0 0 18px}
+.at-top h2{margin:0 0 4px;font-size:22px;letter-spacing:-.01em}
+.at-sub{margin:0;color:var(--dim,#8a8a95);font-size:12.5px;line-height:1.5;max-width:62ch}
+nav button.pri[data-p=store]{--ac:#5FC26B}
+
 /* ---- ATLAS hero: a banner, not a wall ----
    The featured game used to be a full-bleed block at least 214px tall with a
    25px title and a stacked list of figures under it. On a 760px window that

@@ -5,12 +5,26 @@ const ACCENTS = { Amber: "#F5A623", Cyan: "#38BDF8", Violet: "#8B5CF6" };
 const VERSION = "0.2.9";
 const CHANGELOG = [
   {
-    v: "0.2.9", date: "2026-10-17", tag: "Reading the Right Name",
+    v: "0.2.9", date: "2026-10-17", tag: "The Name On The Box",
     groups: {
       Fixed: [
-        "Every Microsoft Store game was titled Microsoft. A package family name is publisher plus codename - Microsoft.Xbox.Nightingale_8wekyb3d8bbwe is Sea of Thieves - and splitting it on the dot returned the publisher. ATLAS then showed five different games as one card called Microsoft, claiming five copies of a game that does not exist.",
-        "The real title lives with the start app rather than the package, so the two are joined now and the display name is read from there. The AUMID is kept on the install as well, which is what a Store activation needs, so launching through the Store no longer needs a second discovery pass.",
-        "Three tests now pin the rule: that a Store title never comes from the package family, that an AUMID carries both the family and the app, and that the first segment of a family is a publisher rather than a title. Nothing covered the name before, which is how this shipped.",
+        "Every Microsoft Store game was titled Microsoft. A package family name is publisher plus codename - Microsoft.Xbox.Nightingale_8wekyb3d8bbwe is Sea of Thieves - and splitting it on the dot returned the publisher. ATLAS then showed several different titles as one card called Microsoft, claiming copies of a game that does not exist.",
+        "The title was never in that path. A package family is a publisher and a codename, not a name anyone would recognise. The display name lives with the start app, so the two lists are now joined on the package family and the real title is read from there.",
+        "Game Bar is no longer listed as a game. Its package is XboxGamingOverlay, not XboxGameBar, so a deny list written from the Start menu name would not have matched it - and its publisher prefix does not end in a dot, so the filter caught it anyway. Both are fixed, and both are pinned by a test.",
+        "The Xbox store app itself is excluded too. It is the shop window, not something anyone plays.",
+      ],
+      New: [
+        "Store games can be started. ATLAS asks Windows to open them by AUMID, which is what double-clicking the tile in the Start menu does. No launcher needs to be running first, and the launch is recorded the same way a Steam launch is.",
+        "Store games have their own page in the sidebar. They are activated by Windows rather than by a path on disk, so mixing them into the library grid made it hard to tell what could be played and what could only be opened elsewhere.",
+      ],
+      Limits: [
+        "Windows puts no flag on a Store package saying whether it is a game. ATLAS lists publishers known to ship games and skips the rest, so a game from a publisher not on that list will not appear. A short list that is right beats a complete list that is wrong.",
+        "A PC with no Store games installed shows an empty Store page saying exactly that, rather than a library full of Calculator and Notepad.",
+      ],
+      Housekeeping: [
+        "The rule about what ATLAS may launch now lives in the backend rather than only in the interface. It used to be enforced in the frontend alone, so calling the launch command directly would have started an Epic game by running its executable - skipping the launcher arguments, and possibly its anti-cheat. The backend refuses now, and there is nothing to route around it.",
+        "A stale test expectation for a function that was refactored away in an early ATLAS release was removed, and a source count that was hardcoded now reads from the fixture so adding a launcher cannot break it.",
+        "The Store publisher lists are slices rather than fixed-size arrays, so editing one cannot leave a length that no longer matches.",
       ],
       Signature: [
         "Signed, like every STRYV release. STRYV checks the published release feed, downloads the installer, and verifies its signature against the key built into the app before running it.",
@@ -324,7 +338,7 @@ function go(p) {
   document.querySelectorAll("[data-p]").forEach((b) => b.classList.toggle("on", b.dataset.p === p));
   document.querySelectorAll(".page").forEach((s) => s.classList.toggle("on", s.id === p));
   if (p === "whatsnew") renderNews(); if (p === "activity") renderActivity(); if (p === "optimizations" && typeof Opt !== "undefined") Opt.load();
-  if (p === "atlas" && typeof Atlas !== "undefined") Atlas.scan();
+  if ((p === "atlas" || p === "store") && typeof Atlas !== "undefined") Atlas.scan();
   if (typeof Sensors !== "undefined") { if (p === "network") Sensors.poll(); else setTimeout(Sensors.poll, 0); }
   document.querySelector("main").scrollTop = 0;
 }

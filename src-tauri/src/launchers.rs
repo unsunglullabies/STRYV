@@ -406,9 +406,15 @@ impl Source for EaSource {
 // The list is local and editable. It is not fetched, and ATLAS has no network code
 // in this path.
 
-const XBOX_GAME_PREFIXES: [&str; 12] = [
-    "Microsoft.Xbox",
-    "Microsoft.ZenStudio",
+const XBOX_GAME_PREFIXES: &[&str] = &[
+    // The trailing dot is load-bearing. Without it "Microsoft.Xbox" also matched
+    // "Microsoft.XboxGamingOverlay", which is the Game Bar overlay rather than a
+    // game, and it turned up in the library titled "Game Bar".
+    "Microsoft.Xbox.",
+    // Solitaire ships as "Microsoft.MicrosoftSolitaireCollection", so matching on
+    // "Microsoft.Solitaire" alone would miss it.
+    "Microsoft.Solitaire",
+    "Microsoft.MicrosoftSolitaireCollection",
     "Minecraft",
     "SeaofThieves",
     "MinecraftLauncher",
@@ -420,6 +426,46 @@ const XBOX_GAME_PREFIXES: [&str; 12] = [
     "Ubisoft.",
     "TripleAxis.",
 ];
+
+/// Xbox and Store families that share a game publisher but are not games.
+/// Checked before the prefix list, because a prefix cannot tell them apart.
+const XBOX_NOT_GAMES: &[&str] = &[
+    // The Game Bar's real package name. It is XboxGamingOverlay, not XboxGameBar -
+    // the name in the Start menu is "Game Bar", which is what made it look like a
+    // game that had simply been mis-titled.
+    "Microsoft.XboxGamingOverlay",
+    // The Xbox app itself: the store front, not something anyone plays.
+    "Microsoft.GamingApp",
+    "Microsoft.XboxIdentityProvider",
+    "Microsoft.XboxGameStreaming",
+    "Microsoft.XboxAriaSyntheticHandInputDriver",
+    "Microsoft.XboxGip",
+    "Microsoft.XboxSpeech",
+    "Microsoft.XboxNetworkedStorage",
+    "Microsoft.XboxDevices",
+    "Microsoft.XboxSoftwareRepair",
+];
+
+/// Whether a package family is a game ATLAS should list.
+///
+/// Windows puts no flag on a package saying whether it is a game, so this is a
+/// judgement made from the publisher: publishers known to ship games, minus the
+/// Microsoft packages that share those publishers but are not games. A short
+/// list that is right beats a complete list that is wrong.
+pub fn is_store_game(family: &str) -> bool {
+    // A package family carries a version suffix after an underscore.
+    let bare = family.split('_').next().unwrap_or(family);
+    if bare.is_empty() {
+        return false;
+    }
+    if XBOX_NOT_GAMES
+        .iter()
+        .any(|bad| bare == *bad || bare.starts_with(&format!("{}.", bad)))
+    {
+        return false;
+    }
+    XBOX_GAME_PREFIXES.iter().any(|pre| bare.starts_with(pre))
+}
 
 /// Xbox / Microsoft Store, read through the same Windows APIs the Start menu uses.
 ///
@@ -480,7 +526,7 @@ impl Source for XboxSource {
             // Only known game publishers. Everything else in the start menu is
             // Word and Paint, and a games library full of those would look
             // complete while being wrong.
-            if !XBOX_GAME_PREFIXES.iter().any(|pre| family.starts_with(pre)) {
+            if !is_store_game(family) {
                 continue;
             }
             if !Path::new(dir).is_dir() {
@@ -650,15 +696,37 @@ mod tests {
     #[test]
     fn only_known_game_publishers_are_treated_as_store_games() {
         // The list is what stops a games library filling up with Calculator.
-        assert!(XBOX_GAME_PREFIXES.iter().any(|p| "Microsoft.Xbox.Nightingale".starts_with(p)));
-        assert!(XBOX_GAME_PREFIXES.iter().any(|p| "Minecraft.UWP".starts_with(p)));
+        assert!(is_store_game("Microsoft.Xbox.Nightingale_8wekyb3d8bbwe"));
+        assert!(is_store_game("Minecraft.UWP_8wekyb3d8bbwe"));
         for not_a_game in ["Microsoft.WindowsCalculator", "Microsoft.WindowsNotepad", "Microsoft.MSPaint"] {
-            assert!(
-                !XBOX_GAME_PREFIXES.iter().any(|p| not_a_game.starts_with(p)),
-                "{} must not be counted as a game",
-                not_a_game
-            );
+            assert!(!is_store_game(not_a_game), "{} must not be counted as a game", not_a_game);
         }
+    }
+
+    #[test]
+    fn the_game_bar_is_not_a_game() {
+        // The Game Bar is an overlay widget that ships on every Xbox PC. It sits
+        // on the Microsoft.Xbox publisher, so a prefix match without the trailing
+        // dot pulled it into the library and it showed up as a card called
+        // "Game Bar". This is the regression that put it there.
+        // The first of these was the real one. Its Start menu name is "Game Bar",
+        // while its package is "XboxGamingOverlay" - so a filter written from the
+        // Start menu name would not have matched it.
+        for widget in [
+            "Microsoft.XboxGamingOverlay_8wekyb3d8bbwe",
+            "Microsoft.GamingApp_8wekyb3d8bbwe",
+            "Microsoft.XboxIdentityProvider_8wekyb3d8bbwe",
+            "Microsoft.XboxGameStreaming_8wekyb3d8bbwe",
+            "Microsoft.XboxAriaSyntheticHandInputDriver_8wekyb3d8bbwe",
+            "Microsoft.XboxSpeech_8wekyb3d8bbwe",
+        ] {
+            assert!(!is_store_game(widget), "{} is not a game", widget);
+        }
+        // And the real thing on the same publisher must survive the deny list.
+        assert!(
+            is_store_game("Microsoft.Xbox.Nightingale_8wekyb3d8bbwe"),
+            "the deny list must not take real Xbox games with it"
+        );
     }
 
 

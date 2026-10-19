@@ -144,13 +144,16 @@ const hasBackend = () => typeof invoke === "function";
   }
 
   // ---- filtering and sorting ---------------------------------------------------
-  const visible = () => {
+  const visible = (only) => {
     const qtext = (E("atlasQ") && E("atlasQ").value || "").trim().toLowerCase();
+    // An override lets the Store page show one source without the Atlas toolbar
+    // adopting that filter behind the user's back.
+    const want = only || filters.source;
     return games.filter((g) => {
       if (filters.favOnly && !g.favorite) return false;
       if (filters.missingOnly && g.available !== false) return false;
       if (filters.kind && String(g.kind || "game") !== filters.kind) return false;
-      if (filters.source && !(Array.isArray(g.sources) && g.sources.includes(filters.source))) return false;
+      if (want && !(Array.isArray(g.sources) && g.sources.includes(want))) return false;
       if (!qtext) return true;
       return [g.name, g.launcher, g.install_dir, g.exe_path].some((v) => String(v || "").toLowerCase().includes(qtext));
     });
@@ -227,6 +230,15 @@ const byId = (id) => games.find((g) => g.id === id);
   // class the stylesheet and the rest of the UI already use.
   const badgeCls = (g) => (srcOf(g) === "standalone" ? "manual" : srcOf(g));
 
+  // The Store id of the first install that is actually on disk. An entry can hold
+  // several installs and only some are present, so the first available one is the
+  // one Windows would be asked to start.
+  const storeIdOf = (g) => {
+    if (!g || !Array.isArray(g.installs) || !g.installs.length) return "";
+    const inst = g.installs.find((i) => i && i.available) || g.installs[0];
+    return String((inst && inst.app_id) || "");
+  };
+
   // Launchability is worked out here, from the data already on the game, rather
   // than trusting a flag the backend computed. The backend does compute one, but
   // a store written before that field existed - or any scan that skips it - would
@@ -243,6 +255,13 @@ function cannotLaunch(g) {
     }
     if (/steam/i.test(g.launcher)) {
       if (!g.app_id || !/^\d+$/.test(String(g.app_id))) return "Steam has no app id for this entry.";
+      return null;
+    }
+    // A Store entry is started by Windows from its AUMID, which is the same
+    // thing double-clicking the tile in the Start menu does. No launcher needs to
+    // be running first, so this is not one of the refusals below.
+    if (srcOf(g) === "xbox") {
+      if (!storeIdOf(g)) return "This Store entry has no Store id recorded. Rescan to pick it up again.";
       return null;
     }
     // Detected from a launcher, but not hand-added, and not Steam. ATLAS reads
@@ -304,10 +323,10 @@ function cannotLaunch(g) {
     </article>`;
   }
 
-  function renderGrid() {
-    const list = sorted(visible());
-    const grid = E("atlasGrid");
-    const empty = E("atlasEmpty");
+  function renderGrid(hostId, emptyId, only) {
+    const list = sorted(visible(only));
+    const grid = E(hostId || "atlasGrid");
+    const empty = E(emptyId || "atlasEmpty");
     if (grid) grid.innerHTML = list.map(card).join("");
     if (grid) wireArt(grid);
 
@@ -329,6 +348,14 @@ function cannotLaunch(g) {
         <p>STRYV reads the library files your launchers have already written. If a game is not listed, add it yourself and ATLAS will launch it directly.</p>
         <button class="btn" data-emptyadd="1">Add a game</button>`;
 } else if (!list.length) {
+      // The Store page cannot offer "add a game" the way Atlas does: a hand-added
+      // entry is not a Store entry and would never be launchable through Windows.
+      if (only === "xbox") {
+        state = `<b>No Store games found.</b>
+          <p>Windows puts nothing on a package saying whether it is a game, so ATLAS lists only Store titles published by known game publishers. A game from a publisher not on that list will not appear here.</p>`;
+        if (empty) { empty.innerHTML = state; show(emptyId || "atlasEmpty", !!state); }
+        return;
+      }
       const term = ((E("atlasQ") && E("atlasQ").value) || "").trim();
       const filtered = filters.favOnly || filters.missingOnly || term;
       // Echoes what was searched for and how big the library actually is, so a
@@ -340,7 +367,7 @@ function cannotLaunch(g) {
         : `<b>No games found yet.</b><p>Add a game and ATLAS will keep it, launch it, and record how long it runs.</p>
            <button class="btn" data-emptyadd="1">Add a game</button>`;
     }
-    if (empty) { empty.innerHTML = state; show("atlasEmpty", !!state); }
+    if (empty) { empty.innerHTML = state; show(emptyId || "atlasEmpty", !!state); }
     const ea = empty && typeof empty.querySelector === "function" ? empty.querySelector("[data-emptyadd]") : null;
     if (ea) ea.onclick = () => openAdd();
     const rs = empty && typeof empty.querySelector === "function" ? empty.querySelector("[data-reset]") : null;
@@ -429,6 +456,7 @@ const launchers = [...new Set(games.map((g) => g.launcher))].filter(Boolean);
     renderSessions();
     renderSources();
     renderFacets();
+    renderStore();
     const restored = ST.get("atlas.removed", false);
     show("atlasRestore", !!restored);
     const active = filters.favOnly || filters.missingOnly || filters.kind || filters.source || ((E("atlasQ") && E("atlasQ").value || "").trim());
@@ -853,6 +881,48 @@ on("atlasRestore", "click", async () => {
     });
   }
 
+  // ---- Store tab --------------------------------------------------------------
+  // Store games get their own page rather than sharing the Atlas grid. Windows
+  // starts them rather than a path on disk, so they behave differently enough to
+  // be worth separating: one list to look at, one way to open them.
+  function mountStore() {
+    if (typeof document === "undefined" || !document.body) return;
+    const main = document.querySelector("main");
+    if (!main || E("store")) return;
+
+    const sec = document.createElement("section");
+    sec.className = "page at-page";
+    sec.id = "store";
+    sec.innerHTML = `
+      <header class="at-top">
+        <div class="at-heroin">
+          <h2>Xbox / Store</h2>
+          <p class="at-sub">Games you own on the Microsoft Store. Windows starts these itself, so ATLAS does not need the launcher open first.</p>
+        </div>
+        <button class="btn" id="storeScan">Rescan</button>
+      </header>
+      <div class="at-grid" id="storeGrid"></div>
+      <p class="at-empty" id="storeEmpty" hidden></p>`;
+    main.appendChild(sec);
+    on("storeScan", "click", () => scan(true));
+
+    const anchor = document.querySelector('#nav button[data-p="atlas"]');
+    if (anchor) {
+      const b = document.createElement("button");
+      b.className = "pri xbox";
+      b.dataset.p = "store";
+      b.innerHTML = '<i class="pt"><svg viewBox="0 0 24 24"><path d="M4 6.5h16v11H4z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M9.5 9.5v5M9.5 12h3.2M15 9.5v5"/></svg></i><span>Store<small>Xbox games</small></span>';
+      b.onclick = () => go("store");
+      anchor.after(b);
+    }
+    if (typeof PAGES !== "undefined" && !PAGES.includes("store")) PAGES.push("store");
+  }
+
+  function renderStore() {
+    if (!E("storeGrid")) return;
+    renderGrid("storeGrid", "storeEmpty", "xbox");
+  }
+
   // Restore the persisted view preferences once the DOM is ready.
   const boot = () => {
     const qe = E("atlasQ"); if (qe) qe.value = ST.get("atlas.q", "");
@@ -863,5 +933,10 @@ on("atlasRestore", "click", async () => {
     else boot();
   }
 
-  return { scan, launch, render, openDetail, closeDetail, openAdd, openEdit, resetAll };
+  if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mountStore);
+    else mountStore();
+  }
+
+  return { scan, launch, render, renderStore, openDetail, closeDetail, openAdd, openEdit, resetAll };
 })();

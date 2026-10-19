@@ -68,7 +68,9 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 // Every id the ATLAS page declares in src/index.html. A missing one here means
 // the test is checking less than the real page has.
 const IDS = [
-  "atlasHeroStat", "atlasAdd", "atlasScan", "atlasFeature", "atlasQ", "atlasSort", "atlasFavOnly", "atlasMissingOnly", "atlasReset", "atlasGrid", "atlasEmpty", "atlasNote", "atlasRestore", "atlasSessClr", "atlasSess", "atlasAddBox", "atlasAddTitle", "atlasAddNo", "atlasName", "atlasExe", "atlasPickExe", "atlasArt", "atlasPickArt", "atlasAddNo2", "atlasAddGo", "atlasEditBox", "atlasEditTitle", "atlasEditNo", "atlasEditName", "atlasEditExe", "atlasPickExe2", "atlasEditArt", "atlasPickArt2", "atlasClearArt", "atlasEditNo2", "atlasEditSave", "atlasDetailWrap", "atlasDetail", "atlasFacets"];
+  "atlasHeroStat", "atlasAdd", "atlasScan", "atlasFeature", "atlasQ", "atlasSort", "atlasFavOnly", "atlasMissingOnly", "atlasReset", "atlasGrid", "atlasEmpty", "atlasNote", "atlasRestore", "atlasSessClr", "atlasSess", "atlasAddBox", "atlasAddTitle", "atlasAddNo", "atlasName", "atlasExe", "atlasPickExe", "atlasArt", "atlasPickArt", "atlasAddNo2", "atlasAddGo", "atlasEditBox", "atlasEditTitle", "atlasEditNo", "atlasEditName", "atlasEditExe", "atlasPickExe2", "atlasEditArt", "atlasPickArt2", "atlasClearArt", "atlasEditNo2", "atlasEditSave", "atlasDetailWrap", "atlasDetail", "atlasFacets",
+    // Built by mountStore() at runtime, so they are absent from index.html.
+    "storeGrid", "storeEmpty", "storeScan"];
 
 function makeEl(dataset) {
   const el = {
@@ -153,7 +155,7 @@ function gridEl() {
 function makeEnv(games, invokeImpl, opts) {
   const o = opts || {};
   const els = {};
-  for (const id of IDS) els[id] = id === "atlasGrid" ? gridEl() : id === "atlasFacets" ? facetsEl() : makeEl();
+  for (const id of IDS) els[id] = (id === "atlasGrid" || id === "storeGrid") ? gridEl() : id === "atlasFacets" ? facetsEl() : makeEl();
   els.atlasNote.textContent = NOTE;
   // Anything the page ships with the hidden attribute starts hidden, so the fake
   // DOM never starts more open than the real one.
@@ -1024,7 +1026,10 @@ check("a failed scan never prints a size total of zero", !/<b>0(\.0)? (B|KB|MB|G
     check("the facet bar is shown", els.atlasFacets.hidden === false);
     check("it offers the sources that were actually found", /data-facet="source"/.test(facets) && /data-val="steam"/.test(facets) && /data-val="standalone"/.test(facets));
     check("it offers the kinds present in the library", /data-facet="kind"/.test(facets) && /data-val="game"/.test(facets) && /data-val="application"/.test(facets) && /data-val="tool"/.test(facets));
-    check("it offers no source that was not found", (facets.match(/data-facet=\"source\"/g) || []).length === 2);
+    const wantSources = new Set(FIXTURE.games.flatMap((g) => g.sources || [])).size;
+    check("it offers no source that was not found",
+    (facets.match(/data-facet=\"source\"/g) || []).length === wantSources,
+    "counted against the fixture, so adding a source cannot make this go stale");
 
     const before = (grid.match(/at-card/g) || []).length;
     const kindChip = els.atlasFacets.querySelector('[data-facet="kind"][data-val="application"]');
@@ -1059,6 +1064,63 @@ check("a failed scan never prints a size total of zero", !/<b>0(\.0)? (B|KB|MB|G
     Atlas.openDetail("steam:431960");
     check("the kind is stated in the detail panel too", /<dt>Kind<\/dt><dd>application<\/dd>/.test(els.atlasDetail.innerHTML));
     check("a single install is headed Install, not Installs", /<h4>Install<\/h4>/.test(els.atlasDetail.innerHTML) && !/<h4>Installs<\/h4>/.test(els.atlasDetail.innerHTML));
+  }
+
+  // ---- Store page and Store launching ---------------------------------------
+  {
+    // Each block builds its own environment, like every other one here.
+    const { Atlas, els } = makeEnv(FIXTURE.games, backend());
+    await Atlas.scan(false);
+    await flush();
+    const store = FIXTURE.games.find((g) => (g.sources || []).includes("xbox"));
+    check("the fixture carries a Store game", !!store);
+    check("it has the real title, not a package codename", store && store.name === "Sea of Thieves");
+    check("it keeps the AUMID", store && /!/.test(store.app_id || ""));
+
+    Atlas.openDetail(store.id);
+    const d = els.atlasDetail.innerHTML;
+    check("a Store game gets a Play button", /data-play=/.test(d));
+    check(
+      "and that Play button is not disabled",
+      !/data-play="[^"]*"\s+disabled/.test(d),
+      "a Store game is started by Windows from its AUMID, so it can launch"
+    );
+    check("the Store is named on the entry", /Xbox \/ Store/.test(d));
+    Atlas.closeDetail();
+
+    Atlas.renderStore();
+    const sg = els.storeGrid.innerHTML;
+    check("the Store page renders", sg.length > 0);
+    check(
+      "it lists the Store game",
+      /Sea of Thieves/.test(sg),
+      "the Store page is its own list, not a filtered copy of the whole library"
+    );
+    check(
+      "and does not list non-Store games",
+      !/Rainbow Six/.test(sg),
+      "an Xbox title next to Steam ones is the confusion this tab exists to remove"
+    );
+  }
+
+  // The Game Bar's package is "XboxGamingOverlay", not "XboxGameBar". A deny list
+  // written from the Start menu name would not have matched it, which is how it
+  // shipped as a card titled "Game Bar".
+  {
+    const rs = fs.readFileSync(path.join(ROOT, "src-tauri", "src", "launchers.rs"), "utf8");
+    check("the Game Bar is denied by its real package name", /"Microsoft\.XboxGamingOverlay"/.test(rs));
+    check("the Xbox store app is denied as well", /"Microsoft\.GamingApp"/.test(rs));
+    check(
+      "the Xbox allow prefix keeps its trailing dot",
+      /"Microsoft\.Xbox\."/.test(rs),
+      "without the dot it matches the overlay too"
+    );
+    check("the overlay appears in a regression test", /XboxGamingOverlay_8wekyb3d8bbwe/.test(rs));
+  }
+
+  {
+    const core = fs.readFileSync(path.join(ROOT, "src", "core.js"), "utf8");
+    check("go() refreshes the Store page", /p === "atlas" \|\| p === "store"/.test(core));
   }
 
   console.log("\n" + pass + " passed, " + fail + " failed");

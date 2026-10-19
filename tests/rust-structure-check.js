@@ -60,7 +60,6 @@ const need = [
   "fn aery_set_pinned",
   "fn aery_set_folder",
   "fn merge_library",
-  "fn detected_games",
   "fn push_session",
   "fn steam_start",
   "fn read_atlas",

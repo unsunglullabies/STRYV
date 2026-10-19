@@ -19,6 +19,41 @@
       "total_secs": 4520
     },
     {
+      "id": "xbox:Microsoft.Xbox.Nightingale_8wekyb3d8bbwe",
+      "launcher": "Xbox / Store",
+      "app_id": "Microsoft.Xbox.Nightingale_8wekyb3d8bbwe!Nightingale",
+      "name": "Sea of Thieves",
+      "install_dir": "C:\\Program Files\\WindowsApps\\Microsoft.Xbox.Nightingale_8wekyb3d8bbwe",
+      "exe_path": "",
+      "size_bytes": 0,
+      "last_played": 1792033906,
+      "source": "detected",
+      "favorite": false,
+      "hidden": false,
+      "plays": 1,
+      "last_launch": 1792033000,
+      "last_session_secs": null,
+      "total_secs": 0,
+      "kind": "game",
+      "sources": [
+        "xbox"
+      ],
+      "multi_install": false,
+      "installs": [
+        {
+          "source_id": "xbox",
+          "source_name": "Xbox / Store",
+          "app_id": "Microsoft.Xbox.Nightingale_8wekyb3d8bbwe!Nightingale",
+          "install_dir": "C:\\Program Files\\WindowsApps\\Microsoft.Xbox.Nightingale_8wekyb3d8bbwe",
+          "exe_path": "",
+          "size_bytes": 0,
+          "last_played": 1792033906,
+          "kind": "game",
+          "available": true
+        }
+      ]
+    },
+    {
       "id": "steam:228980",
       "launcher": "Steam",
       "app_id": "228980",
