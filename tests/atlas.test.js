@@ -324,7 +324,7 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
     check("every cover src is a plain Steam CDN url",
       srcs(grid).every((s) => /^https:\/\/cdn\.cloudflare\.steamstatic\.com\/steam\/apps\/\d{1,12}\/header\.jpg$/.test(s)));
     check("no cover src carries a quote or angle bracket", !srcs(grid).some((s) => /[<>"']/.test(s)));
-    check("a poisoned app id gets no cover at all", imgs(poison).length === 0 && /at-covf/.test(poison));
+    check("a poisoned app id gets no cover at all", imgs(poison).length === 0 && /at-tile/.test(poison));
     check("a poisoned app id is told it is not a Steam entry", /Steam has no app id for this entry/.test(poison));
     check("a poisoned app id never reaches the markup raw", !poison.includes(POISON.app_id));
         check("a poisoned app id cannot be launched", /data-play="[^"]+" disabled/.test(poison));
@@ -342,7 +342,12 @@ const POISON = FIXTURE.games.find((g) => /[<>]/.test(g.app_id));
     check("every Steam entry with a decimal app id gets a cover",
     covers.length === FIXTURE.games.filter((g) => /steam/i.test(g.launcher) && /^\d{1,12}$/.test(String(g.app_id))).length);
     check("every cover has an error handler", covers.every((i) => typeof i.onerror === "function"));
-    check("a hand-added entry says it has no cover art", /No cover art/.test(cardFor(els.atlasGrid.innerHTML, "Hollow Knight")));
+    const hollow = cardFor(els.atlasGrid.innerHTML, "Hollow Knight");
+    check("a hand-added entry falls back to a letter tile", /at-tile/.test(hollow));
+    check("and the tile carries the title's first letter", /<span>H<\/span>/.test(hollow),
+    "a letter tile with no letter would be a grey box again");
+    check("the tile is not an image request", !/<img[^>]*at-cov/.test(hollow),
+    "there is nothing to fetch for an entry with no artwork");
     check("a cover is lazy and sends no referrer", /loading="lazy"/.test(els.atlasGrid.innerHTML) && /referrerpolicy="no-referrer"/.test(els.atlasGrid.innerHTML));
 
     const replaced = [];
@@ -1121,6 +1126,72 @@ check("a failed scan never prints a size total of zero", !/<b>0(\.0)? (B|KB|MB|G
   {
     const core = fs.readFileSync(path.join(ROOT, "src", "core.js"), "utf8");
     check("go() refreshes the Store page", /p === "atlas" \|\| p === "store"/.test(core));
+  }
+
+  // ---- QOL: letter tiles, launcher buttons, the Store button -----------------
+  {
+    const { Atlas, els } = makeEnv(FIXTURE.games, backend());
+    await Atlas.scan(false);
+    await flush();
+
+    const hollow = cardFor(els.atlasGrid.innerHTML, "Hollow Knight");
+    check("an entry with no artwork gets a letter tile", /at-tile/.test(hollow));
+    check("the tile carries the title's first letter", /<span>H<\/span>/.test(hollow));
+
+    // The tile is derived from the title, so two entries cannot look alike.
+    const tiles = [...els.atlasGrid.innerHTML.matchAll(/--th:(\d+)/g)].map((m) => m[1]);
+    check("tiles carry a hue derived from the title", tiles.length > 0 && tiles.every((h) => /^\d+$/.test(h)));
+    check("no two tiles share a hue", new Set(tiles).size === tiles.length,
+      "the same grey box on every card was the thing being fixed");
+  }
+
+  {
+    // A launcher ATLAS can open but not start games through offers the button.
+    // The backend mock answers from FIXTURE.games, so a derived list has to be
+    // passed through the `over` hook rather than handed to makeEnv and ignored.
+    const withEpic = FIXTURE.games
+      .map((g) => (g.launcher === "Steam" ? { ...g, sources: ["epic"], launcher: "Epic Games" } : g));
+    const { Atlas, els } = makeEnv(FIXTURE.games, backend({
+      atlas_scan: () => JSON.parse(JSON.stringify(withEpic)),
+    }));
+    await Atlas.scan(false);
+    await flush();
+    const card = cardFor(els.atlasGrid.innerHTML, "Tom Clancy's Rainbow Six Siege");
+    const dbg = els.atlasGrid.innerHTML.match(/Epic Games/g) || [];
+    check("an Epic entry offers to open the launcher", /data-open-launcher/.test(card));
+    check("the button names the launcher", /Open Epic Games/.test(card));
+    check("its Play button is still disabled", /data-play="[^"]*"\s+disabled/.test(card),
+      "opening the launcher is not the same as starting the game");
+  }
+
+  {
+    const rs = fs.readFileSync(path.join(ROOT, "src-tauri", "src", "atlas.rs"), "utf8");
+    check("opening a launcher is its own command", /fn atlas_open_launcher/.test(rs));
+    check("and so is opening the Store", /fn atlas_open_store/.test(rs));
+    check("the launcher command is not the launch command",
+      /atlas_open_launcher/.test(rs) && /fn atlas_launch_id/.test(rs),
+      "starting a client and starting a game have to stay separable");
+  }
+
+  {
+    // The release notes come from the app's own changelog, so the release page
+    // and the app cannot say different things.
+    const { execFileSync } = require("child_process");
+    let notes = "";
+    try {
+      notes = execFileSync(process.execPath, [path.join(ROOT, "scripts", "release-notes.js")], {
+        cwd: ROOT,
+        encoding: "utf8",
+      });
+    } catch (e) {
+      notes = "";
+    }
+    check("the release notes script runs", !!notes.trim());
+    check("they are markdown, not a link", notes.includes("## ") && notes.includes("- "));
+    check("they name the version", /^## 0\.2\.9/.test(notes.trim()));
+    check("they carry the QOL group", /\*\*Quality of life\*\*/.test(notes));
+    check("they are not a link away from the notes", !/\[.*\]\(.*CHANGELOG.*\)/i.test(notes),
+      "the point was that the release body IS the notes");
   }
 
   console.log("\n" + pass + " passed, " + fail + " failed");

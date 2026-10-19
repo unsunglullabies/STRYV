@@ -1346,6 +1346,50 @@ pub async fn atlas_launch(appid: String) -> Result<String, String> {
         .map_err(|e| e.to_string())?
 }
 
+/// Opens the Microsoft Store itself.
+///
+/// Not a game launch: it is the shop front, reached through the same shell
+/// protocol a Start menu shortcut uses. Offered on an empty Store page, where the
+/// honest message is that nothing was found and the useful reply is to go and find
+/// something.
+#[tauri::command]
+pub async fn atlas_open_store() -> Result<String, String> {
+    std::process::Command::new("explorer.exe")
+        .arg("ms-windows-store:")
+        .spawn()
+        .map_err(|e| format!("Could not open the Microsoft Store: {}.", e))?;
+    Ok("Opened the Microsoft Store.".to_string())
+}
+
+/// Opens a launcher's own client, without starting any game through it.
+///
+/// Deliberately separate from `atlas_launch_id`. Starting a launcher is safe: it
+/// is an ordinary desktop app, and it does the per-game handshake itself once you
+/// click Play inside it. Starting a game by running its executable is not, which is
+/// why that path refuses.
+#[tauri::command]
+pub async fn atlas_open_launcher(source_id: String) -> Result<String, String> {
+    let id = source_id.trim().to_lowercase();
+    let name = match id.as_str() {
+        "epic" => "Epic Games Launcher",
+        "gog" => "GOG Galaxy",
+        "ea" => "EA app",
+        other => {
+            return Err(format!("{} has no launcher ATLAS can open.", other));
+        }
+    };
+    let exe = crate::launchers::launcher_client(&id).ok_or_else(|| {
+        format!(
+            "{} was not found in its usual place. Open it from your Start menu instead.",
+            name
+        )
+    })?;
+    std::process::Command::new(&exe)
+        .spawn()
+        .map_err(|e| format!("Could not open {}: {}.", name, e))?;
+    Ok(format!("Opened {}.", name))
+}
+
 /// Starts a Microsoft Store app by its AUMID.
 ///
 /// Windows exposes no "launch this package" call other than asking Explorer to

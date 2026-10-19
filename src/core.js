@@ -8,24 +8,30 @@ const CHANGELOG = [
     v: "0.2.9", date: "2026-10-17", tag: "The Name On The Box",
     groups: {
       Fixed: [
-        "Every Microsoft Store game was titled Microsoft. A package family name is publisher plus codename - Microsoft.Xbox.Nightingale_8wekyb3d8bbwe is Sea of Thieves - and splitting it on the dot returned the publisher. ATLAS then showed several different titles as one card called Microsoft, claiming copies of a game that does not exist.",
+        "Every Microsoft Store game was titled Microsoft. A package family name is publisher plus codename - Microsoft.Xbox.Nightingale_8wekyb3d8bbwe is Sea of Thieves - and splitting it on the dot returned the publisher. ATLAS then folded several different titles into one card called Microsoft, claiming copies of a game that does not exist.",
         "The title was never in that path. A package family is a publisher and a codename, not a name anyone would recognise. The display name lives with the start app, so the two lists are now joined on the package family and the real title is read from there.",
-        "Game Bar is no longer listed as a game. Its package is XboxGamingOverlay, not XboxGameBar, so a deny list written from the Start menu name would not have matched it - and its publisher prefix does not end in a dot, so the filter caught it anyway. Both are fixed, and both are pinned by a test.",
+        "Game Bar is no longer listed as a game. Two things were wrong in one line: its publisher prefix had no trailing dot, so it matched the overlay, and the deny list named the package XboxGameBar when the package is actually XboxGamingOverlay. A filter written from the Start menu name would never have matched it. Both are fixed and both are pinned by a test.",
         "The Xbox store app itself is excluded too. It is the shop window, not something anyone plays.",
-        "The sidebar scrolls and says so. It already had overflow-y:auto, but the scrollbar was hidden outright, so once the nav outgrew the panel it scrolled invisibly and read as a list that was simply cut off. There is now a thin scrollbar that strengthens on hover, and a wheel gesture over the nav no longer scrolls the page behind it.",
+        "The sidebar scrolls and says so. It already had overflow-y:auto, but the scrollbar was hidden outright, so once the nav outgrew the panel it scrolled invisibly and read as a list that had simply been cut off.",
       ],
       New: [
         "Store games can be started. ATLAS asks Windows to open them by AUMID, which is what double-clicking the tile in the Start menu does. No launcher needs to be running first, and the launch is recorded the same way a Steam launch is.",
-        "Store games have their own page in the sidebar. They are activated by Windows rather than by a path on disk, so mixing them into the library grid made it hard to tell what could be played and what could only be opened elsewhere.",
+        "Store games have their own page in the sidebar. They are activated by Windows rather than by a path on disk, so mixing them into the library grid made it hard to tell what could be played and what could only be opened somewhere else.",
+        "Epic, GOG and EA entries now offer to open the launcher. Starting a launcher client is safe - it is an ordinary desktop app that does its own per-game handshake - so the refusal no longer tells you to go open something it gives you no way to open. Starting the game by running its executable still refuses, and that refusal now lives in the backend where it cannot be routed around.",
+      ],
+      "Quality of life": [
+        "Games with no artwork get a letter tile instead of the same grey box. Store games have no cover art at all, so a page of them looked like a page of nothing. The tile takes the first letter of the title on a colour derived from it, which makes it obvious at a glance which card is which - and it is not pretending to be artwork.",
+        "An empty Store page now offers to open the Microsoft Store. A PC with no Store games should not be left staring at a dead end.",
+        "The sidebar has a thin scrollbar that strengthens on hover, stops a wheel gesture over it from scrolling the page behind, and can no longer spill sideways.",
+        "Release notes now reach you properly. The updater manifest shipped with an empty notes field on every release, because the workflow never set it, and the GitHub release body was a list of commit hashes from --generate-notes. Both are now generated from this changelog, so the release page and the app cannot disagree, and the body is the actual text rather than a link somewhere else.",
       ],
       Limits: [
         "Windows puts no flag on a Store package saying whether it is a game. ATLAS lists publishers known to ship games and skips the rest, so a game from a publisher not on that list will not appear. A short list that is right beats a complete list that is wrong.",
-        "A PC with no Store games installed shows an empty Store page saying exactly that, rather than a library full of Calculator and Notepad.",
+        "Launching a launcher is not the same as launching a game through it. ATLAS opens Epic, GOG and EA so you can click Play yourself, because guessing the arguments a launcher needs would be worse than not trying.",
       ],
       Housekeeping: [
-        "The rule about what ATLAS may launch now lives in the backend rather than only in the interface. It used to be enforced in the frontend alone, so calling the launch command directly would have started an Epic game by running its executable - skipping the launcher arguments, and possibly its anti-cheat. The backend refuses now, and there is nothing to route around it.",
-        "A stale test expectation for a function that was refactored away in an early ATLAS release was removed, and a source count that was hardcoded now reads from the fixture so adding a launcher cannot break it.",
-        "The Store publisher lists are slices rather than fixed-size arrays, so editing one cannot leave a length that no longer matches.",
+        "A stale test expectation for a function refactored away in an early ATLAS release was removed, and a source count that was hardcoded now reads from the fixture so adding a launcher cannot break it.",
+        "The Store publisher lists are slices rather than fixed-size arrays, so editing one cannot leave a length that no longer matches. It did, twice, while writing this.",
       ],
       Signature: [
         "Signed, like every STRYV release. STRYV checks the published release feed, downloads the installer, and verifies its signature against the key built into the app before running it.",

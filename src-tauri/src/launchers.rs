@@ -446,6 +446,39 @@ const XBOX_NOT_GAMES: &[&str] = &[
     "Microsoft.XboxSoftwareRepair",
 ];
 
+/// The client application for a launcher, or None when it is not installed.
+///
+/// Paths are the documented install locations rather than anything derived from
+/// a game folder, because the client usually lives outside the game tree
+/// entirely. Each launcher has renamed itself at least once, so both the current
+/// and the previous layout are checked.
+pub fn launcher_client(source_id: &str) -> Option<PathBuf> {
+    const EPIC: &[&str] = &[
+        r"C:\Program Files (x86)\Epic Games\Launcher\Portal\Binaries\Win32\EpicGamesLauncher.exe",
+        r"C:\Program Files\Epic Games\Launcher\Portal\Binaries\Win32\EpicGamesLauncher.exe",
+    ];
+    const GOG: &[&str] = &[
+        r"C:\Program Files (x86)\GOG Galaxy\GOGGames.exe",
+        r"C:\Program Files\GOG Galaxy\GOGGames.exe",
+        r"C:\Program Files (x86)\GOG.com\GalaxyClient\GOGGalaxy.exe",
+    ];
+    const EA: &[&str] = &[
+        r"C:\Program Files\Electronic Arts\EA Desktop\EA Desktop\EADesktop.exe",
+        r"C:\Program Files (x86)\Electronic Arts\EA Desktop\EA Desktop\EADesktop.exe",
+        r"C:\Program Files (x86)\Origin\Origin.exe",
+    ];
+    let candidates: &[&str] = match source_id {
+        "epic" => EPIC,
+        "gog" => GOG,
+        "ea" => EA,
+        _ => return None,
+    };
+    candidates
+        .iter()
+        .map(PathBuf::from)
+        .find(|p| p.is_file())
+}
+
 /// Whether a package family is a game ATLAS should list.
 ///
 /// Windows puts no flag on a package saying whether it is a game, so this is a
@@ -773,6 +806,19 @@ mod tests {
             );
         }
     }
+    #[test]
+    fn only_launchers_with_a_known_client_can_be_opened() {
+        // A source with no client mapping must return None rather than fall back
+        // to some default, or "Open launcher" would point at the wrong program.
+        for unknown in ["", "steam", "xbox", "manual", "standalone", "gog2"] {
+            assert!(
+                launcher_client(unknown).is_none(),
+                "{} has no launcher client and must not resolve to one",
+                unknown
+            );
+        }
+    }
+
     #[test]
     fn every_adapter_declares_a_stable_id_and_a_name() {
         let all: Vec<Box<dyn Source>> = vec![

@@ -103,6 +103,22 @@ const hasBackend = () => typeof invoke === "function";
       .catch(() => { artCache.set(id, null); return null; });
   }
 
+  // Stand-in artwork for an entry that has none. Store games have none at all,
+  // so every one of them rendered as the same grey "No cover art" box.
+  //
+  // It is not pretending to be cover art - it is a label that is easy to pick
+  // out of a grid, which twenty identical grey boxes are not. The hue comes
+  // from the title, the same idea the Tasks page uses for process icons.
+  function tileArt(name) {
+    const clean = String(name || "").replace(/\s+/g, " ").trim();
+    // A title starting with a symbol or an emoji still gets a real letter: the
+    // first alphanumeric character anywhere in the name is used.
+    const letter = ((clean.match(/[A-Za-z0-9]/) || ["?"])[0] || "?").toUpperCase();
+    let hue = 0;
+    for (const ch of clean) hue = (hue * 31 + ch.charCodeAt(0)) % 360;
+    return `<div class="at-tile" style="--th:${hue}"><span>${escF(letter)}</span></div>`;
+  }
+
   // Returns the markup for one artwork slot.
   function art(g, cls) {
     const frame = cls || "at-covw";
@@ -114,7 +130,7 @@ const hasBackend = () => typeof invoke === "function";
       const url = "https://cdn.cloudflare.steamstatic.com/steam/apps/" + g.app_id + "/header.jpg";
       return `<div class="${frame}"><img class="at-cov" src="${escF(url)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-cover="1" data-cdn="1"></div>`;
     }
-    return `<div class="${frame}"><div class="at-covf">No cover art</div></div>`;
+    return `<div class="${frame}">${tileArt(g.name)}</div>`;
   }
 
   // Valve's legacy path 404s on newer titles. Ask the store once, then let the
@@ -230,6 +246,45 @@ const byId = (id) => games.find((g) => g.id === id);
   // class the stylesheet and the rest of the UI already use.
   const badgeCls = (g) => (srcOf(g) === "standalone" ? "manual" : srcOf(g));
 
+  // The launchers ATLAS can open but cannot start games through. Opening the
+  // client is safe - it is an ordinary desktop app that does its own per-game
+  // handshake. Starting a game by running its executable is not.
+  const LAUNCHERS = { epic: "Epic Games", gog: "GOG Galaxy", ea: "EA app" };
+
+  // The Store page is empty on a PC with no Store games, and an empty page with
+  // no way forward is just a dead end. Opening the shop is the useful reply.
+  async function openStore() {
+    const act = A.log({ text: "Opening the Microsoft Store", status: "running" });
+    try {
+      const msg = await call("atlas_open_store", {});
+      A.update(act, { status: "done", detail: String(msg) });
+      T(String(msg));
+    } catch (e) {
+      A.update(act, { status: "failed", detail: String(e.message || e) });
+      TG.add("atlas.openStore", e);
+      T(String(e.message || e), true);
+    }
+  }
+  const canOpenLauncher = (g) => !!(g && LAUNCHERS[srcOf(g)]);
+
+  // Opens the launcher itself. This is what the refusal used to tell people to do
+  // without giving them any way to do it - which is a dead end with an
+  // instruction attached.
+  async function openLauncher(g) {
+    const which = LAUNCHERS[srcOf(g)];
+    if (!which) return;
+    const act = A.log({ text: "Opening " + which, status: "running" });
+    try {
+      const msg = await call("atlas_open_launcher", { sourceId: srcOf(g) });
+      A.update(act, { status: "done", detail: String(msg) });
+      T(String(msg));
+    } catch (e) {
+      A.update(act, { status: "failed", detail: String(e.message || e) });
+      TG.add("atlas.openLauncher", e);
+      T(String(e.message || e), true);
+    }
+  }
+
   // The Store id of the first install that is actually on disk. An entry can hold
   // several installs and only some are present, so the first available one is the
   // one Windows would be asked to start.
@@ -316,6 +371,7 @@ function cannotLaunch(g) {
         ${why}
         <div class="at-cbtns">
           <button class="btn" data-play="${escF(g.id)}"${blocked ? " disabled" : ""}>Play</button>
+          ${canOpenLauncher(g) && blocked ? `<button class="btn ghost" data-open-launcher="${escF(g.id)}">Open ${escF(LAUNCHERS[srcOf(g)])}</button>` : ""}
           <button class="btn ghost at-fav" data-fav="${escF(g.id)}" aria-pressed="${g.favorite ? "true" : "false"}" title="${g.favorite ? "Remove from favourites" : "Add to favourites"}" aria-label="Favourite">${g.favorite ? "★" : "☆"}</button>
           <button class="btn ghost at-del" data-del="${escF(g.id)}">Remove</button>
         </div>
@@ -334,7 +390,8 @@ function cannotLaunch(g) {
       grid.querySelectorAll("[data-play]").forEach((b) => { b.onclick = (ev) => { stop(ev); launch(byId(b.dataset.play)); }; });
       grid.querySelectorAll("[data-fav]").forEach((b) => { b.onclick = (ev) => { stop(ev); toggleFav(b.dataset.fav); }; });
       grid.querySelectorAll("[data-del]").forEach((b) => { b.onclick = (ev) => { stop(ev); remove(b.dataset.del, false); }; });
-      grid.querySelectorAll("[data-open]").forEach((c) => { c.onclick = () => openDetail(c.dataset.open); });
+      grid.querySelectorAll("[data-open-launcher]").forEach((b) => { b.onclick = (ev) => { stop(ev); openLauncher(byId(b.dataset.openLauncher)); }; });
+    grid.querySelectorAll("[data-open]").forEach((c) => { c.onclick = () => openDetail(c.dataset.open); });
     }
 
     // Four distinct empty states, never one generic message.
@@ -352,7 +409,8 @@ function cannotLaunch(g) {
       // entry is not a Store entry and would never be launchable through Windows.
       if (only === "xbox") {
         state = `<b>No Store games found.</b>
-          <p>Windows puts nothing on a package saying whether it is a game, so ATLAS lists only Store titles published by known game publishers. A game from a publisher not on that list will not appear here.</p>`;
+          <p>Windows puts nothing on a package saying whether it is a game, so ATLAS lists only Store titles published by known game publishers. A game from a publisher not on that list will not appear here.</p>
+          <button class="btn" data-open-store="1">Open the Microsoft Store</button>`;
         if (empty) { empty.innerHTML = state; show(emptyId || "atlasEmpty", !!state); }
         return;
       }
@@ -370,6 +428,8 @@ function cannotLaunch(g) {
     if (empty) { empty.innerHTML = state; show(emptyId || "atlasEmpty", !!state); }
     const ea = empty && typeof empty.querySelector === "function" ? empty.querySelector("[data-emptyadd]") : null;
     if (ea) ea.onclick = () => openAdd();
+    const os = empty && typeof empty.querySelector === "function" ? empty.querySelector("[data-open-store]") : null;
+    if (os) os.onclick = () => openStore();
     const rs = empty && typeof empty.querySelector === "function" ? empty.querySelector("[data-reset]") : null;
     if (rs) rs.onclick = () => resetAll();
   }
@@ -617,6 +677,7 @@ if (!ok) return;
         ${installList(g)}
         <div class="at-cbtns">
           <button class="btn" data-play="${escF(g.id)}"${cannotLaunch(g) ? " disabled" : ""}>Play</button>
+      ${canOpenLauncher(g) && cannotLaunch(g) ? `<button class="btn ghost" data-open-launcher="${escF(g.id)}">Open ${escF(LAUNCHERS[srcOf(g)])}</button>` : ""}
           <button class="btn ghost at-fav" data-fav="${escF(g.id)}" aria-pressed="${g.favorite ? "true" : "false"}" title="${g.favorite ? "Remove from favourites" : "Add to favourites"}" aria-label="Favourite">${g.favorite ? "★" : "☆"}</button>
           <button class="btn ghost" data-edit="${escF(g.id)}">Edit</button>
           <button class="btn ghost at-del" data-del="${escF(g.id)}">Remove</button>
@@ -627,6 +688,8 @@ if (!ok) return;
     wireArt(host);
     const pb = typeof host.querySelector === "function" ? host.querySelector("[data-play]") : null;
     if (pb) pb.onclick = () => launch(g);
+    const ob = typeof host.querySelector === "function" ? host.querySelector("[data-open-launcher]") : null;
+    if (ob) ob.onclick = () => openLauncher(g);
     const fb = typeof host.querySelector === "function" ? host.querySelector("[data-fav]") : null;
     if (fb) fb.onclick = () => { toggleFav(g.id); openDetail(g.id); };
     const eb = typeof host.querySelector === "function" ? host.querySelector("[data-edit]") : null;
@@ -938,5 +1001,5 @@ on("atlasRestore", "click", async () => {
     else mountStore();
   }
 
-  return { scan, launch, render, renderStore, openDetail, closeDetail, openAdd, openEdit, resetAll };
+  return { scan, launch, render, renderStore, openDetail, closeDetail, openAdd, openEdit, resetAll, openStore, openLauncher };
 })();

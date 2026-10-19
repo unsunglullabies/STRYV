@@ -65,7 +65,20 @@ if (!Object.keys(platforms).length) {
   process.exit(1);
 }
 
-const notes = process.env.RELEASE_NOTES || "";
+// Notes come from a file written by scripts/release-notes.js, which generates them
+// from the app's own changelog. RELEASE_NOTES still wins if it is set, so this
+// script can still be driven by hand.
+//
+// A file rather than an env var because these are multi-line, and a workflow
+// cannot pass a multi-line string through `env:` without fighting the YAML.
+const notesFile = process.env.RELEASE_NOTES_FILE;
+const notes = process.env.RELEASE_NOTES
+  || (notesFile && fs.existsSync(notesFile) ? fs.readFileSync(notesFile, "utf8") : "");
+if (!notes.trim()) {
+  console.error("No release notes. Set RELEASE_NOTES, or RELEASE_NOTES_FILE to a file written by");
+  console.error("scripts/release-notes.js, so the updater is not shipped with a blank changelog.");
+  process.exit(1);
+}
 const out = {
   version,
   notes,

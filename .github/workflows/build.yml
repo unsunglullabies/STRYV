@@ -75,11 +75,22 @@ jobs:
         shell: pwsh
         run: npm run build
 
+      # Generated from the app's own CHANGELOG so the release body and the
+      # in-app What's New page cannot say different things. Fails if the version
+      # being tagged has no changelog entry, which stops a release shipping with
+      # nothing to show for it.
+      - name: Generate release notes
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        run: node scripts/release-notes.js | Out-File -FilePath release-notes.md -Encoding utf8
+
       # Refuses to run if any installer lacks a signature, so an unsigned
       # artifact can never reach a release.
       - name: Generate updater manifest
         if: github.ref_type == 'tag' && github.event_name != 'pull_request'
         shell: pwsh
+        env:
+          RELEASE_NOTES_FILE: release-notes.md
         run: node scripts/make-latest-json.js
 
       - name: Upload build artifacts
@@ -108,6 +119,12 @@ jobs:
       # needs a checkout. Without one, "gh release create" has no repository to
       # act on and fails.
       - uses: actions/checkout@v4
+
+      # Regenerated here rather than handed over from the build job: this job got
+      # its own checkout, and the notes are derived from a file inside it.
+      - name: Generate release notes
+        shell: bash
+        run: node scripts/release-notes.js > release-notes.md
 
       - uses: actions/download-artifact@v4
         with:
@@ -149,5 +166,9 @@ jobs:
             echo "Release $TAG already exists; updating its assets."
             gh release upload "$TAG" "${assets[@]}" --clobber
           else
-            gh release create "$TAG" "${assets[@]}" --title "STRYV $TAG" --generate-notes
+            # The body is the real changelog from src/core.js rather than
+            # --generate-notes, which summarised commit messages and left people
+            # with a list of hashes instead of what changed.
+            gh release create "$TAG" "${assets[@]}" --title "STRYV $TAG" \
+              --notes-file release-notes.md
           fi
