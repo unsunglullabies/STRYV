@@ -202,5 +202,16 @@ the user was not happy about Claude showing as a co-author on their GitHub page.
   moved the launch policy into the backend, and did a quality-of-life pass.
 - The background work (Task manager, background alerts, glass controls) came from
   the user's own machine and was committed on `background-tasks` (`a6b2f83`)
-  before being merged. It carries `*.before-background` originals kept so the
-  change can be undone without a revert.
+  before being merged.
+
+  **Its three `*.before-background` files must not be deleted.** They look like a
+  redundant copy of something git already holds, and they are not: all three differ
+  from the commit before the merge, even ignoring line endings, and git's copies are
+  *larger*. The pre-background state on this machine was not the v0.2.8 state, so
+  those files are the only copy of it.
+
+  They came very close to being removed as dead weight in a review pass. What saved
+  them was checking rather than assuming:
+
+      git show a6b2f83^:src/index.html > "%TEMP%\before.html"
+      fc /b src/index.html.before-background "%TEMP%\before.html"
