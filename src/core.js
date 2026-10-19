@@ -12,6 +12,7 @@ const CHANGELOG = [
         "The title was never in that path. A package family is a publisher and a codename, not a name anyone would recognise. The display name lives with the start app, so the two lists are now joined on the package family and the real title is read from there.",
         "Game Bar is no longer listed as a game. Its package is XboxGamingOverlay, not XboxGameBar, so a deny list written from the Start menu name would not have matched it - and its publisher prefix does not end in a dot, so the filter caught it anyway. Both are fixed, and both are pinned by a test.",
         "The Xbox store app itself is excluded too. It is the shop window, not something anyone plays.",
+        "The sidebar scrolls and says so. It already had overflow-y:auto, but the scrollbar was hidden outright, so once the nav outgrew the panel it scrolled invisibly and read as a list that was simply cut off. There is now a thin scrollbar that strengthens on hover, and a wheel gesture over the nav no longer scrolls the page behind it.",
       ],
       New: [
         "Store games can be started. ATLAS asks Windows to open them by AUMID, which is what double-clicking the tile in the Start menu does. No launcher needs to be running first, and the launch is recorded the same way a Steam launch is.",
