@@ -36,6 +36,25 @@ const ROOT = path.resolve(__dirname, "..");
 const SRC = path.join(ROOT, "src");
 const MOCK = path.join(__dirname, "dev", "mock-backend.js");
 
+// The mock runs in a browser and cannot require() anything, so the real release
+// notes are generated here and injected as globals. Generated from the same
+// script that writes latest.json, so what a dev shot shows is what ships.
+function updateSeed() {
+  let version = "0.0.0";
+  let notes = "";
+  try {
+    version = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8")).version;
+    notes = require("child_process")
+      .execFileSync(process.execPath, [path.join(__dirname, "release-notes.js"), "--short"], { encoding: "utf8" });
+  } catch (e) {
+    notes = "";
+  }
+  return `<script>
+  window.__DEV_UPDATE_VERSION__ = ${JSON.stringify(version)};
+  window.__DEV_UPDATE_NOTES__ = ${JSON.stringify(notes)};
+  </script>`;
+}
+
 const BRAVE_CANDIDATES = [
   "C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
   "C:\\Program Files (x86)\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
@@ -104,7 +123,7 @@ function inject(html) {
   const head = html.match(/<head[^>]*>/i);
   if (!head) return html + HARNESS;
   const at = head.index + head[0].length;
-  const seed = NO_INTRO ? NO_INTRO_SEED : "";
+  const seed = (NO_INTRO ? NO_INTRO_SEED : "") + updateSeed();
   return html.slice(0, at) + `<script src="/__dev/mock.js"></script>` + seed + PINNED_CLOCK + html.slice(at);
 }
 

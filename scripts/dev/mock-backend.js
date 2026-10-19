@@ -135,6 +135,25 @@
   };
 
   const handlers = {
+    // Lets the update panel be seen in a dev shot. Without this the panel could
+    // only be reviewed after shipping, which is how it reached users as one
+    // unreadable wall of Markdown.
+    //
+    // The body is injected by the dev server from scripts/release-notes.js
+    // --short, i.e. the exact text that goes into latest.json.
+    "plugin:updater|check": () => {
+      const notes = String(window.__DEV_UPDATE_NOTES__ || "");
+      const cur = String(window.__DEV_UPDATE_VERSION__ || "0.0.1");
+      // The current version, with its own notes. Offering a different number
+      // alongside these notes made the panel read "0.2.8 is available" above
+      // notes for 0.2.9, which is nonsense to anyone reviewing it.
+      return {
+        version: cur,
+        body: notes,
+        current_version: cur,
+        date: new Date().toISOString(),
+      };
+    },
     // --- monitoring -------------------------------------------------------
     get_snapshot: () => (tick(), SNAP()),
     get_system_info: () => ({

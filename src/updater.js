@@ -3,6 +3,48 @@
 // tauri.conf.json before it is allowed to install, so a tampered download is
 // rejected rather than run. This file only asks, downloads and starts the
 // installer; it never decides what is trustworthy.
+// Renders the small Markdown subset scripts/release-notes.js emits: a heading,
+// bold labels, bullet lists, a rule, and paragraphs.
+//
+// Everything is HTML-escaped before any markup is added, so a note can never
+// inject anything. This is content fetched over the network, and innerHTML is
+// only safe here because of that first pass - which is also why it is not a
+// general-purpose Markdown parser.
+const escHtml = (s) =>
+  String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+const inline = (s) => escHtml(s).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+
+function renderNotes(md) {
+  const lines = String(md || "").replace(/\r\n/g, "\n").split("\n");
+  const out = [];
+  let list = null;
+  const closeList = () => {
+    if (list) {
+      out.push("<ul>" + list.join("") + "</ul>");
+      list = null;
+    }
+  };
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) { closeList(); continue; }
+    if (/^(-{3,}|\*{3,})$/.test(line)) { closeList(); out.push("<hr>"); continue; }
+    if (/^#{1,6}\s+/.test(line)) {
+      closeList();
+      out.push("<h5>" + inline(line.replace(/^#{1,6}\s+/, "")) + "</h5>");
+      continue;
+    }
+    if (/^[-*]\s+/.test(line)) {
+      (list = list || []).push("<li>" + inline(line.replace(/^[-*]\s+/, "")) + "</li>");
+      continue;
+    }
+    closeList();
+    out.push("<p>" + inline(line) + "</p>");
+  }
+  closeList();
+  return out.join("");
+}
+
 const Updater = (() => {
   let pending = null, busy = false;
 
@@ -44,7 +86,7 @@ const Updater = (() => {
       pending = meta;
       if (q("updFound")) q("updFound").style.display = "";
       if (q("updFoundV")) q("updFoundV").textContent = "STRYV " + meta.version + " is available.";
-      if (q("updNotes")) q("updNotes").textContent = meta.body || "";
+      if (q("updNotes")) q("updNotes").innerHTML = renderNotes(meta.body || "");
       showInstall(true);
       if (manual) {
         toast("STRYV " + meta.version + " is available");
