@@ -160,6 +160,13 @@ h1::before{display:none}
   transition:filter .15s,transform .1s,box-shadow .15s;
 }
 .btn:hover{filter:brightness(1.07)}
+/* A disabled control has to read as unavailable at a glance, not merely as slightly
+   faded. Half-opacity amber still looked like the primary action on the card, and
+   it still brightened on hover. Neutral, flat, and inert. */
+.btn:disabled,.btn:disabled:hover{
+  background:var(--p2);color:var(--m);border-color:transparent;
+  box-shadow:none;filter:none;opacity:.75;pointer-events:none;
+}
 .btn.ghost{
   background:rgba(255,255,255,.05);color:var(--t);box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
   border:1px solid rgba(255,255,255,.12);

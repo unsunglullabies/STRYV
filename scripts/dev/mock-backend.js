@@ -185,7 +185,12 @@
     })),
     aery_read: (a) => {
       for (const [path, n] of Object.entries(NOTES)) {
-        if (path === a.id || btoa(path).replace(/=+$/, "") === a.id) {
+        // Must accept the same id aery_list just produced. It used to match only
+        // the bare base64 or the raw path, and aery_list emits neither - so every
+        // read failed and the page raised an error toast on load.
+        const want = String((a && a.id) || "");
+        const id = "mock:" + btoa(path).replace(/=+$/, "");
+        if (id === want || path === want) {
           const title = (n.body.match(/title: (.+)/) || [null, path])[1];
           return {
             id: a.id, title, path, folder: path.includes("/") ? path.split("/")[0] : "",

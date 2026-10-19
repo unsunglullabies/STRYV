@@ -248,13 +248,22 @@ table tr:hover td{background:rgba(255,255,255,.02)}td.n{font-variant-numeric:tab
 .at-covw{display:block;aspect-ratio:16/10;overflow:hidden;background:var(--p2)}
 .at-cov{display:block;width:100%;height:100%;object-fit:cover}
 /* Placeholder for manually added games and for a Steam header that 404s. */
-/* Letter tile for an entry with no artwork. The hue arrives as --th, set inline
-   from the title, so no two entries look alike. */
-.at-tile{display:flex;align-items:center;justify-content:center;height:100%;
-  background:linear-gradient(145deg,hsl(var(--th,210) 38% 24%),hsl(calc(var(--th,210) + 38) 34% 14%));
-  box-shadow:inset 0 0 0 1px var(--line)}
-.at-tile span{font-weight:700;font-size:clamp(26px,40%,58px);line-height:1;
-  color:hsl(var(--th,210) 62% 86%);opacity:.92}
+/* Letter tile for an entry with no artwork.
+
+   Deliberately quiet. It sits where a dark, detailed cover would be, and a
+   saturated flat fill reads as a rendering error rather than a placeholder -
+   it made the emptiest card the loudest thing on the page. The hue is still
+   derived from the title so two entries do not look alike, but at a level you
+   notice on the second glance rather than the first. */
+.at-tile{
+  display:flex;align-items:center;justify-content:center;height:100%;
+  background:linear-gradient(150deg,hsl(var(--th,210) 15% 16%),hsl(calc(var(--th,210) + 28) 12% 10%));
+  box-shadow:inset 0 0 0 1px var(--line);
+}
+.at-tile span{
+  font-weight:600;font-size:clamp(18px,26%,34px);line-height:1;
+  color:hsl(var(--th,210) 22% 74%);opacity:.5;letter-spacing:.08em;
+}
 .at-covf{display:flex;align-items:center;justify-content:center;height:100%;
   padding:0 18px;background:var(--p2);color:var(--m);font-size:10px;
   font-weight:600;letter-spacing:.14em;text-transform:uppercase;text-align:center;
@@ -296,6 +305,7 @@ table tr:hover td{background:rgba(255,255,255,.02)}td.n{font-variant-numeric:tab
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 .at-cbtns{display:flex;align-items:center;gap:8px;margin-top:auto;padding-top:2px}
+.at-openlauncher{white-space:nowrap;flex:0 0 auto}
 /* .btn still carries align-self:flex-start from the base rule, which would
    top-align Play against a centred star. Reset it for this row. */
 .at-cbtns .btn{align-self:center;padding:7px 14px;font-size:13px}
@@ -865,9 +875,13 @@ table tr:hover td{background:rgba(255,255,255,.02)}td.n{font-variant-numeric:tab
    * card, badge and empty state above rather than restating them. Only the
    * header and its subtitle are new.
    */
-.at-top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:0 0 18px}
+.at-top{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap;margin:0 0 20px}
+/* .at-hd, deliberately not .at-heroin: that is the ATLAS hero grid, whose
+   grid-template-areas silently auto-placed a title and a subtitle into two
+   columns. A plain header needs a plain box. */
+.at-hd{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1 1 320px}
 .at-top h2{margin:0 0 4px;font-size:22px;letter-spacing:-.01em}
-.at-sub{margin:0;color:var(--dim,#8a8a95);font-size:12.5px;line-height:1.5;max-width:62ch}
+.at-sub{margin:0;color:var(--dim,#8a8a95);font-size:12.5px;line-height:1.5;max-width:78ch}
 nav button.pri[data-p=store]{--ac:#5FC26B}
 
 /* ---- ATLAS hero: a banner, not a wall ----

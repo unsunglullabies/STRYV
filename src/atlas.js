@@ -257,6 +257,9 @@ const byId = (id) => games.find((g) => g.id === id);
   // client is safe - it is an ordinary desktop app that does its own per-game
   // handshake. Starting a game by running its executable is not.
   const LAUNCHERS = { epic: "Epic Games", gog: "GOG Galaxy", ea: "EA app" };
+  // Short names for the button. The full names wrap to two lines in a row that
+  // already holds Play, a star and Remove.
+  const LAUNCHERS_SHORT = { epic: "Epic", gog: "GOG", ea: "EA app" };
 
   // The Store page is empty on a PC with no Store games, and an empty page with
   // no way forward is just a dead end. Opening the shop is the useful reply.
@@ -378,7 +381,7 @@ function cannotLaunch(g) {
         ${why}
         <div class="at-cbtns">
           <button class="btn" data-play="${escF(g.id)}"${blocked ? " disabled" : ""}>Play</button>
-          ${canOpenLauncher(g) && blocked ? `<button class="btn ghost" data-open-launcher="${escF(g.id)}">Open ${escF(LAUNCHERS[srcOf(g)])}</button>` : ""}
+          ${canOpenLauncher(g) && blocked ? `<button class="btn ghost at-openlauncher" data-open-launcher="${escF(g.id)}">Open ${escF(LAUNCHERS_SHORT[srcOf(g)])}</button>` : ""}
           <button class="btn ghost at-fav" data-fav="${escF(g.id)}" aria-pressed="${g.favorite ? "true" : "false"}" title="${g.favorite ? "Remove from favourites" : "Add to favourites"}" aria-label="Favourite">${g.favorite ? "★" : "☆"}</button>
           <button class="btn ghost at-del" data-del="${escF(g.id)}">Remove</button>
         </div>
@@ -684,7 +687,7 @@ if (!ok) return;
         ${installList(g)}
         <div class="at-cbtns">
           <button class="btn" data-play="${escF(g.id)}"${cannotLaunch(g) ? " disabled" : ""}>Play</button>
-      ${canOpenLauncher(g) && cannotLaunch(g) ? `<button class="btn ghost" data-open-launcher="${escF(g.id)}">Open ${escF(LAUNCHERS[srcOf(g)])}</button>` : ""}
+      ${canOpenLauncher(g) && cannotLaunch(g) ? `<button class="btn ghost" data-open-launcher="${escF(g.id)}">Open ${escF(LAUNCHERS_SHORT[srcOf(g)])}</button>` : ""}
           <button class="btn ghost at-fav" data-fav="${escF(g.id)}" aria-pressed="${g.favorite ? "true" : "false"}" title="${g.favorite ? "Remove from favourites" : "Add to favourites"}" aria-label="Favourite">${g.favorite ? "★" : "☆"}</button>
           <button class="btn ghost" data-edit="${escF(g.id)}">Edit</button>
           <button class="btn ghost at-del" data-del="${escF(g.id)}">Remove</button>
@@ -965,7 +968,7 @@ on("atlasRestore", "click", async () => {
     sec.id = "store";
     sec.innerHTML = `
       <header class="at-top">
-        <div class="at-heroin">
+        <div class="at-hd">
           <h2>Xbox / Store</h2>
           <p class="at-sub">Games you own on the Microsoft Store. Windows starts these itself, so ATLAS does not need the launcher open first.</p>
         </div>

@@ -1171,7 +1171,9 @@ check("a failed scan never prints a size total of zero", !/<b>0(\.0)? (B|KB|MB|G
     const card = cardFor(els.atlasGrid.innerHTML, "Tom Clancy's Rainbow Six Siege");
     const dbg = els.atlasGrid.innerHTML.match(/Epic Games/g) || [];
     check("an Epic entry offers to open the launcher", /data-open-launcher/.test(card));
-    check("the button names the launcher", /Open Epic Games/.test(card));
+    check("the button names the launcher", /Open Epic/.test(card));
+    check("and the name is short enough not to wrap", !/Open Epic Games/.test(card),
+      "the long name wrapped to two lines in a row that already holds four controls");
     check("its Play button is still disabled", /data-play="[^"]*"\s+disabled/.test(card),
       "opening the launcher is not the same as starting the game");
   }
