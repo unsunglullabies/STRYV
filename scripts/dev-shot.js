@@ -72,6 +72,7 @@ const [W, H] = flag("--size", "1280x800").split("x").map(Number);
 const AT = flag("--at", "");
 const PAGE = flag("--page", "");
 const NO_INTRO = has("--no-intro");
+const ACT = flag("--act", "");
 const BUDGET = parseInt(flag("--budget", "6000"), 10);
 const MIN_BYTES = parseInt(flag("--min-bytes", "8192"), 10);
 
@@ -115,6 +116,7 @@ const HARNESS = `<script>
 window.addEventListener("DOMContentLoaded", function () {
   ${NO_INTRO ? "window.__pinned.run();" : ""}
   ${PAGE ? `try { go(${JSON.stringify(PAGE)}); } catch (e) {}` : ""}
+  ${ACT ? `setTimeout(function () { try { ${ACT} } catch (e) {} }, 120);` : ""}
   ${AT && !NO_INTRO ? "setTimeout(function () { window.__pinned.run(); }, 30);" : ""}
 });
 </script>`;

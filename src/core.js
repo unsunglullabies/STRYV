@@ -2,8 +2,49 @@
 const q = (id) => document.getElementById(id);
 const PAGES = ["dashboard", "performance", "network", "aery", "atlas", "optimizations", "system", "syn", "activity", "settings", "whatsnew", "help"];
 const ACCENTS = { Amber: "#F5A623", Cyan: "#38BDF8", Violet: "#8B5CF6" };
-const VERSION = "0.2.9";
+const VERSION = "0.3.0";
 const CHANGELOG = [
+  {
+    v: "0.3.0", date: "2026-10-20", tag: "Shelves, Files, and Flashcards",
+    groups: {
+      Folders: [
+        "AERY folders can be renamed. The folder is a path, so the rename moves the folder and everything inside it in one step, and the notes keep their ids - open tabs, pins and study links still point at the same notes afterwards.",
+        "Deleting a folder no longer means losing what is in it. A folder with notes in it asks where they should go, moves every file there, gives a colliding name a numbered suffix instead of overwriting, and only removes the empty directories once nothing is left inside.",
+        "A folder cannot be renamed onto a folder that already exists, and it cannot be moved inside itself. Both are refused with a reason rather than quietly merged or half-moved.",
+      ],
+      Files: [
+        "A single note can be exported through the normal save dialog. It is a byte-for-byte copy, not a re-render, and AERY refuses to export a note on top of the file it is already editing.",
+        "The whole vault can be exported with its folder structure intact. Markdown files are copied and anything else is skipped and counted, and the export refuses a destination inside the vault so it cannot copy itself into itself.",
+        "Markdown files and whole folders can be imported. Imported folders keep their name and shape, a name that is already taken gets a numbered suffix, a missing or colliding id in the front matter is replaced, and links that point at notes outside the import are listed instead of being invented.",
+      ],
+      ATLAS: [
+        "A game renamed in its launcher kept its card but lost its favourite and its play sessions. A canonical id is a hash of the title, so a rename changed the id while the install had not moved. ATLAS now remembers every id an install has appeared under and looks the old ones up when the library is merged.",
+        "A truncated ATLAS store could be read as empty and then written back over the only copy. An unreadable store is now preserved beside the new one, and writes go to a temporary file that is swapped in, so a crash mid-write leaves the previous store intact.",
+        "Editing a hand-added game sent the card's canonical id to commands that only know the stored manual id, so every edit answered that the game was no longer in the library. The stored id is resolved from the install, and pointing an entry at a new executable uses the id that edit returns for the artwork write.",
+        "Launcher manifests are plain text in ProgramData. A damaged or hand-edited manifest could name a path outside the install folder, so paths are now accepted only when every component is plain and an absolute executable is inside the folder it belongs to.",
+      ],
+      Study: [
+        "AERY has a third view: Study. Decks hold cards, cards can be edited or deleted, and every deck shows how many cards are due before you open it.",
+        "Reviews use a small SM-2 variant. Again, Hard, Good and Easy each set the next interval, with an ease floor so a card that keeps being missed cannot collapse to a zero-day loop. The schedule is deterministic and tested.",
+        "Quizzes are built from the cards in one deck, and the wrong answers are listed afterwards so they can be reviewed as a set rather than one at a time.",
+        "Study sessions record cards reviewed, quiz score and time spent, and the dashboard shows recall, a seven-day activity chart and the decks that need attention.",
+        "A card can be made from selected editor text, and it keeps a link back to the note it came from. If that note is gone, the card says so instead of opening nothing.",
+      ],
+      Fixed: [
+        "The launch screen could not open the app when the backend hung. Startup was awaited with no cap, so a call that never returned left the splash up forever with a button that only helped if someone pressed it. Startup is now raced against a 12-second cap and opens the app anyway, recording why it gave up.",
+        "A startup result that was undefined, null or an empty object threw inside an async function and became an unhandled rejection: no message, no retry, no fallback. Anything that is not explicitly ok now reaches the error screen with a stated reason.",
+        "A failed startup reported String(e), which reads as Error: backend gone. It reports the message itself now.",
+      ],
+      Limits: [
+        "Import reads Markdown and folders of Markdown. It is UTF-8 text, not HTML, PDF or a proprietary notes export, and symlinks are skipped.",
+        "Deleting a folder moves notes, it does not delete them. If the destination cannot take them all, the folder is left in place and the error says what is still inside.",
+        "Study data lives beside the app's settings on this PC, not in the vault, and it is not synced anywhere. A corrupt store is preserved next to the new one rather than silently replaced.",
+      ],
+      Signature: [
+        "Signed, like every STRYV release. STRYV checks the published release feed, downloads the installer, and verifies its signature against the key built into the app before running it.",
+      ]
+    }
+  },
   {
     v: "0.2.9", date: "2026-10-17", tag: "The Name On The Box",
     groups: {

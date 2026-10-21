@@ -1202,8 +1202,20 @@ check("a failed scan never prints a size total of zero", !/<b>0(\.0)? (B|KB|MB|G
     }
     check("the release notes script runs", !!notes.trim());
     check("they are markdown, not a link", notes.includes("## ") && notes.includes("- "));
-    check("they name the version", /^## 0\.2\.9/.test(notes.trim()));
-    check("they carry the QOL group", /\*\*Quality of life\*\*/.test(notes));
+
+    // Read the version and the leading group from the same changelog the notes
+    // are generated from, so a new release cannot fail this test merely by
+    // existing. What must hold is the relationship, not the 0.2.9 wording.
+    const src = fs.readFileSync(path.join(ROOT, "src", "core.js"), "utf8");
+    const marker = "const CHANGELOG = ";
+    const start = src.indexOf(marker) + marker.length;
+    const endIdx = src.indexOf("}];", start);
+    const log = vm.runInNewContext("(" + src.slice(start, endIdx + 2) + ")");
+    const VERSION = (src.match(/const VERSION = "([^"]+)"/) || [])[1];
+    const firstGroup = Object.keys(log.find((e) => e.v === VERSION).groups)[0];
+
+    check("they name the version", notes.trim().startsWith("## " + VERSION));
+    check("they carry the changelog groups", notes.includes("**" + firstGroup + "**"));
     check("they are not a link away from the notes", !/\[.*\]\(.*CHANGELOG.*\)/i.test(notes),
       "the point was that the release body IS the notes");
   }

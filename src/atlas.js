@@ -239,6 +239,17 @@ const hasBackend = () => typeof invoke === "function";
 
 const byId = (id) => games.find((g) => g.id === id);
 
+  // A card id is canonical (g:<hash>), but a hand-added game is stored under the
+  // id its executable produces (manual:<hash>). Editing, artwork and forgetting
+  // only know the stored form, so resolve it from the install the card carries.
+  // Sending the card id made every one of those commands answer "no longer in
+  // your library", because no stored entry has that id.
+  const manualIdOf = (g) => {
+    const list = g && Array.isArray(g.installs) ? g.installs : [];
+    const i = list.find((x) => x && x.source_id === "standalone" && /^manual:/.test(String(x.legacy_id || "")));
+    return i ? i.legacy_id : "";
+  };
+
   // Which source owns the headline install. This used to be a test for
   // /steam/i, which painted Epic, GOG, EA and Store in the hand-added colour
   // because none of them are Steam.
@@ -733,11 +744,12 @@ if (!ok) return;
   function openEdit(id) {
     const g = byId(id);
     if (!g) return;
-    if (g.source !== "manual") {
+    const mid = manualIdOf(g);
+    if (!mid) {
       T("Detected games are read from " + g.launcher + ". Remove it from the launcher to clear it from ATLAS.", true);
       return;
     }
-    editingId = id;
+    editingId = mid;
     const n = E("atlasEditName"), x = E("atlasEditExe"), a = E("atlasEditArt"), ti = E("atlasEditTitle");
     if (n) n.value = g.name;
     if (x) x.value = g.exe_path;
@@ -795,9 +807,14 @@ async function submitAdd() {
     const name = (E("atlasEditName") && E("atlasEditName").value || "").trim() || null;
     const exe = (E("atlasEditExe") && E("atlasEditExe").value || "").trim() || null;
     try {
-      await call("atlas_update", { id: editingId, name, exe_path: exe });
+      const updated = await call("atlas_update", { id: editingId, name, exe_path: exe });
+      // Pointing the entry at a different executable gives it a new id. The
+      // cover write has to use that id, or a successful rename would be
+      // followed by a failed "no longer in your library".
+      const target = (updated && updated.id) ? updated.id : editingId;
+      editingId = target;
       const artPath = (E("atlasEditArt") && E("atlasEditArt").value || "").trim();
-      await call("atlas_set_art", { id: editingId, art_path: artPath || null });
+      await call("atlas_set_art", { id: target, art_path: artPath || null });
       closeEdit();
       await scan(false);
       T("Saved.");

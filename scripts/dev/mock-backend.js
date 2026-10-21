@@ -133,6 +133,42 @@
     "welcome.md": { body: "---\ntitle: Welcome\n---\n# Welcome\n\nA mocked note so the Aery workspace has something to show.\n\nLink to [[Ideas]].", tags: ["mock"], created: 1758000000, updated: 1758100000, pinned: true },
     "ideas.md": { body: "---\ntitle: Ideas\n---\n# Ideas\n\nBacklink from [[Welcome]].\n\n#mock", tags: ["mock"], created: 1757000000, updated: 1757900000, pinned: false },
   };
+  // The same id scheme the list emits, so a read reaches the note the list named.
+  const nid = (p) => "mock:" + btoa(p).replace(/=+$/, "");
+  const ntitle = (p, n) => (n.body.match(/title: (.+)/) || [null, p])[1];
+  const nlinks = (body) => [...body.matchAll(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g)]
+    .map((m) => m[1].trim());
+
+  // --- mock study data ------------------------------------------------------
+  const NOW = Math.floor(Date.now() / 1000);
+  let SID = 20;
+  const card = (id, deck, question, answer, src, due, last) => ({
+    id, deck_id: deck, question, answer, source_note_id: src || "",
+    created: NOW - 86400 * 6, updated: NOW - 86400, ease: 2.5,
+    interval_days: last ? 2 : 0, reps: last ? 2 : 0, lapses: 0,
+    due: due || 0, last_review: last || 0,
+  });
+  const STUDY = {
+    version: 1,
+    decks: [
+      { id: "d1", name: "Biology", subject: "Cells", created: NOW - 86400 * 6, updated: NOW - 3600 },
+      { id: "d2", name: "Systems", subject: "", created: NOW - 86400 * 4, updated: NOW - 7200 },
+    ],
+    cards: [
+      card("c1", "d1", "What does the mitochondria do?", "Produces ATP through respiration.", nid("welcome.md"), 0, 0),
+      card("c2", "d1", "What is the function of the cell membrane?", "Controls what moves in and out of the cell.", "", 0, 0),
+      card("c3", "d1", "What is osmosis?", "Water moving across a membrane toward higher solute concentration.", "", 0, 0),
+      card("c4", "d2", "What is a feedback loop?", "A system where the output changes the input.", "", NOW - 500, NOW - 86400),
+    ],
+    reviews: [
+      { t: NOW - 86400 * 2, card_id: "c4", grade: "good", remembered: true },
+      { t: NOW - 86400 * 2 + 300, card_id: "c3", grade: "again", remembered: false },
+      { t: NOW - 86400, card_id: "c4", grade: "good", remembered: true },
+      { t: NOW - 3600, card_id: "c1", grade: "good", remembered: true },
+    ],
+    quizzes: [{ id: "q1", deck_id: "d1", title: "Biology quiz", t: NOW - 86400, total: 4, correct: 3, wrong: [] }],
+    sessions: [{ id: "s1", deck_id: "d1", started: NOW - 86400, ended: NOW - 86400 + 240, cards: 3, remembered: 2, quiz_total: 0, quiz_correct: 0 }],
+  };
 
   const handlers = {
     // Lets the update panel be seen in a dev shot. Without this the panel could
@@ -196,8 +232,8 @@
 
     // --- Aery -------------------------------------------------------------
     aery_list: () => Object.entries(NOTES).map(([path, n]) => ({
-      id: "mock:" + btoa(path).replace(/=+$/, ""),
-      title: (n.body.match(/title: (.+)/) || [null, path])[1],
+      id: nid(path),
+      title: ntitle(path, n),
       path, folder: path.includes("/") ? path.split("/")[0] : "",
       pinned: !!n.pinned, created: n.created, modified: n.updated, size: n.body.length,
       excerpt: n.body.slice(0, 280), tags: n.tags, links: [], backlinks: [],
@@ -208,24 +244,123 @@
         // the bare base64 or the raw path, and aery_list emits neither - so every
         // read failed and the page raised an error toast on load.
         const want = String((a && a.id) || "");
-        const id = "mock:" + btoa(path).replace(/=+$/, "");
-        if (id === want || path === want) {
-          const title = (n.body.match(/title: (.+)/) || [null, path])[1];
-          return {
+        if (nid(path) === want || path === want) {
+          const title = ntitle(path, n);
+          const byTitle = new Map(Object.entries(NOTES).map(([p, o]) => [ntitle(p, o).toLowerCase(), p]));
+          const note = {
             id: a.id, title, path, folder: path.includes("/") ? path.split("/")[0] : "",
-            content: n.body, tags: n.tags, pinned: !!n.pinned,
-            modified: n.updated, created: n.created, size: n.body.length,
-            links: [], backlinks: [], word_count: n.body.split(/\s+/).length,
+            pinned: !!n.pinned, modified: n.updated, created: n.created,
+            size: n.body.length, tags: n.tags, links: [], backlinks: [],
+          };
+          // The real command returns this shape, and the context panel reads it.
+          // A mock that omits it hid an empty title bar and empty link panels.
+          const outgoing = nlinks(n.body).map((t) => {
+            const target = byTitle.get(t.toLowerCase());
+            return { title: t, resolved: target ? nid(target) : null, path: target || null };
+          });
+          const backlinks = Object.entries(NOTES)
+            .filter(([p2, o]) => p2 !== path && nlinks(o.body).some((t) => t.toLowerCase() === title.toLowerCase()))
+            .map(([p2, o]) => ({
+              id: nid(p2), title: ntitle(p2, o), path: p2,
+              folder: p2.includes("/") ? p2.split("/")[0] : "",
+            }));
+          return {
+            note, content: n.body, tags: n.tags, outgoing, backlinks,
+            word_count: n.body.split(/\s+/).length,
           };
         }
       }
       throw new Error("That note is not in the vault.");
     },
     aery_vault_path: () => "C:\\mock\\vault (does not exist)",
-    aery_counts: () => ({ notes: Object.keys(NOTES).length, tags: ["mock"], folders: [] }),
+    aery_counts: () => ({ notes: Object.keys(NOTES).length, tags: ["mock"], folders: ["work", "archive/2025"] }),
     aery_save: () => null, aery_create: () => null, aery_rename: () => null,
     aery_delete: () => null, aery_restore: () => null,
-    aery_set_pinned: () => null, aery_set_folder: () => null,
+    aery_set_pinned: () => null, aery_set_folder: () => null, aery_mkdir: (a) => String((a && a.path) || ""),
+    aery_rename_folder: (a) => String((a && a.to) || ""),
+    aery_delete_folder: () => ({ deleted: true, moved: 0, notes: 0 }),
+    aery_export_note: () => null,
+    aery_export_vault: () => ({ copied: 0, skipped: 0, dest: "C:\\mock\\export" }),
+    aery_import: () => ({ imported: 0, renamed: 0, skipped: 0, unresolved_links: 0, errors: [] }),
+
+    // --- Study ------------------------------------------------------------
+    study_load: () => STUDY,
+    study_deck_save: (a) => {
+      const deck = (a && a.deck) || {};
+      const hit = STUDY.decks.find((d) => d.id === deck.id);
+      if (hit) { hit.name = deck.name; hit.subject = deck.subject || ""; hit.updated = NOW; }
+      else if (deck.name) STUDY.decks.push({ id: "d" + (++SID), name: deck.name, subject: deck.subject || "", created: NOW, updated: NOW });
+      return STUDY;
+    },
+    study_deck_delete: (a) => {
+      const id = (a && a.id) || "";
+      STUDY.decks = STUDY.decks.filter((d) => d.id !== id);
+      STUDY.cards = STUDY.cards.filter((c) => c.deck_id !== id);
+      return STUDY;
+    },
+    study_card_save: (a) => {
+      const card = (a && a.card) || {};
+      const hit = STUDY.cards.find((c) => c.id === card.id);
+      if (hit) { hit.question = card.question; hit.answer = card.answer; hit.source_note_id = card.source_note_id || ""; }
+      else if (card.question && card.answer) {
+        STUDY.cards.push({
+          id: "c" + (++SID), deck_id: card.deck_id, question: card.question, answer: card.answer,
+          source_note_id: card.source_note_id || "", created: NOW, updated: NOW,
+          ease: 2.5, interval_days: 0, reps: 0, lapses: 0, due: NOW - 60, last_review: 0,
+        });
+      }
+      return STUDY;
+    },
+    study_card_delete: (a) => {
+      STUDY.cards = STUDY.cards.filter((c) => c.id !== ((a && a.id) || ""));
+      return STUDY;
+    },
+    study_review: (a) => {
+      const card = STUDY.cards.find((c) => c.id === ((a && a.id) || ""));
+      if (card) {
+        const remembered = String((a && a.grade) || "") !== "again";
+        card.last_review = NOW;
+        card.reps = remembered ? card.reps + 1 : 0;
+        card.interval_days = remembered ? (card.interval_days || 1) * 2 : 0;
+        card.due = NOW + card.interval_days * 86400;
+        STUDY.reviews.push({ t: NOW, card_id: card.id, grade: (a && a.grade) || "good", remembered });
+      }
+      const sess = STUDY.sessions.find((s) => s.ended === 0);
+      if (sess) sess.cards++;
+      return STUDY;
+    },
+    study_quiz_save: (a) => {
+      const q = (a && a.quiz) || {};
+      STUDY.quizzes.push({ ...q, id: "q" + (++SID), t: NOW });
+      const sess = STUDY.sessions.find((s) => s.ended === 0);
+      if (sess) { sess.quiz_total = q.total || 0; sess.quiz_correct = q.correct || 0; sess.ended = NOW; }
+      return STUDY;
+    },
+    study_session_start: (a) => {
+      for (const s of STUDY.sessions) if (!s.ended) s.ended = NOW;
+      STUDY.sessions.push({ id: "s" + (++SID), deck_id: (a && a.deck) || "", started: NOW, ended: 0, cards: 0, remembered: 0, quiz_total: 0, quiz_correct: 0 });
+      return STUDY;
+    },
+    study_session_end: (a) => {
+      const s = STUDY.sessions.find((x) => x.id === ((a && a.id) || ""));
+      if (s) s.ended = NOW;
+      return STUDY;
+    },
+    aery_graph: () => {
+      const nodes = Object.entries(NOTES).map(([path, n]) => ({
+        id: nid(path), title: ntitle(path, n),
+        folder: path.includes("/") ? path.split("/")[0] : "", pinned: !!n.pinned,
+      }));
+      const byTitle = new Map(nodes.map((n) => [n.title.toLowerCase(), n.id]));
+      const edges = [];
+      for (const [path, n] of Object.entries(NOTES)) {
+        for (const t of nlinks(n.body)) {
+          const to = byTitle.get(t.toLowerCase());
+          if (to && to !== nid(path)) edges.push({ from: nid(path), to });
+        }
+      }
+      return { nodes, edges };
+    },
 
     // --- explicitly not mocked -------------------------------------------
     // These would touch the real machine, so they report the reason instead of

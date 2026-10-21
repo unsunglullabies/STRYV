@@ -21,9 +21,59 @@
 // partial number dressed as a total is worse than no number.
 
 use serde::Deserialize;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use crate::atlas::{Source, SourceEntry, SourceError};
+
+/// Joins a manifest-supplied relative path onto a known root, refusing anything
+/// that could climb out of it.
+///
+/// These files live in ProgramData and are plain text: a damaged or hand-edited
+/// manifest must not be able to make ATLAS index, open or launch something
+/// outside the folder it belongs to. Only plain components are accepted, so
+/// `..`, a drive prefix and a rooted-but-prefixless path all fail.
+fn join_inside(base: &Path, rel: &str) -> Option<PathBuf> {
+    let r = Path::new(rel);
+    if r.is_absolute()
+        || r.components()
+            .any(|c| !matches!(c, Component::Normal(_) | Component::CurDir))
+    {
+        return None;
+    }
+    Some(base.join(r))
+}
+
+/// An absolute path from a manifest is accepted only when it is really absolute
+/// and does not climb. A launcher may install to another drive, so absolute
+/// locations are legitimate; `C:\Games\..\Windows` is not.
+fn plain_absolute(p: &str) -> Option<PathBuf> {
+    let pb = PathBuf::from(p);
+    if !pb.is_absolute()
+        || pb
+            .components()
+            .any(|c| matches!(c, Component::ParentDir))
+    {
+        return None;
+    }
+    Some(pb)
+}
+
+/// Resolves a launcher's recorded executable against its install folder. A
+/// relative name must stay inside that folder; an absolute one must already be
+/// inside it. Never returns a path ATLAS cannot vouch for, because absence is
+/// honest and a wrong path is not.
+fn resolve_exe(base: &Path, exe: &str) -> Option<PathBuf> {
+    let exe = exe.trim();
+    if exe.is_empty() {
+        return None;
+    }
+    let p = Path::new(exe);
+    if p.is_absolute() {
+        plain_absolute(exe).filter(|abs| abs.starts_with(base))
+    } else {
+        join_inside(base, exe)
+    }
+}
 
 /// Reads a JSON file, mapping an unreadable file to the reason rather than to an
 /// empty result.
@@ -150,6 +200,7 @@ impl Source for EpicSource {
 
         let mut out = Vec::new();
         let mut unreadable = 0usize;
+        let mut unsafe_path = 0usize;
         for e in rd.flatten() {
             let path = e.path();
             if path.extension().map(|x| x.eq_ignore_ascii_case("item")) != Some(true) {
@@ -177,23 +228,25 @@ impl Source for EpicSource {
             }
 
             // installlocation is usually a folder name relative to the launcher
-            // root, but an absolute path is used for some titles.
-            let loc = PathBuf::from(&item.install_location);
-            let install_dir = if loc.is_absolute() {
-                loc
+            // root, but an absolute path is used for some titles. Either way it
+            // has to resolve to a real place: a manifest that climbs out of its
+            // root is dropped rather than followed.
+            let loc = item.install_location.trim();
+            let install_dir = if loc.is_empty() {
+                Some(root.clone())
+            } else if Path::new(loc).is_absolute() {
+                plain_absolute(loc)
             } else {
-                root.join(&item.install_location)
+                join_inside(&root, loc)
+            };
+            let Some(install_dir) = install_dir else {
+                unsafe_path += 1;
+                continue;
             };
 
-            let exe = item.launch_executable.trim();
-            let exe_path = if exe.is_empty() {
-                String::new()
-            } else {
-                let p = PathBuf::from(exe);
-                if p.is_absolute() { p } else { install_dir.join(exe) }
-                    .to_string_lossy()
-                    .into_owned()
-            };
+            let exe_path = resolve_exe(&install_dir, &item.launch_executable)
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_default();
 
             out.push(SourceEntry {
                 source_id: "epic".into(),
@@ -212,10 +265,10 @@ impl Source for EpicSource {
             });
         }
 
-        if out.is_empty() && unreadable > 0 {
+        if out.is_empty() && unreadable + unsafe_path > 0 {
             return Err(SourceError::Unreadable(format!(
-                "{} Epic manifests could not be read. The Epic Games launcher may be mid-update, or the files are damaged.",
-                unreadable
+                "{} Epic manifests could not be read, and {} pointed outside the Epic Games folder. The Epic Games launcher may be mid-update, or the files are damaged.",
+                unreadable, unsafe_path
             )));
         }
         Ok(out)
@@ -619,6 +672,35 @@ mod tests {
         assert_eq!(parse_human_size("1234"), 1234, "a bare number is a byte count");
         assert_eq!(parse_human_size(""), 0);
         assert_eq!(parse_human_size("not a size"), 0, "unknown stays unknown");
+    }
+
+    #[test]
+    fn a_manifest_path_that_climbs_out_is_refused() {
+        let base = Path::new(r"C:\Epic Games");
+        assert!(join_inside(base, "Portal2").is_some());
+        assert!(join_inside(base, r"..\..\Windows\System32").is_none());
+        assert!(join_inside(base, r"/Windows").is_none());
+        assert!(join_inside(base, r"D:\Games\Portal2").is_none());
+    }
+
+    #[test]
+    fn an_absolute_location_is_accepted_but_not_one_that_climbs() {
+        assert!(plain_absolute(r"D:\Games\Portal2").is_some());
+        assert!(plain_absolute(r"D:\Games\..\Windows").is_none());
+        assert!(plain_absolute(r"Games\Portal2").is_none());
+    }
+
+    #[test]
+    fn an_executable_must_live_inside_its_install_folder() {
+        let base = Path::new(r"C:\Epic Games\Portal2");
+        assert_eq!(
+            resolve_exe(base, "portal2.exe"),
+            Some(base.join("portal2.exe"))
+        );
+        assert!(resolve_exe(base, r"..\..\Windows\System32\cmd.exe").is_none());
+        assert!(resolve_exe(base, r"C:\Windows\System32\cmd.exe").is_none());
+        assert!(resolve_exe(base, r"C:\Epic Games\Portal2\bin\portal2.exe").is_some());
+        assert!(resolve_exe(base, "  ").is_none());
     }
 
     #[test]

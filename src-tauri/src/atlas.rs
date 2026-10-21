@@ -15,7 +15,7 @@
 //      be read says why instead of silently contributing nothing.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -773,10 +773,16 @@ pub struct AtlasStore {
     /// Sources the user turned off. Empty means every source is read.
     #[serde(default)]
     pub disabled_sources: Vec<String>,
-    // Legacy id -> canonical id used to live here as an `aliases` map, for
-    // favourites and sessions recorded before the canonical split. Nothing ever
-    // read it - the migration rewrites those in place instead - so it was always
-    // empty and was only ever asserted empty. Removed.
+    // An install id maps to every canonical id that install has appeared under.
+    //
+    // A canonical id is a hash of the title, so a launcher-side rename changes
+    // it, while the install id (steam:<appid>, manual:<path hash>) does not.
+    // Without this map, renaming a game in Steam silently orphaned the
+    // favourites and sessions filed under the old id. An earlier, never-written
+    // version of this field was removed as dead weight; this one is populated by
+    // `remember_ids` on every scan and read by `merge_library`.
+    #[serde(default)]
+    pub aliases: HashMap<String, Vec<String>>,
  }
 
 const STORE_VERSION: u32 = 2;
@@ -790,15 +796,37 @@ pub fn atlas_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 fn read_atlas(app: &tauri::AppHandle) -> AtlasStore {
     let Ok(p) = atlas_path(app) else { return AtlasStore::default() };
     let Ok(t) = std::fs::read_to_string(&p) else { return AtlasStore::default() };
-    let mut s: AtlasStore = serde_json::from_str(&t).unwrap_or_default();
-    migrate(&mut s);
-    s
+    match serde_json::from_str::<AtlasStore>(&t) {
+        Ok(mut s) => {
+            migrate(&mut s);
+            s
+        }
+        Err(_) => {
+            // Unreadable is not the same as empty. Returning a default here used
+            // to let the next command write that default back over the only copy,
+            // which is how one truncated file could erase a library. Keep the
+            // file, start from a clean store, and never silently overwrite it.
+            let stamp = super::now_unix();
+            let bad = p.with_extension(format!("json.corrupt-{}", stamp));
+            let _ = std::fs::rename(&p, &bad);
+            AtlasStore::default()
+        }
+    }
 }
 
 fn write_atlas(app: &tauri::AppHandle, s: &AtlasStore) -> Result<(), String> {
     let p = atlas_path(app)?;
-    std::fs::write(&p, serde_json::to_string_pretty(s).unwrap_or_default())
-        .map_err(|e| format!("ATLAS settings could not be written: {}", e))
+    let json = serde_json::to_string_pretty(s)
+        .map_err(|e| format!("ATLAS settings could not be written: {}", e))?;
+    // Write beside the target and swap it in. A crash mid-write then leaves the
+    // previous store intact instead of a truncated file that reads as empty.
+    let tmp = p.with_extension("json.tmp");
+    std::fs::write(&tmp, json)
+        .map_err(|e| format!("ATLAS settings could not be written: {}", e))?;
+    std::fs::rename(&tmp, &p).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("ATLAS settings could not be written: {}", e)
+    })
 }
 
 /// Brings an older store forward without losing anything in it.
@@ -820,6 +848,29 @@ fn migrate(s: &mut AtlasStore) {
 
 // ---------- merging ----------
 
+/// Records every canonical id each install has appeared under, and returns true
+/// when something new was learned.
+///
+/// A scan is the only place that knows the current title, so it is the only place
+/// that can notice a rename. The old ids are kept rather than replaced: they are
+/// what the favourites and sessions already on disk are filed under.
+pub fn remember_ids(store: &mut AtlasStore, games: &[Game]) -> bool {
+    let mut changed = false;
+    for g in games {
+        for i in &g.installs {
+            if i.legacy_id.is_empty() {
+                continue;
+            }
+            let seen = store.aliases.entry(i.legacy_id.clone()).or_default();
+            if !seen.iter().any(|x| x == &g.id) {
+                seen.push(g.id.clone());
+                changed = true;
+            }
+        }
+    }
+    changed
+}
+
 /// Turns the canonical games into the flat card list the frontend renders,
 /// folding in favourites, hidden entries and recorded sessions.
 pub fn merge_library(store: &AtlasStore, canon: Vec<CanonicalGame>) -> Vec<Game> {
@@ -827,10 +878,18 @@ pub fn merge_library(store: &AtlasStore, canon: Vec<CanonicalGame>) -> Vec<Game>
 
     for mut c in canon {
         // The user may have hidden or starred this game under any of the ids it
-        // has ever had. All of them are honoured.
+        // has ever had. All of them are honoured, including the canonical ids
+        // that a rename has since replaced.
         let legacy: HashSet<String> = c.installs.iter().map(|i| i.legacy_id.clone()).collect();
+        let mut known: HashSet<String> = legacy.clone();
+        known.insert(c.id.clone());
+        for i in &c.installs {
+            if let Some(ids) = store.aliases.get(&i.legacy_id) {
+                known.extend(ids.iter().cloned());
+            }
+        }
         let flagged = |list: &Vec<String>| -> bool {
-            list.iter().any(|x| x == &c.id) || list.iter().any(|x| legacy.contains(x))
+            list.iter().any(|x| known.contains(x))
         };
         if flagged(&store.hidden) {
             continue;
@@ -910,10 +969,17 @@ pub fn merge_library(store: &AtlasStore, canon: Vec<CanonicalGame>) -> Vec<Game>
     // source of truth. A session filed under any id this game has ever had still
     // counts, so upgrading ATLAS never silently empties the play-time totals.
     for g in out.iter_mut() {
-        let ids: HashSet<&str> = std::iter::once(g.id.as_str())
-            .chain(g.installs.iter().map(|i| i.legacy_id.as_str()))
+        let mut known: HashSet<String> = HashSet::new();
+        known.insert(g.id.clone());
+        for i in &g.installs {
+            known.insert(i.legacy_id.clone());
+            if let Some(ids) = store.aliases.get(&i.legacy_id) {
+                known.extend(ids.iter().cloned());
+            }
+        }
+        let s: Vec<&Session> = store.sessions.iter()
+            .filter(|x| known.contains(&x.game_id))
             .collect();
-        let s: Vec<&Session> = store.sessions.iter().filter(|x| ids.contains(x.game_id.as_str())).collect();
         g.plays = s.len() as u64;
         g.last_launch = s.iter().map(|x| x.started).max().unwrap_or(0);
         g.total_secs = s.iter().filter_map(|x| x.duration_secs).sum();
@@ -960,7 +1026,7 @@ fn manual_entries(manual: &[Game]) -> Vec<SourceEntry> {
 
 #[tauri::command]
 pub async fn atlas_scan(app: tauri::AppHandle) -> Result<ScanReport, String> {
-    let store = read_atlas(&app);
+    let mut store = read_atlas(&app);
     let manual = manual_entries(&store.manual);
     let disabled: HashSet<String> = store.disabled_sources.iter().cloned().collect();
 
@@ -973,6 +1039,14 @@ pub async fn atlas_scan(app: tauri::AppHandle) -> Result<ScanReport, String> {
         .map_err(|e| format!("The library scan could not be started: {}.", e))?;
 
     let games = merge_library(&store, canonicalize(raw.entries));
+    // Learn the id this scan gave each install, so a later rename can still find
+    // the favourites and sessions filed under today's id. A scan that learns
+    // nothing does not touch the disk, and a failed write does not fail the scan:
+    // the library on screen is already correct, and the alias only matters once
+    // the title changes.
+    if remember_ids(&mut store, &games) {
+        let _ = write_atlas(&app, &store);
+    }
     Ok(ScanReport {
         started: now_unix(),
         ms: raw.ms,
@@ -1439,24 +1513,37 @@ pub async fn atlas_launch_id(app: tauri::AppHandle, id: String) -> Result<String
             "That game is not in the library STRYV can see. Rescan and try again.".to_string()
         })?;
 
-    if game.launcher == "Steam" {
-        let msg = steam_start(&game.app_id)?;
+    // A card can hold several installs, and the headline launcher is not always
+    // the one that can be started. A Steam game the user also added by hand has
+    // a manual install pointing at a verified executable; the old code looked at
+    // the headline source first and then refused the Steam install it had just
+    // picked, so that card could not be launched at all.
+    //
+    // An executable the user pointed ATLAS at wins: it is the only install where
+    // the path is both verified and allowed to be spawned. Otherwise Steam and
+    // the Store are started the way Windows expects, and the rest are refused
+    // honestly.
+    let direct = game.installs.iter().find(|i| {
+        matches!(i.source_id.as_str(), "manual" | "standalone")
+            && !i.exe_path.is_empty()
+            && Path::new(&i.exe_path).is_file()
+    });
+    let inst = direct
+        .or_else(|| game.installs.iter().find(|i| i.source_id == "steam" && !i.app_id.is_empty()))
+        .or_else(|| game.installs.iter().find(|i| i.source_id == "xbox" && !i.app_id.is_empty()))
+        .or_else(|| game.installs.iter().find(|i| i.available))
+        .or_else(|| game.installs.first())
+        .cloned()
+        .unwrap_or_default();
+
+    if inst.source_id == "steam" {
+        let msg = steam_start(&inst.app_id)?;
         // Steam starts the game itself, so STRYV never gets a process handle.
         // The launch is recorded, but the duration is left unmeasured rather
         // than guessed.
-        push_session(&app, &game.id, &game.name, &game.launcher, None, None, None, false);
+        push_session(&app, &game.id, &game.name, &inst.source_name, None, None, None, false);
         return Ok(msg);
     }
-
-    // A card can hold several installs; the first one that is actually on disk
-    // is the one launched, and if none are, the error names the first path so
-    // the user knows where ATLAS last saw it.
-    let inst = game
-        .installs
-        .iter()
-        .find(|i| i.available)
-        .cloned()
-        .unwrap_or_default();
 
     // A Microsoft Store entry is started by its AUMID rather than by a path. Its
     // files live inside WindowsApps, which is ACL-protected and not something
@@ -1466,7 +1553,7 @@ pub async fn atlas_launch_id(app: tauri::AppHandle, id: String) -> Result<String
         // Windows starts the app itself, so STRYV never gets a process handle.
         // The launch is recorded and the duration left unmeasured, the same
         // treatment Steam gets.
-        push_session(&app, &game.id, &game.name, &game.launcher, None, None, None, false);
+        push_session(&app, &game.id, &game.name, &inst.source_name, None, None, None, false);
         return Ok(msg);
     }
 
@@ -1507,7 +1594,9 @@ pub async fn atlas_launch_id(app: tauri::AppHandle, id: String) -> Result<String
     let pid = child.id();
     let gid = game.id.clone();
     let gname = game.name.clone();
-    let glaunch = game.launcher.clone();
+    // Record the source that was actually started, not the card's headline one:
+    // a merged card can be headed by one launcher and launched from another.
+    let glaunch = inst.source_name.clone();
     let handle = app.clone();
 
     // The child is owned by this thread now. It is polled until the process
@@ -1693,6 +1782,56 @@ mod tests {
         assert_eq!(g[0].plays, 1, "upgrading ATLAS must not empty the play time");
         assert_eq!(g[0].total_secs, 600);
         assert_eq!(g[0].last_session_secs, Some(600));
+    }
+
+    #[test]
+    fn remember_ids_learns_every_canonical_id_an_install_has_had() {
+        let mut store = AtlasStore::default();
+        let before = merge_library(&store, canonicalize(vec![entry("steam", "Hollow Knight", "C:/a", "", 1)]));
+        assert!(remember_ids(&mut store, &before), "the first scan learns the id");
+        let old_id = before[0].id.clone();
+        assert_eq!(store.aliases.get("steam:111"), Some(&vec![old_id.clone()]));
+
+        // The launcher renames the game. The canonical id changes; the install
+        // id does not, so the old canonical id is kept beside the new one.
+        let after = merge_library(&store, canonicalize(vec![entry("steam", "Hollow Knight: Voidheart", "C:/a", "", 1)]));
+        assert_ne!(after[0].id, old_id);
+        assert!(remember_ids(&mut store, &after));
+        let ids = store.aliases.get("steam:111").unwrap();
+        assert!(ids.contains(&old_id) && ids.contains(&after[0].id));
+        assert!(!remember_ids(&mut store, &after), "a second scan learns nothing new");
+    }
+
+    #[test]
+    fn a_session_filed_under_a_pre_rename_id_still_counts() {
+        let mut store = AtlasStore::default();
+        let before = merge_library(&store, canonicalize(vec![entry("steam", "Hollow Knight", "C:/a", "", 1)]));
+        remember_ids(&mut store, &before);
+        store.sessions.push(Session {
+            id: "s1".into(),
+            game_id: before[0].id.clone(),
+            name: "Hollow Knight".into(),
+            launcher: "Steam".into(),
+            started: 100,
+            duration_secs: Some(600),
+            ..Default::default()
+        });
+
+        // Same install, renamed title: the card is new, the play time is not.
+        let after = merge_library(&store, canonicalize(vec![entry("steam", "Hollow Knight: Voidheart", "C:/a", "", 1)]));
+        assert_eq!(after[0].plays, 1);
+        assert_eq!(after[0].total_secs, 600, "renaming a game must not delete its history");
+    }
+
+    #[test]
+    fn a_favourite_filed_under_a_pre_rename_id_still_pins_the_card() {
+        let mut store = AtlasStore::default();
+        let before = merge_library(&store, canonicalize(vec![entry("steam", "Hollow Knight", "C:/a", "", 1)]));
+        remember_ids(&mut store, &before);
+        store.favorites.push(before[0].id.clone());
+
+        let after = merge_library(&store, canonicalize(vec![entry("steam", "Hollow Knight: Voidheart", "C:/a", "", 1)]));
+        assert!(after[0].favorite, "the star follows the game, not the title");
     }
 
     #[test]

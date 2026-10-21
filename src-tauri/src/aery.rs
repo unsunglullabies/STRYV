@@ -442,6 +442,46 @@ pub fn aery_resolve(root: &Path, rel: &str) -> Result<PathBuf, String> {
 
 // ---- commands -------------------------------------------------------------
 
+/// Title, excerpt and tag match. The body is deliberately not read here: the
+/// excerpt is only the first 280 characters, so a body search has to be a file
+/// read, and that is the caller's job so a library with no query never pays for
+/// it.
+pub fn aery_meta_matches(n: &AeryNote, term: &str) -> bool {
+    n.title.to_lowercase().contains(term)
+        || n.excerpt.to_lowercase().contains(term)
+        || n.tags.iter().any(|t| t.contains(term))
+}
+
+/// The search filter, with the body reader injected so it can be tested without
+/// an AppHandle. `read` is only called for a note the metadata did not already
+/// match, so the common case is one pass over what the scan already had.
+pub fn aery_filter<F>(notes: Vec<AeryNote>, term: &str, want_tag: &str, read: F) -> Vec<AeryNote>
+where
+    F: Fn(&AeryNote) -> Option<String>,
+{
+    // Normalised here rather than trusted from the caller: the command already
+    // does it, but a helper that only works for pre-lowercased input is a trap.
+    let term = term.trim().to_lowercase();
+    let want_tag = want_tag.trim().trim_start_matches('#').to_lowercase();
+    notes
+        .into_iter()
+        .filter(|n| {
+            if !want_tag.is_empty() && !n.tags.iter().any(|t| t == &want_tag) {
+                return false;
+            }
+            if term.is_empty() || aery_meta_matches(n, &term) {
+                return true;
+            }
+            // A match past the excerpt is still a match. Without this, a note
+            // whose word appears halfway down its body was reported as not in
+            // the vault, which is worse than a slow search.
+            read(n)
+                .map(|text| text.to_lowercase().contains(term.as_str()))
+                .unwrap_or(false)
+        })
+        .collect()
+}
+
 #[tauri::command]
 pub fn aery_list(app: tauri::AppHandle, q: Option<String>, tag: Option<String>) -> Result<Vec<AeryNote>, String> {
     let root = aery_root(&app)?;
@@ -452,13 +492,10 @@ pub fn aery_list(app: tauri::AppHandle, q: Option<String>, tag: Option<String>) 
     let term = q.unwrap_or_default().trim().to_lowercase();
     let want_tag = tag.unwrap_or_default().trim().trim_start_matches('#').to_lowercase();
     if !term.is_empty() || !want_tag.is_empty() {
-        notes.retain(|n| {
-            let hit_tag = want_tag.is_empty() || n.tags.iter().any(|t| *t == want_tag);
-            let hit_term = term.is_empty()
-                || n.title.to_lowercase().contains(&term)
-                || n.excerpt.to_lowercase().contains(&term)
-                || n.tags.iter().any(|t| t.contains(&term));
-            hit_tag && hit_term
+        notes = aery_filter(notes, &term, &want_tag, |n| {
+            aery_resolve(&root, &n.path)
+                .ok()
+                .and_then(|p| std::fs::read_to_string(p).ok())
         });
     }
 
@@ -468,9 +505,49 @@ pub fn aery_list(app: tauri::AppHandle, q: Option<String>, tag: Option<String>) 
     Ok(notes)
 }
 
+/// The link graph, as nodes and directed edges. A link that points at a title
+/// no note carries is left out of the edges rather than drawn to a phantom
+/// node: the note view already shows unresolved links, and inventing a node here
+/// would make the map claim a connection that does not exist.
+///
+/// Titles are matched case-insensitively, the same rule `aery_read` uses, so the
+/// graph and the backlink panel can never disagree about what links where.
 #[tauri::command]
-pub fn aery_read(app: tauri::AppHandle, id: String) -> Result<serde_json::Value, String> {
+pub fn aery_graph(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let root = aery_root(&app)?;
+    let meta = aery_read_meta(&root);
+    let mut notes: Vec<AeryNote> = Vec::new();
+    aery_scan_dir(&root, &root, &meta, &mut notes, 0);
+
+    let mut edges: Vec<(String, String)> = Vec::new();
+    for n in &notes {
+        let Ok(text) = std::fs::read_to_string(aery_resolve(&root, &n.path)?) else { continue };
+        for target in aery_links(&text) {
+            let Some(to) = notes.iter().find(|o| o.title.eq_ignore_ascii_case(&target)) else {
+                continue;
+            };
+            // A self-link is not a connection between two notes, and a duplicate
+            // link in one note is one edge, not several.
+            if to.id == n.id || edges.iter().any(|(f, t)| *f == n.id && *t == to.id) {
+                continue;
+            }
+            edges.push((n.id.clone(), to.id.clone()));
+        }
+    }
+
+    Ok(json!({
+        "nodes": notes.iter().map(|n| json!({
+            "id": n.id,
+            "title": n.title,
+            "folder": n.folder,
+            "pinned": n.pinned,
+        })).collect::<Vec<_>>(),
+        "edges": edges.iter().map(|(f, t)| json!({ "from": f, "to": t })).collect::<Vec<_>>(),
+    }))
+}
+
+#[tauri::command]
+pub fn aery_read(app: tauri::AppHandle, id: String) -> Result<serde_json::Value, String> {    let root = aery_root(&app)?;
     let meta = aery_read_meta(&root);
     let mut notes: Vec<AeryNote> = Vec::new();
     aery_scan_dir(&root, &root, &meta, &mut notes, 0);
@@ -705,6 +782,37 @@ pub fn aery_delete(app: tauri::AppHandle, id: String) -> Result<(), String> {
     aery_write_meta(&root, &meta)
 }
 
+/// Resolves where a trashed note should be restored to, or None if the recorded
+/// relative path could leave the vault.
+///
+/// The relative path comes from a filename inside `.trash`, which a user - or
+/// anything else with write access to the vault - controls. A lexical
+/// `starts_with(root)` cannot catch `..`: it compares components without
+/// resolving them, so `<root>/../escape` looks like it is inside `<root>`.
+/// Only plain components are accepted, and the parent is then canonicalised so
+/// a symlink inside the vault cannot redirect the write either.
+fn aery_restore_target(root: &Path, orig: &str) -> Option<PathBuf> {
+    // aery_root() already canonicalises, but taking a copy here means a caller
+    // that did not cannot make the comparison below meaningless.
+    let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let joined = orig.replace('~', "/");
+    let rel = Path::new(&joined);
+    if rel.is_absolute() {
+        return None;
+    }
+    if !rel.components().all(|c| matches!(c, std::path::Component::Normal(_))) {
+        return None;
+    }
+    let target = root.join(rel);
+    let parent = target.parent()?;
+    std::fs::create_dir_all(parent).ok()?;
+    let real_parent = parent.canonicalize().ok()?;
+    if !real_parent.starts_with(&root) {
+        return None;
+    }
+    Some(real_parent.join(target.file_name()?))
+}
+
 #[tauri::command]
 pub fn aery_restore(app: tauri::AppHandle) -> Result<usize, String> {
     let root = aery_root(&app)?;
@@ -721,20 +829,9 @@ pub fn aery_restore(app: tauri::AppHandle) -> Result<usize, String> {
         // cannot corrupt the restore path.
         let stem = &name[..name.len() - 3];
         let Some((orig, _stamp)) = stem.rsplit_once("__") else { continue };
-        let target = root.join(orig.replace('~', "/"));
         // Never let a restore write outside the vault, even if the trash was
-        // tampered with by hand.
-        let target = match target.canonicalize() {
-            Ok(c) => c,
-            Err(_) => {
-                if let Some(p) = target.parent() { let _ = std::fs::create_dir_all(p); }
-                target
-            }
-        };
-        if !target.starts_with(&root) { continue; }
-        if let Some(p) = target.parent() {
-            std::fs::create_dir_all(p).map_err(|x| x.to_string())?;
-        }
+        // tampered with by hand. Checked before the directory is created.
+        let Some(target) = aery_restore_target(&root, orig) else { continue };
         if std::fs::rename(e.path(), &target).is_ok() {
             back += 1;
         }
@@ -755,6 +852,83 @@ pub fn aery_set_pinned(app: tauri::AppHandle, id: String, pinned: bool) -> Resul
         meta.pinned.retain(|x| *x != id);
     }
     aery_write_meta(&root, &meta)
+}
+
+/// Validates a user-supplied folder path. Returns it with forward slashes, or
+/// explains why it cannot be used.
+///
+/// `aery_mkdir` creates directories, so this is the same containment rule as
+/// the other note commands - but stricter about `.`: a hidden folder would be
+/// skipped by the scan, so creating one would look like a folder that vanished.
+pub fn aery_folder_rel(path: &str) -> Result<String, String> {
+    // Checked before trimming: "/abs" is a drive-root path, and silently
+    // re-reading it as "abs" would make the answer depend on the leading slash.
+    // has_root, not is_absolute: on Windows "/abs" has a root but no drive
+    // prefix, so is_absolute() is false for it and it would slip through.
+    if Path::new(path.trim()).has_root() {
+        return Err("That folder is not in the vault.".into());
+    }
+    let clean = path.trim().replace('\\', "/");
+    let clean = clean.trim_matches('/').to_string();
+    if clean.is_empty() {
+        return Err("A folder needs a name.".into());
+    }
+    let rel = Path::new(&clean);
+    if rel.is_absolute() || !rel.components().all(|c| matches!(c, std::path::Component::Normal(_))) {
+        return Err("That folder is not in the vault.".into());
+    }
+    if clean.split('/').any(|s| s.trim().is_empty() || s.starts_with('.')) {
+        return Err("Folder names cannot be empty or start with a dot.".into());
+    }
+    Ok(clean)
+}
+
+/// Every folder in the vault, empty ones included, so a folder you just made
+/// stays visible and can be moved into before it holds a note.
+pub fn aery_scan_folders(root: &Path, dir: &Path, out: &mut Vec<String>, depth: u32) {
+    if depth > 12 {
+        return;
+    }
+    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    for e in rd.flatten() {
+        let p = e.path();
+        let name = e.file_name().to_string_lossy().to_string();
+        if !p.is_dir() || name.starts_with('.') {
+            continue;
+        }
+        out.push(aery_rel_of(root, &p));
+        aery_scan_folders(root, &p, out, depth + 1);
+    }
+}
+
+#[tauri::command]
+pub fn aery_mkdir(app: tauri::AppHandle, path: String) -> Result<String, String> {
+    let root = aery_root(&app)?;
+    let clean = aery_folder_rel(&path)?;
+
+    // Check every component that already exists before creating anything. A
+    // symlinked directory inside the vault could otherwise redirect the write
+    // outside it, and create_dir_all would happily follow it.
+    let mut probe = root.clone();
+    for part in clean.split('/') {
+        probe.push(part);
+        if probe.exists() {
+            let canon = probe.canonicalize().map_err(|e| e.to_string())?;
+            if !canon.starts_with(&root) {
+                return Err("A folder cannot be outside the vault.".into());
+            }
+        } else {
+            break;
+        }
+    }
+
+    let dir = root.join(clean.replace('/', "\\"));
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Could not create that folder: {}", e))?;
+    let canon = dir.canonicalize().map_err(|e| e.to_string())?;
+    if !canon.starts_with(&root) {
+        return Err("A folder cannot be outside the vault.".into());
+    }
+    Ok(aery_rel_of(&root, &canon))
 }
 
 #[tauri::command]
@@ -802,14 +976,377 @@ pub fn aery_counts(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let mut tags: Vec<String> = notes.iter().flat_map(|n| n.tags.clone()).collect();
     tags.sort();
     tags.dedup();
-    let mut folders: Vec<String> = notes.iter().filter(|n| !n.folder.is_empty()).map(|n| n.folder.clone()).collect();
+    let mut folders: Vec<String> = Vec::new();
+    aery_scan_folders(&root, &root, &mut folders, 0);
+    folders.extend(notes.iter().filter(|n| !n.folder.is_empty()).map(|n| n.folder.clone()));
     folders.sort();
     folders.dedup();
     Ok(json!({ "notes": notes.len(), "tags": tags, "folders": folders }))
 }
-// ============================================================================
-// Tests
-// ============================================================================
+// ---- folders, import and export -------------------------------------------
+
+fn aery_rel_join(root: &Path, rel: &str) -> PathBuf {
+    if rel.trim().is_empty() { root.to_path_buf() } else { root.join(rel.replace('/', "\\")) }
+}
+
+/// A name that is free in `dir`, never overwriting what is there.
+fn aery_unique_path(dir: &Path, stem: &str, ext: &str) -> PathBuf {
+    let stem = aery_safe_stem(stem);
+    let mut name = format!("{}.{}", stem, ext);
+    let mut n = 2;
+    while dir.join(&name).exists() {
+        name = format!("{} {}.{}", stem, n, ext);
+        n += 1;
+    }
+    dir.join(name)
+}
+
+/// Rewrites an existing aery_id, or adds one. Used when an imported note claims
+/// an id that another note in this vault already owns: keeping it would make
+/// two notes share a tab, a pin and a study reference.
+fn aery_force_id(text: &str, id: &str) -> String {
+    if aery_front_id(text).is_none() {
+        return aery_ensure_id(text, id);
+    }
+    let mut out = Vec::new();
+    let mut done = false;
+    for line in text.lines() {
+        if !done && line.trim_start().starts_with("aery_id:") {
+            out.push(format!("aery_id: {}", id));
+            done = true;
+        } else {
+            out.push(line.to_string());
+        }
+    }
+    let mut joined = out.join("\n");
+    if text.ends_with('\n') { joined.push('\n'); }
+    joined
+}
+
+#[tauri::command]
+pub fn aery_rename_folder(app: tauri::AppHandle, from: String, to: String) -> Result<String, String> {
+    let root = aery_root(&app)?;
+    rename_folder_in(&root, &from, &to)
+}
+
+fn rename_folder_in(root: &Path, from: &str, to: &str) -> Result<String, String> {
+    let root = root.canonicalize().map_err(|e| e.to_string())?;
+    let from_rel = aery_folder_rel(from)?;
+    let to_rel = aery_folder_rel(to)?;
+    if from_rel == to_rel {
+        return Ok(to_rel);
+    }
+    let src = root.join(from_rel.replace('/', "\\"));
+    if !src.is_dir() {
+        return Err("That folder is not in the vault.".into());
+    }
+    let dst = root.join(to_rel.replace('/', "\\"));
+    if dst.exists() {
+        // A rename must never merge two folders: that would silently rewrite
+        // paths and make name collisions ambiguous.
+        return Err("A folder with that name already exists.".into());
+    }
+    // Refuse `work` -> `work/ideas`: the destination would be inside the source
+    // and the rename would either fail halfway or lose the parent.
+    if dst.starts_with(&src) {
+        return Err("A folder cannot be moved inside itself.".into());
+    }
+    let parent = dst.parent().ok_or("That folder has no parent.")?;
+    std::fs::create_dir_all(parent).map_err(|e| format!("Could not create the new folder: {}", e))?;
+    std::fs::rename(&src, &dst).map_err(|e| format!("Could not rename the folder: {}", e))?;
+    let canon = dst.canonicalize().map_err(|e| e.to_string())?;
+    if !canon.starts_with(&root) {
+        return Err("A folder cannot be outside the vault.".into());
+    }
+    Ok(aery_rel_of(&root, &canon))
+}
+
+/// Deletes a folder only when it is empty, or when the caller has said where
+/// its files should go. Files are moved, never erased.
+#[tauri::command]
+pub fn aery_delete_folder(app: tauri::AppHandle, folder: String, move_to: Option<String>) -> Result<serde_json::Value, String> {
+    let root = aery_root(&app)?;
+    delete_folder_in(&root, &folder, move_to.as_deref())
+}
+
+fn delete_folder_in(root: &Path, folder: &str, move_to: Option<&str>) -> Result<serde_json::Value, String> {
+    let rel = aery_folder_rel(folder)?;
+    let dir = root.join(rel.replace('/', "\\"));
+    if dir == root || !dir.is_dir() {
+        return Err("That folder is not in the vault.".into());
+    }
+
+    let mut files: Vec<PathBuf> = Vec::new();
+    aery_walk(&dir, &mut files, 0);
+    let notes = files.iter().filter(|p| p.extension().map(|x| x.eq_ignore_ascii_case("md")).unwrap_or(false)).count();
+
+    if !files.is_empty() {
+        let Some(target) = move_to else {
+            return Err(format!(
+                "That folder holds {} file{}. Move them somewhere first.",
+                files.len(), if files.len() == 1 { "" } else { "s" }
+            ));
+        };
+        let dest_rel = aery_folder_rel(target).unwrap_or_default();
+        let dest = aery_rel_join(&root, &dest_rel);
+        if !dest.is_dir() {
+            return Err("The folder to move into does not exist.".into());
+        }
+        if dest.starts_with(&dir) {
+            return Err("Files cannot be moved into the folder being deleted.".into());
+        }
+        for f in &files {
+            let stem = f.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+            let ext = f.extension().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+            let to = aery_unique_path(&dest, &stem, &ext);
+            std::fs::rename(f, &to).map_err(|e| format!("Could not move {}: {}", f.display(), e))?;
+        }
+        // Every file is out. Remove the now-empty tree bottom-up; a directory
+        // that still has something in it stops the removal rather than being
+        // force-deleted.
+        aery_prune_empty_dirs(&dir);
+        if dir.exists() {
+            return Err("Some files in that folder could not be moved, so the folder was kept.".into());
+        }
+        return Ok(json!({ "deleted": true, "moved": files.len(), "notes": notes }));
+    }
+
+    aery_prune_empty_dirs(&dir);
+    if dir.exists() {
+        return Err("The folder still holds something, so it was kept.".into());
+    }
+    Ok(json!({ "deleted": true, "moved": 0, "notes": notes }))
+}
+
+fn aery_walk(dir: &Path, out: &mut Vec<PathBuf>, depth: u32) {
+    if depth > 12 {
+        return;
+    }
+    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    for e in rd.flatten() {
+        let p = e.path();
+        let name = e.file_name().to_string_lossy().to_string();
+        if name.starts_with('.') {
+            continue;
+        }
+        let Ok(md) = std::fs::symlink_metadata(&p) else { continue };
+        if md.file_type().is_symlink() {
+            continue;
+        }
+        if p.is_dir() {
+            aery_walk(&p, out, depth + 1);
+        } else {
+            out.push(p);
+        }
+    }
+}
+
+fn aery_prune_empty_dirs(dir: &Path) {
+    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    let kids: Vec<PathBuf> = rd.flatten().map(|e| e.path()).collect();
+    for k in kids {
+        if k.is_dir() {
+            aery_prune_empty_dirs(&k);
+        }
+    }
+    let _ = std::fs::remove_dir(dir);
+}
+
+#[tauri::command]
+pub fn aery_export_note(app: tauri::AppHandle, id: String, dest: String) -> Result<String, String> {
+    let root = aery_root(&app)?;
+    let meta = aery_read_meta(&root);
+    let mut notes: Vec<AeryNote> = Vec::new();
+    aery_scan_dir(&root, &root, &meta, &mut notes, 0);
+    let Some(note) = notes.iter().find(|n| n.id == id) else {
+        return Err("That note is not in the vault.".into());
+    };
+    let from = aery_resolve(&root, &note.path)?;
+    let to = PathBuf::from(&dest);
+    if to == from {
+        return Err("That is the note's own file, so nothing was overwritten.".into());
+    }
+    // Byte copy, not re-encoded text: exporting must not change a single byte of
+    // the note, front matter included.
+    let bytes = std::fs::read(&from).map_err(|e| e.to_string())?;
+    aery_atomic_write(&to, &bytes)?;
+    Ok(to.to_string_lossy().to_string())
+}
+
+/// Copies every note in the vault into `dest`, keeping the folder structure.
+/// Existing files are only replaced when `overwrite` is true; otherwise they are
+/// counted and left alone so the caller can ask.
+#[tauri::command]
+pub fn aery_export_vault(app: tauri::AppHandle, dest: String, overwrite: bool) -> Result<serde_json::Value, String> {
+    let root = aery_root(&app)?;
+    export_vault_in(&root, &dest, overwrite)
+}
+
+fn export_vault_in(root: &Path, dest: &str, overwrite: bool) -> Result<serde_json::Value, String> {
+    let root = root.canonicalize().map_err(|e| e.to_string())?;
+    let dest = PathBuf::from(dest);
+    if !dest.is_dir() {
+        return Err("Choose an existing folder to export into.".into());
+    }
+    let dest = dest.canonicalize().map_err(|e| e.to_string())?;
+    if dest.starts_with(&root) {
+        return Err("Choose a folder outside the vault, so the export cannot overwrite it.".into());
+    }
+    let mut files: Vec<PathBuf> = Vec::new();
+    aery_walk(&root, &mut files, 0);
+    let mut copied = 0;
+    let mut skipped = 0;
+    for f in files {
+        if !f.extension().map(|x| x.eq_ignore_ascii_case("md")).unwrap_or(false) {
+            continue;
+        }
+        let rel = aery_rel_of(&root, &f);
+        let to = dest.join(rel.replace('/', "\\"));
+        if to.exists() && !overwrite {
+            skipped += 1;
+            continue;
+        }
+        if let Some(parent) = to.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        std::fs::copy(&f, &to).map_err(|e| e.to_string())?;
+        copied += 1;
+    }
+    Ok(json!({ "copied": copied, "skipped": skipped, "dest": dest.to_string_lossy() }))
+}
+
+/// Imports Markdown files or folders the user picked. Never overwrites: a name
+/// that is taken gets a suffix, and an id another note owns is replaced.
+#[tauri::command]
+pub fn aery_import(app: tauri::AppHandle, paths: Vec<String>, folder: Option<String>) -> Result<serde_json::Value, String> {
+    let root = aery_root(&app)?;
+    import_in(&root, paths, folder.as_deref())
+}
+
+fn import_in(root: &Path, paths: Vec<String>, folder: Option<&str>) -> Result<serde_json::Value, String> {
+    let dest_rel = aery_folder_rel(folder.unwrap_or_default()).unwrap_or_default();
+    let dest = aery_rel_join(&root, &dest_rel);
+    if !dest.is_dir() {
+        return Err("The folder to import into does not exist.".into());
+    }
+
+    let meta = aery_read_meta(&root);
+    let mut existing: Vec<AeryNote> = Vec::new();
+    aery_scan_dir(&root, &root, &meta, &mut existing, 0);
+    let mut ids: Vec<String> = existing.iter().map(|n| n.id.clone()).collect();
+
+    let mut imported = 0;
+    let mut renamed = 0;
+    let mut skipped = 0;
+    let mut errors: Vec<String> = Vec::new();
+    let mut written: Vec<PathBuf> = Vec::new();
+
+    for raw in paths {
+        let src = PathBuf::from(&raw);
+        let mut batch: Vec<(PathBuf, PathBuf)> = Vec::new(); // (absolute, relative to import base)
+        let md = std::fs::symlink_metadata(&src).ok();
+        let Some(md) = md else { skipped += 1; errors.push(format!("{}: not found", raw)); continue };
+        if md.file_type().is_symlink() {
+            skipped += 1;
+            errors.push(format!("{}: symlinks are not imported", raw));
+            continue;
+        }
+        if src.is_dir() {
+            let mut files = Vec::new();
+            aery_walk(&src, &mut files, 0);
+            for f in files {
+                if !f.extension().map(|x| x.eq_ignore_ascii_case("md")).unwrap_or(false) {
+                    continue;
+                }
+                let rel = f.strip_prefix(&src).unwrap_or(&f).to_path_buf();
+                batch.push((f, rel));
+            }
+            // Keep the imported folder's name as the top level, so importing a
+            // vault does not pour its contents into the current root.
+            if let Some(name) = src.file_name() {
+                let base = PathBuf::from(name);
+                batch = batch.into_iter().map(|(abs, rel)| (abs, base.join(rel))).collect();
+            }
+        } else if src.extension().map(|x| x.eq_ignore_ascii_case("md")).unwrap_or(false) {
+            batch.push((src.clone(), PathBuf::from(src.file_name().unwrap_or_default())));
+        } else {
+            skipped += 1;
+            errors.push(format!("{}: not a Markdown file", raw));
+            continue;
+        }
+
+        for (abs, rel) in batch {
+            let Ok(text) = std::fs::read_to_string(&abs) else {
+                skipped += 1;
+                errors.push(format!("{}: unreadable or not UTF-8", abs.display()));
+                continue;
+            };
+            let stem = abs.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+            let target_dir = dest.join(rel.parent().unwrap_or_else(|| Path::new("")));
+            if std::fs::create_dir_all(&target_dir).is_err() {
+                skipped += 1;
+                errors.push(format!("{}: could not create its folder", abs.display()));
+                continue;
+            }
+            let wanted = target_dir.join(format!("{}.md", aery_safe_stem(&stem)));
+            let target = if wanted.exists() {
+                renamed += 1;
+                aery_unique_path(&target_dir, &stem, "md")
+            } else {
+                wanted
+            };
+            // A colliding id would make two notes share a tab, a pin and any
+            // study card that points at the old one.
+            let body = match aery_front_id(&text) {
+                Some(old) if ids.iter().any(|x| *x == old) => {
+                    let fresh = aery_id(&aery_rel_of(&root, &target));
+                    aery_force_id(&text, &fresh)
+                }
+                Some(_) => text,
+                // No usable id: adopt the path-derived one now, so the note's
+                // identity is stable even before its first edit.
+                None => aery_ensure_id(&text, &aery_id(&aery_rel_of(&root, &target))),
+            };
+            if let Some(id) = aery_front_id(&body) {
+                ids.push(id);
+            }
+            if let Err(e) = aery_atomic_write(&target, body.as_bytes()) {
+                skipped += 1;
+                errors.push(format!("{}: {}", abs.display(), e));
+                continue;
+            }
+            imported += 1;
+            written.push(target);
+        }
+    }
+
+    // Report unresolved links among what was just imported, against the vault as
+    // it now stands. "Imported" should not imply "connected".
+    let mut now_notes: Vec<AeryNote> = Vec::new();
+    aery_scan_dir(&root, &root, &aery_read_meta(&root), &mut now_notes, 0);
+    let titles: Vec<String> = now_notes.iter().map(|n| n.title.to_lowercase()).collect();
+    let mut unresolved = 0;
+    for p in &written {
+        if let Ok(t) = std::fs::read_to_string(p) {
+            for l in aery_links(&t) {
+                if !titles.iter().any(|x| *x == l.to_lowercase()) {
+                    unresolved += 1;
+                }
+            }
+        }
+    }
+
+    Ok(json!({
+        "imported": imported,
+        "renamed": renamed,
+        "skipped": skipped,
+        "unresolved_links": unresolved,
+        "errors": errors,
+        "title_sample": now_notes.first().map(|n| n.title.clone()).unwrap_or_default(),
+    }))
+}
+
+
 // There were none. Every bug in this file was invisible to the suite because
 // tests/aery.test.js mocks the backend entirely, and
 // tests/rust-structure-check.js only greps for function NAMES - it would pass
@@ -835,7 +1372,89 @@ mod tests {
         d
     }
 
+    // ---- folders -----------------------------------------------------------
+
+    #[test]
+    fn folder_names_cannot_escape_the_vault_or_hide_from_the_scan() {
+        assert_eq!(aery_folder_rel("work").unwrap(), "work");
+        assert_eq!(aery_folder_rel("work/ideas/").unwrap(), "work/ideas");
+        assert_eq!(aery_folder_rel("work\\ideas").unwrap(), "work/ideas");
+        for bad in ["", "   ", "..", "../out", "C:/Windows", "/abs", "/work", "work/../out", ".hidden", "work/.hidden", "a//b"] {
+            assert!(aery_folder_rel(bad).is_err(), "{:?} must be refused", bad);
+        }
+    }
+
+    #[test]
+    fn the_folder_list_includes_empty_folders_and_skips_hidden_ones() {
+        let root = tmp();
+        std::fs::create_dir_all(root.join("work").join("ideas")).unwrap();
+        std::fs::create_dir_all(root.join(".trash")).unwrap();
+        let mut out = Vec::new();
+        aery_scan_folders(&root, &root, &mut out, 0);
+        out.sort();
+        assert_eq!(out, vec!["work".to_string(), "work/ideas".to_string()]);
+    }
+
     // ---- identity ----------------------------------------------------------
+
+    fn note(id: &str, title: &str, excerpt: &str, tags: &[&str]) -> AeryNote {
+        AeryNote {
+            id: id.into(),
+            title: title.into(),
+            path: format!("{}.md", title),
+            folder: String::new(),
+            pinned: false,
+            created: 0,
+            modified: 0,
+            size: 0,
+            excerpt: excerpt.into(),
+            tags: tags.iter().map(|t| t.to_string()).collect(),
+            links: Vec::new(),
+            backlinks: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn search_reads_the_body_when_the_excerpt_does_not_match() {
+        let notes = vec![
+            note("a", "Shopping", "milk, eggs", &[]),
+            note("b", "Recipes", "flour, butter", &[]),
+        ];
+        // The word only exists past the first 280 characters, which the excerpt
+        // never carried. The old filter reported this note as absent.
+        let got = aery_filter(notes, "saffron", "", |n| {
+            (n.id == "b").then(|| "flour, butter ... and saffron".to_string())
+        });
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].id, "b");
+    }
+
+    #[test]
+    fn search_does_not_read_a_note_the_metadata_already_matched() {
+        let notes = vec![note("a", "Shopping", "milk", &[])];
+        let got = aery_filter(notes, "shop", "", |_| panic!("must not read the body"));
+        assert_eq!(got.len(), 1);
+    }
+
+    #[test]
+    fn a_tag_filter_is_exact_and_a_search_term_is_case_insensitive() {
+        let notes = vec![
+            note("a", "Deep Work", "notes", &["focus"]),
+            note("b", "Focus log", "notes", &[]),
+        ];
+        let by_tag = aery_filter(notes.clone(), "", "focus", |_| None);
+        assert_eq!(by_tag.len(), 1);
+        assert_eq!(by_tag[0].id, "a", "a tag match must not accept the title");
+        let by_term = aery_filter(notes, "FOCUS", "", |_| None);
+        assert_eq!(by_term.len(), 2);
+    }
+
+    #[test]
+    fn a_note_that_cannot_be_read_does_not_match_a_body_term() {
+        let notes = vec![note("a", "Unreadable", "", &[])];
+        let got = aery_filter(notes, "anything", "", |_| None);
+        assert!(got.is_empty());
+    }
 
     #[test]
     fn front_matter_id_round_trips() {
@@ -951,6 +1570,34 @@ mod tests {
 
         std::fs::remove_dir_all(&root).ok();
         std::fs::remove_dir_all(&outside).ok();
+    }
+
+    #[test]
+    fn a_restore_path_that_climbs_out_is_refused_even_when_its_parent_exists() {
+        // The old code only canonicalised the target when it already existed.
+        // When the parent existed but the file did not, it kept the raw path and
+        // compared it lexically, so "<root>/../escaped.md" passed the check and
+        // could be written beside the vault.
+        let root = tmp();
+        assert!(aery_restore_target(&root, "../escaped.md").is_none(),
+            "a parent-directory component must be refused");
+        assert!(aery_restore_target(&root, "sub/../../escaped.md").is_none(),
+            ".. must be refused anywhere in the path");
+        assert!(aery_restore_target(&root, "..").is_none(),
+            "a bare .. must be refused");
+        assert!(aery_restore_target(&root, "/abs/escaped.md").is_none(),
+            "an absolute path must be refused");
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_restore_path_inside_the_vault_is_accepted() {
+        let root = tmp();
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        let t = aery_restore_target(&root, "sub/idea.md").expect("a plain relative path");
+        assert!(t.starts_with(root.canonicalize().unwrap_or(root.clone())));
+        assert_eq!(t.file_name().unwrap(), "idea.md");
+        std::fs::remove_dir_all(&root).ok();
     }
 
     // ---- containment -------------------------------------------------------
@@ -1110,5 +1757,148 @@ mod vault_tests {
         assert!(doc.contains("title: Mine"));
         assert!(doc.contains("tags: [a, b]"));
         assert!(doc.ends_with("body text"), "the body is never rewritten");
+    }
+
+    // ---- folder rename/delete, import/export --------------------------------
+
+    fn tmp() -> PathBuf {
+        static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let d = std::env::temp_dir().join(format!("aery-io-{}-{}", std::process::id(), n));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    fn seed(root: &Path, rel: &str, id: &str, body: &str) {
+        let p = root.join(rel.replace('/', "\\"));
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        let doc = format!("---\naery_id: {}\ntitle: {}\n---\n\n{}", id, rel, body);
+        std::fs::write(&p, doc).unwrap();
+    }
+
+    #[test]
+    fn renaming_a_folder_moves_its_notes_and_refuses_a_taken_name() {
+        let root = tmp();
+        seed(&root, "work/a.md", "id-a", "alpha");
+        seed(&root, "work/deep/b.md", "id-b", "beta");
+        std::fs::create_dir_all(root.join("archive")).unwrap();
+
+        assert_eq!(rename_folder_in(&root, "work", "job").unwrap(), "job");
+        assert!(root.join("job\\a.md").is_file());
+        assert!(root.join("job\\deep\\b.md").is_file());
+        assert!(!root.join("work").exists(), "the old folder is gone");
+
+        // Two folders must never merge behind the user's back.
+        let err = rename_folder_in(&root, "job", "archive").unwrap_err();
+        assert!(err.contains("already exists"), "{}", err);
+        assert!(root.join("job\\a.md").is_file(), "the refusal changed nothing");
+
+        let err = rename_folder_in(&root, "job", "job/inner").unwrap_err();
+        assert!(err.contains("inside itself"), "{}", err);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn deleting_a_folder_moves_notes_out_first_and_never_erases_them() {
+        let root = tmp();
+        seed(&root, "work/a.md", "id-a", "alpha");
+        seed(&root, "work/deep/b.md", "id-b", "beta");
+
+        let err = delete_folder_in(&root, "work", None).unwrap_err();
+        assert!(err.contains("Move them"), "{}", err);
+        assert!(root.join("work\\a.md").is_file(), "the refusal changed nothing");
+
+        let r = delete_folder_in(&root, "work", Some("")).unwrap();
+        assert_eq!(r["moved"], 2);
+        assert!(!root.join("work").exists());
+        assert!(root.join("a.md").is_file());
+        // A flat move has to keep both stems; the second one is renamed, not lost.
+        assert!(root.join("b.md").is_file());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn an_empty_folder_deletes_cleanly() {
+        let root = tmp();
+        std::fs::create_dir_all(root.join("empty\\deeper")).unwrap();
+        let r = delete_folder_in(&root, "empty", None).unwrap();
+        assert_eq!(r["moved"], 0);
+        assert!(!root.join("empty").exists());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn exporting_a_vault_keeps_its_shape_and_only_overwrites_on_request() {
+        let root = tmp();
+        seed(&root, "work/a.md", "id-a", "alpha");
+        seed(&root, "b.md", "id-b", "beta");
+        let out = tmp();
+
+        let r = export_vault_in(&root, out.to_str().unwrap(), false).unwrap();
+        assert_eq!(r["copied"], 2);
+        assert!(out.join("work\\a.md").is_file());
+        assert!(out.join("b.md").is_file());
+
+        std::fs::write(out.join("b.md"), "do not lose me").unwrap();
+        let r = export_vault_in(&root, out.to_str().unwrap(), false).unwrap();
+        assert_eq!(r["copied"], 0);
+        assert_eq!(r["skipped"], 2);
+        assert_eq!(std::fs::read_to_string(out.join("b.md")).unwrap(), "do not lose me");
+
+        let r = export_vault_in(&root, out.to_str().unwrap(), true).unwrap();
+        assert_eq!(r["copied"], 2);
+        assert!(std::fs::read_to_string(out.join("b.md")).unwrap().contains("beta"));
+
+        // Exporting into the vault itself would mix the copy with the source.
+        let err = export_vault_in(&root, root.to_str().unwrap(), false).unwrap_err();
+        assert!(err.contains("outside the vault"), "{}", err);
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&out);
+    }
+
+    #[test]
+    fn importing_never_overwrites_and_gives_a_colliding_id_a_new_one() {
+        let root = tmp();
+        seed(&root, "a.md", "id-aaaaaa", "original");
+        let src = tmp();
+        std::fs::write(src.join("a.md"), "---\naery_id: id-aaaaaa\ntitle: Imported\n---\n\nnew body").unwrap();
+        std::fs::write(src.join("notes.txt"), "ignored").unwrap();
+
+        let r = import_in(&root, vec![
+            src.join("a.md").to_string_lossy().to_string(),
+            src.join("notes.txt").to_string_lossy().to_string(),
+        ], Some("")).unwrap();
+        assert_eq!(r["imported"], 1);
+        assert_eq!(r["skipped"], 1);
+        assert_eq!(r["renamed"], 1);
+        assert!(root.join("a 2.md").is_file(), "the existing note is untouched");
+        assert!(std::fs::read_to_string(root.join("a.md")).unwrap().contains("original"));
+        // Two notes must not share an id: a tab and a study card would follow
+        // the wrong one.
+        let imported = std::fs::read_to_string(root.join("a 2.md")).unwrap();
+        assert!(imported.contains("aery_id: a"), "{}", imported);
+        assert!(!imported.contains("id-aaaaaa"), "the id was replaced: {}", imported);
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&src);
+    }
+
+    #[test]
+    fn importing_a_folder_keeps_its_shape_and_reports_what_it_could_not_read() {
+        let root = tmp();
+        let src = tmp();
+        std::fs::create_dir_all(src.join("Vault\\deep")).unwrap();
+        std::fs::write(src.join("Vault\\one.md"), "---\ntitle: One\n---\n\n[[Nowhere]]").unwrap();
+        std::fs::write(src.join("Vault\\deep\\two.md"), "two").unwrap();
+        std::fs::write(src.join("Vault\\skip.png"), "not markdown").unwrap();
+
+        let r = import_in(&root, vec![src.join("Vault").to_string_lossy().to_string()], Some("")).unwrap();
+        assert_eq!(r["imported"], 2);
+        assert!(root.join("Vault\\one.md").is_file());
+        assert!(root.join("Vault\\deep\\two.md").is_file());
+        assert!(!root.join("Vault\\skip.png").exists());
+        assert_eq!(r["unresolved_links"], 1, "[[Nowhere]] has no target");
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&src);
     }
 }

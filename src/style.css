@@ -720,14 +720,38 @@ table tr:hover td{background:rgba(255,255,255,.02)}td.n{font-variant-numeric:tab
 .aery-counts{display:flex; flex-direction:column; gap:2px}
 .aery-counts b{font-size:24px; font-weight:650; letter-spacing:-.02em; color:var(--hi); font-variant-numeric:tabular-nums}
 .aery-counts small{font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--m)}
+.aery-views{display:flex; gap:4px; margin-top:12px}
+.aery-view{
+  flex:1; background:none; border:1px solid transparent; color:var(--m);
+  border-radius:7px; padding:6px 8px; font:inherit; font-size:11.5px; cursor:pointer;
+}
+.aery-view:hover{background:var(--p2); color:var(--t)}
+.aery-view.on{background:var(--p2); border-color:var(--line); color:var(--hi)}
 
-.aery-tools{padding:12px; display:flex; flex-wrap:wrap; gap:6px; border-bottom:1px solid var(--line)}
+.aery-tools{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); padding:12px; gap:6px; border-bottom:1px solid var(--line)}
+.aery-tools input[type=search],.aery-tools select{grid-column:1/-1}
 .aery-tools input[type=search],.aery-tools select{
   width:100%; background:var(--p2); border:1px solid var(--line); color:var(--t);
   border-radius:8px; padding:8px 10px; font-size:13px; font-family:inherit;
 }
 .aery-tools input[type=search]:focus,.aery-tools select:focus{outline:none; border-color:var(--v)}
-.aery-tools .btn{flex:1 1 auto; padding:7px 10px; font-size:12px}
+.aery-tools .btn{flex:1 1 auto; padding:7px 10px; font-size:12px; white-space:nowrap}
+.aery-folderform{padding:8px 12px; display:flex; gap:6px; border-bottom:1px solid var(--line)}
+/* `hidden` on a flex container is not enough: the author display rule wins
+   over the UA one, so the form stayed on screen with the picker. */
+.aery-folderform[hidden]{display:none}
+.aery-folderform input{
+  flex:1; min-width:0; background:var(--p2); border:1px solid var(--line); color:var(--t);
+  border-radius:7px; padding:6px 9px; font-size:12.5px; font-family:inherit;
+}
+.aery-folderform input:focus{outline:none; border-color:var(--v)}
+.aery-folderform .btn{padding:6px 9px; font-size:12px}
+.aery-folder-sel{
+  flex:none; max-width:180px; background:var(--p2); border:1px solid var(--line);
+  color:var(--t); border-radius:7px; padding:5px 8px; font-size:12px; font-family:inherit;
+}
+.aery-folder-sel:focus{outline:none; border-color:var(--v)}
+.aery-folder-sel:disabled{opacity:.45}
 
 .aery-list{flex:1; overflow:auto; padding:6px}
 .anote{
@@ -744,7 +768,27 @@ table tr:hover td{background:rgba(255,255,255,.02)}td.n{font-variant-numeric:tab
 .aery-path{padding:9px 12px; border-top:1px solid var(--line); color:var(--m); font-size:10.5px; font-family:var(--mono); overflow-wrap:anywhere; opacity:.7}
 
 .aery-main{display:flex; flex-direction:column; min-width:0}
+.aery-tabs{display:flex; gap:2px; padding:8px 12px 0; border-bottom:1px solid var(--line); overflow-x:auto}
+.aery-tabs:empty{display:none}
+.atab{
+  display:flex; align-items:center; gap:7px; max-width:200px; flex:none;
+  background:none; border:1px solid transparent; border-bottom:0; border-radius:8px 8px 0 0;
+  color:var(--m); padding:7px 6px 8px 10px; font-size:12.5px;
+}
+.atab:hover{background:var(--p2); color:var(--t)}
+.atab.on{background:var(--p1); border-color:var(--line); color:var(--hi); margin-bottom:-1px; padding-bottom:9px}
+.atab-t{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; max-width:150px}
+.atab .dot{width:5px; height:5px; border-radius:50%; background:var(--warn); flex:none}
+.atab-x{
+  background:none; border:0; color:var(--m); font:inherit; line-height:1; font-size:15px;
+  padding:0 4px 2px; border-radius:4px; cursor:pointer; flex:none;
+}
+.atab-x:hover{background:var(--line); color:var(--hi)}
 .aery-bar{display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid var(--line)}
+/* Author display rules beat the UA [hidden] rule, so the note chrome stayed on
+   screen behind the graph and study views. */
+.aery-bar[hidden],.aery-tabs[hidden],.aery-graph[hidden],
+.aery-tools[hidden],.aery-list[hidden],.aery-folders[hidden]{display:none}
 .aery-title{
   flex:1; background:none; border:0; color:var(--hi);
   font-size:17px; font-weight:600; font-family:inherit; padding:2px 0; min-width:0;
@@ -760,9 +804,72 @@ table tr:hover td{background:rgba(255,255,255,.02)}td.n{font-variant-numeric:tab
   background:none; color:var(--t); font-family:var(--mono); font-size:13.5px; line-height:1.72;
 }
 .aery-editor:focus{outline:none}
+.aery-readbtn{flex:none; font-size:12px; padding:5px 10px}
+
+/* Reading mode. Deliberately a narrow, quiet column: the whole point is that
+   prose is comfortable to read, which a full-width pane is not. */
+.aery-read-pane{
+  flex:1; min-height:0; overflow:auto; width:100%; max-width:82ch; margin:0 auto;
+  padding:26px 32px 48px; color:var(--t); font-size:14.5px; line-height:1.78;
+}
+.aery-read-pane h1,.aery-read-pane h2,.aery-read-pane h3,
+.aery-read-pane h4,.aery-read-pane h5,.aery-read-pane h6{
+  color:var(--hi); line-height:1.28; letter-spacing:-.01em; font-weight:650;
+  margin:1.7em 0 .55em;
+}
+.aery-read-pane > :first-child{margin-top:0}
+.aery-read-pane h1{font-size:25px; letter-spacing:-.02em}
+.aery-read-pane h2{font-size:20px}
+.aery-read-pane h3{font-size:16.5px}
+.aery-read-pane h4{font-size:14.5px}
+.aery-read-pane h5,.aery-read-pane h6{font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--m)}
+.aery-read-pane p{margin:0 0 .95em}
+.aery-read-pane ul,.aery-read-pane ol{margin:0 0 1em; padding-left:1.5em}
+.aery-read-pane li{margin:.24em 0}
+.aery-read-pane li>input[type=checkbox]{accent-color:var(--v); margin-right:2px}
+.aery-read-pane blockquote{
+  margin:1.1em 0; padding:.15em 0 .15em 14px; border-left:2px solid var(--v); color:var(--m);
+}
+.aery-read-pane hr{border:0; border-top:1px solid var(--line); margin:1.7em 0}
+.aery-read-pane code{
+  font-family:var(--mono); font-size:12.5px; background:var(--p2);
+  border:1px solid var(--line); border-radius:4px; padding:1px 5px;
+}
+.aery-read-pane pre.md-code{
+  background:var(--p2); border:1px solid var(--line); border-radius:8px;
+  padding:12px 14px; margin:1.1em 0; overflow:auto;
+}
+.aery-read-pane pre.md-code code{background:none; border:0; padding:0; white-space:pre; font-size:12.5px; line-height:1.6}
+.aery-read-pane .md-link{
+  color:var(--v); text-decoration:none; cursor:pointer;
+  border-bottom:1px solid color-mix(in srgb,var(--v) 35%,transparent);
+}
+.aery-read-pane .md-link:hover{border-bottom-color:var(--v)}
+.aery-read-pane .md-link.unresolved{color:var(--m); border-bottom-style:dashed; cursor:help}
+.aery-read-pane .md-url{color:var(--c); text-decoration:none; border-bottom:1px solid color-mix(in srgb,var(--c) 32%,transparent)}
+.aery-read-pane .md-url:hover{border-bottom-color:var(--c)}
+.aery-read-pane .md-url.blocked{color:var(--m); text-decoration:line-through; cursor:help}
+.aery-read-pane .md-empty{color:var(--m)}
 .aery-placeholder{padding:34px 26px; color:var(--m)}
 .aery-placeholder b{display:block; color:var(--hi); font-size:15px; margin-bottom:8px}
 .aery-placeholder p{margin:0 0 14px; line-height:1.65; max-width:46ch}
+
+.aery-graph{
+  flex:1; min-height:0; overflow:auto; padding:10px; display:flex; flex-direction:column;
+  background:radial-gradient(circle at 50% 42%, rgba(245,166,35,.055), transparent 62%);
+}
+.aery-graph svg{flex:1; min-height:0; width:100%; display:block}
+.ag-meta{margin:4px 12px 0; color:var(--m); font-size:11px; display:flex; gap:5px; align-items:baseline; flex-wrap:wrap}
+.ag-meta b{color:var(--hi); font-weight:600}
+.ag-meta span{margin-left:auto; opacity:.75}
+.ag-edge{stroke:var(--line); stroke-width:1.2; fill:none}
+.ag-node{cursor:pointer}
+.ag-node circle{fill:var(--p2); stroke:var(--line); stroke-width:1.4; transition:fill .15s,stroke .15s}
+.ag-node:hover circle,.ag-node.on circle{fill:color-mix(in srgb,var(--v) 15%,var(--p1)); stroke:var(--v)}
+.ag-node.pin circle{stroke:var(--v)}
+.ag-node text{fill:var(--t); font-size:11px; font-family:inherit; paint-order:stroke; stroke:var(--p1); stroke-width:3px}
+.ag-empty{margin:auto; padding:30px; color:var(--m); text-align:center; line-height:1.65; max-width:46ch}
+.ag-empty b{display:block; color:var(--hi); font-size:15px; margin-bottom:8px}
 
 .actx{margin-bottom:20px}
 .actx h4{
@@ -788,6 +895,144 @@ table tr:hover td{background:rgba(255,255,255,.02)}td.n{font-variant-numeric:tab
 .aery-help{border-top:1px solid var(--line); padding-top:14px; margin-top:6px}
 .aery-help h4{margin:0 0 8px; font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--m); font-weight:600; overflow-wrap:anywhere}
 .aery-help p{margin:0 0 7px; color:var(--m); font-size:11.5px; line-height:1.5}
+
+/* ---- folders, files ------------------------------------------------------ */
+.aery-folders{padding:8px 12px; display:flex; flex-direction:column; gap:3px; border-bottom:1px solid var(--line); max-height:150px; overflow:auto}
+.aery-folders:empty{display:none}
+.aery-folderrow{display:flex; flex-wrap:wrap; align-items:center; gap:3px; min-width:0}
+.aery-folderactions{flex:1 1 100%; display:flex; gap:4px; padding:0 0 4px 2px}
+.aery-folderactions .btn{padding:3px 8px; font-size:11px}
+.aery-folderrow b{
+  flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  color:var(--t); font-size:12px; font-weight:450;
+}
+.aery-folderrow small{color:var(--m); font-size:10px; font-variant-numeric:tabular-nums}
+.aery-fbtn{
+  flex:none; width:21px; height:21px; display:grid; place-items:center; cursor:pointer;
+  background:none; border:1px solid transparent; border-radius:5px; color:var(--m);
+  font:inherit; font-size:12px; line-height:1;
+}
+.aery-fbtn:hover{background:var(--p2); border-color:var(--line); color:var(--hi)}
+.aery-fbtn.danger:hover{color:#e2695e; border-color:color-mix(in srgb,#e2695e 40%,var(--line))}
+.aery-folderconfirm{
+  display:flex; flex-wrap:wrap; gap:5px; align-items:center; padding:7px 8px;
+  border:1px solid color-mix(in srgb,#e2695e 35%,var(--line)); border-radius:7px;
+  background:color-mix(in srgb,#e2695e 7%,var(--p1)); font-size:11px; color:var(--t);
+}
+.aery-folderconfirm p{flex:1 1 100%; margin:0; line-height:1.45; color:var(--t)}
+.aery-folderconfirm .btn{padding:3px 8px; font-size:11px}
+
+.aery-io{border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:14px}
+.aery-io h4{margin:0 0 8px; font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--m); font-weight:600}
+.aery-io-btns{display:grid; grid-template-columns:1fr 1fr; gap:6px}
+.aery-io-btns .btn{padding:6px 8px; font-size:11.5px; white-space:nowrap}
+.aery-iomsg{margin:8px 0 0; font-size:11px; line-height:1.45; color:var(--m); overflow-wrap:anywhere}
+.aery-iomsg:empty{display:none}
+.aery-iomsg.warn{color:#e0a35e}
+.aery-iomsg.bad{color:#e2695e}
+.aery-iomsg .btn{padding:3px 8px; font-size:11px; margin-left:4px}
+
+/* ---- study --------------------------------------------------------------- */
+.aery-study{flex:1; min-height:0; overflow:auto; padding:20px 22px 26px; display:flex; flex-direction:column; gap:16px}
+.aery-study[hidden]{display:none}
+.st-head{display:flex; align-items:flex-start; gap:12px; flex-wrap:wrap}
+.st-head>div:first-child{flex:1; min-width:0}
+.st-title{margin:0; font-size:20px; font-weight:600; letter-spacing:-.01em; color:var(--hi)}
+.st-sub{margin:4px 0 0; color:var(--m); font-size:12px}
+.st-actions{display:flex; gap:6px; flex-wrap:wrap}
+.st-actions .btn{padding:6px 11px; font-size:12px}
+.st-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(128px,1fr)); gap:10px}
+.st-card{background:var(--p1); border:1px solid var(--line); border-radius:10px; padding:12px 14px}
+.st-card b{display:block; font-size:22px; font-weight:600; color:var(--hi); font-variant-numeric:tabular-nums; line-height:1.15}
+.st-card small{display:block; margin-top:4px; color:var(--m); font-size:10px; letter-spacing:.1em; text-transform:uppercase}
+.st-sec h3{margin:0 0 8px; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--m); font-weight:600}
+.st-list{display:flex; flex-direction:column; gap:6px}
+.st-row{
+  display:flex; align-items:center; gap:10px; padding:9px 12px; border:1px solid var(--line);
+  border-radius:8px; background:var(--p1); min-width:0;
+}
+.st-row-main{flex:1; min-width:0}
+.st-row b{display:block; font-size:12.5px; font-weight:550; color:var(--t); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.st-row small{display:block; margin-top:2px; color:var(--m); font-size:11px; overflow-wrap:anywhere}
+.st-badge{flex:none; font-size:10px; padding:2px 7px; border-radius:20px; border:1px solid var(--line); color:var(--m); white-space:nowrap}
+.st-badge.due{color:var(--v); border-color:color-mix(in srgb,var(--v) 45%,var(--line)); background:color-mix(in srgb,var(--v) 9%,transparent)}
+.st-empty{
+  padding:22px; border:1px dashed var(--line); border-radius:10px; color:var(--m);
+  font-size:12.5px; line-height:1.6; text-align:center;
+}
+.st-empty b{display:block; color:var(--t); margin-bottom:5px; font-size:13px}
+.st-form{display:grid; gap:8px; padding:12px; border:1px solid var(--line); border-radius:10px; background:var(--p1)}
+.st-form h4{margin:0; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--m); font-weight:600}
+.st-form input,.st-form textarea,.st-form select{
+  width:100%; background:var(--p2); border:1px solid var(--line); color:var(--t);
+  border-radius:7px; padding:8px 10px; font:inherit; font-size:12.5px; resize:vertical;
+}
+.st-form input:focus,.st-form textarea:focus,.st-form select:focus{outline:none; border-color:var(--v)}
+.st-form textarea{min-height:66px}
+.st-formrow{display:flex; gap:6px; align-items:center; flex-wrap:wrap}
+.st-formrow .btn{padding:6px 11px; font-size:12px}
+.st-formrow small{color:var(--m); font-size:11px; margin-left:auto}
+
+.aery-study-rail{padding:12px; display:flex; flex-direction:column; gap:6px; overflow:auto; border-bottom:1px solid var(--line)}
+.aery-study-rail[hidden]{display:none}
+.st-railtop{display:flex; align-items:baseline; gap:6px; margin-bottom:2px}
+.st-railtop b{font-size:20px; color:var(--hi); font-variant-numeric:tabular-nums; font-weight:600}
+.st-railtop small{font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--m)}
+.st-railbtn{
+  display:flex; align-items:center; gap:7px; width:100%; text-align:left; cursor:pointer;
+  background:none; border:1px solid transparent; border-radius:7px; padding:7px 9px;
+  color:var(--t); font:inherit; font-size:12.5px;
+}
+.st-railbtn:hover{background:var(--p1)}
+.st-railbtn.on{background:var(--p2); border-color:var(--line)}
+.st-railbtn span{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.st-railbtn em{font-style:normal; color:var(--m); font-size:10px; font-variant-numeric:tabular-nums}
+.st-railbtn em.due{color:var(--v)}
+.st-raildecks{border-top:1px solid var(--line); padding-top:6px; margin-top:4px; display:flex; flex-direction:column; gap:2px}
+.st-raildecks h4{margin:4px 8px 4px; font-size:9.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--m); font-weight:600}
+
+.st-progress{height:4px; border-radius:4px; background:var(--p2); overflow:hidden}
+.st-progress i{display:block; height:100%; background:var(--v); border-radius:4px}
+.st-review{display:flex; flex-direction:column; gap:12px; max-width:680px; width:100%; margin:0 auto}
+.st-reviewmeta{display:flex; align-items:center; gap:8px; color:var(--m); font-size:11.5px}
+.st-qcard{
+  border:1px solid var(--line); border-radius:12px; background:var(--p1);
+  padding:30px 26px; min-height:190px; display:flex; flex-direction:column; justify-content:center; gap:14px;
+}
+.st-qcard .st-label{font-size:9.5px; letter-spacing:.15em; text-transform:uppercase; color:var(--m); font-weight:600}
+.st-qcard q{font-size:18px; line-height:1.5; color:var(--hi); quotes:none; overflow-wrap:anywhere}
+.st-qcard .st-answer{
+  border-top:1px solid var(--line); padding-top:14px; color:var(--t); font-size:13.5px;
+  line-height:1.6; white-space:pre-wrap; overflow-wrap:anywhere;
+}
+.st-grades{display:grid; grid-template-columns:repeat(4,1fr); gap:6px}
+.st-grades .btn{padding:9px 6px; font-size:12px}
+.st-src{font-size:11px; color:var(--m)}
+.st-src button{
+  background:none; border:0; color:var(--v); font:inherit; font-size:11px;
+  cursor:pointer; padding:0; text-decoration:underline; text-underline-offset:2px;
+}
+.st-choices{display:grid; gap:7px}
+.st-choice{
+  display:flex; gap:9px; text-align:left; padding:10px 12px; border:1px solid var(--line);
+  border-radius:8px; background:var(--p1); color:var(--t); font:inherit; font-size:12.5px;
+  cursor:pointer; line-height:1.45;
+}
+.st-choice:hover{border-color:color-mix(in srgb,var(--v) 40%,var(--line))}
+.st-choice.on{border-color:var(--v); background:color-mix(in srgb,var(--v) 8%,var(--p1))}
+.st-choice i{flex:none; font-style:normal; color:var(--m); font-size:10px; width:14px}
+.st-choice.on i{color:var(--v)}
+.st-choice.right{border-color:#63a06b; background:color-mix(in srgb,#63a06b 9%,var(--p1))}
+.st-choice.wrong{border-color:#e2695e; background:color-mix(in srgb,#e2695e 8%,var(--p1))}
+.st-score{display:flex; align-items:baseline; gap:8px}
+.st-score b{font-size:38px; color:var(--hi); font-weight:650; font-variant-numeric:tabular-nums; letter-spacing:-.02em}
+.st-score span{color:var(--m); font-size:12px}
+.st-bars{display:flex; align-items:flex-end; gap:5px; height:44px; padding-top:4px}
+.st-bars i{flex:1; background:var(--p2); border-radius:3px 3px 0 0; min-height:2px; position:relative}
+.st-bars i.on{background:var(--v)}
+.st-bars i span{position:absolute; left:50%; transform:translateX(-50%); bottom:-15px; font-size:9px; color:var(--m); font-style:normal}
+.st-barsrow{display:flex; flex-direction:column; gap:2px; padding-bottom:15px}
+
 
 @media (max-width:1180px){
   .aery-shell{grid-template-columns:220px minmax(0,1fr)}

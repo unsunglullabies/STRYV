@@ -159,30 +159,62 @@
         <aside class="aery-rail">
           <div class="aery-railhead">
             <div id="aeryCounts" class="aery-counts"><b>0</b><small>notes</small></div>
+            <div class="aery-views" role="tablist" aria-label="Aery view">
+              <button class="aery-view on" id="aeryViewNotes" role="tab" aria-selected="true">Notes</button>
+              <button class="aery-view" id="aeryViewGraph" role="tab" aria-selected="false">Graph</button>
+              <button class="aery-view" id="aeryViewStudy" role="tab" aria-selected="false">Study</button>
+            </div>
           </div>
-          <div class="aery-tools">
+          <div class="aery-tools" id="aeryTools">
             <input id="aeryQ" type="search" placeholder="Search notes" aria-label="Search notes" autocomplete="off">
             <select id="aeryTag" aria-label="Filter by tag"><option value="">All tags</option></select>
             <button class="btn" id="aeryNew">New</button>
+            <button class="btn ghost" id="aeryFolderNew" title="Create a folder in the vault">+ Folder</button>
             <button class="btn ghost" id="aeryPin" title="Pin this note">Pin</button>
             <button class="btn ghost" id="aeryRestore">Restore</button>
             <button class="btn ghost" id="aeryDel" title="Move to trash">Trash</button>
           </div>
+          <div class="aery-folderform" id="aeryFolderForm" hidden>
+            <input id="aeryFolderName" type="text" placeholder="Folder name" aria-label="New folder name" autocomplete="off">
+            <button class="btn" id="aeryFolderAdd">Create</button>
+            <button class="btn ghost" id="aeryFolderCancel">Cancel</button>
+          </div>
+          <div id="aeryFolders" class="aery-folders" aria-label="Vault folders"></div>
+          <div id="aeryStudyRail" class="aery-study-rail" hidden></div>
           <div id="aeryList" class="aery-list" role="list"></div>
           <small class="aery-path" id="aeryVaultPath" title="Where your notes are stored"></small>
         </aside>
 
         <div class="aery-main">
-          <div class="aery-bar">
+          <div id="aeryTabs" class="aery-tabs" role="tablist" aria-label="Open notes"></div>
+          <div class="aery-bar" id="aeryBar">
             <input id="aeryTitle" class="aery-title" placeholder="Note title" aria-label="Note title">
+            <select id="aeryFolderSel" class="aery-folder-sel" aria-label="Folder for this note" title="Move this note to a folder" disabled>
+              <option value="">Vault root</option>
+            </select>
+            <button class="btn ghost aery-readbtn" id="aeryRead" aria-pressed="false" title="Read this note (Ctrl+E)" hidden>Read</button>
+            <button class="btn ghost aery-readbtn" id="aeryCardSel" title="Make a study card from the selected text" hidden>+ Card</button>
             <span id="aerySave" class="a-save clean">Saved</span>
           </div>
           <div id="aeryPlaceholder" class="aery-placeholder"></div>
           <textarea id="aeryEditor" class="aery-editor" spellcheck="false"
             placeholder="Write in Markdown. Link another note with [[double brackets]]." hidden></textarea>
+          <div id="aeryPreview" class="aery-read-pane" hidden></div>
+          <div id="aeryGraph" class="aery-graph" hidden></div>
+          <div id="aeryStudy" class="aery-study" hidden></div>
         </div>
 
         <aside class="aery-ctx">
+          <div class="aery-io">
+            <h4>Vault files</h4>
+            <div class="aery-io-btns">
+              <button class="btn ghost" id="aeryExportNote" disabled>Export note</button>
+              <button class="btn ghost" id="aeryExportVault">Export vault</button>
+              <button class="btn ghost" id="aeryImport">Import</button>
+              <button class="btn ghost" id="aeryImportFolder" title="Import a folder of Markdown files">Import folder</button>
+            </div>
+            <p class="aery-iomsg" id="aeryIoMsg"></p>
+          </div>
           <div id="aeryContext"></div>
           <div class="aery-help">
             <h4>Markdown Aery understands</h4>
